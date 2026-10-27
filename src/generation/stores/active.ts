@@ -13,6 +13,7 @@ export const MAX_BATCH = 4;
 type ActiveState = {
   surface: Surface;
   model: string;
+  modelBySurface: Record<Surface, string>;
   batch: number;
   setModel: (id: string) => void;
   setBatch: (count: number) => void;
@@ -23,14 +24,21 @@ export const useActive = create<ActiveState>()(
     (set) => ({
       surface: "video",
       model: "seedance-2.5",
+      modelBySurface: { image: "flux-2", video: "seedance-2.5" },
       batch: 1,
       setModel: (id) => {
         const model = getModel(id);
-        set((state) =>
-          state.model === model.id && state.surface === model.surface
-            ? state
-            : { model: model.id, surface: model.surface },
-        );
+        set((state) => {
+          const modelBySurface = { ...state.modelBySurface, [model.surface]: model.id };
+          if (
+            state.model === model.id &&
+            state.surface === model.surface &&
+            state.modelBySurface[model.surface] === model.id
+          ) {
+            return state;
+          }
+          return { model: model.id, surface: model.surface, modelBySurface };
+        });
       },
       setBatch: (count) =>
         set((state) => {
@@ -41,13 +49,20 @@ export const useActive = create<ActiveState>()(
     {
       name: "openhiggsfield.active.v2",
       storage: browserStorage(),
-      partialize: (state) => ({ surface: state.surface, model: state.model, batch: state.batch }),
+      partialize: (state) => ({
+        surface: state.surface,
+        model: state.model,
+        modelBySurface: state.modelBySurface,
+        batch: state.batch,
+      }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        const remembered = state.modelBySurface?.[state.surface] || state.model;
         try {
-          getModel(state.model);
+          getModel(remembered);
+          state.setModel(remembered);
         } catch {
-          state.setModel("seedance-2.5");
+          state.setModel(state.surface === "image" ? "flux-2" : "seedance-2.5");
         }
       },
     },

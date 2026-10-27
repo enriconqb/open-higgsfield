@@ -24,6 +24,23 @@ function mapVideo(plane: GenerationPlane, slug: string, seedance: boolean): Reco
     prompt: plane.prompt.text,
     ...commonVideo(plane),
   };
+  if (slug.includes("upscale")) {
+    const factor = Number(plane.settings.upscaleFactor);
+    const clips = urls(plane, "video").map((url) => ({ type: "video_url", video_url: { url } }));
+    return {
+      model: slug,
+      ...(plane.prompt.text ? { prompt: plane.prompt.text } : {}),
+      ...(Number.isFinite(factor) && factor > 0 ? { upscale_factor: factor } : {}),
+      ...(clips.length ? { input_references: clips } : {}),
+    };
+  }
+  if (slug.includes("video-edit")) {
+    const references = [
+      ...urls(plane, "video").map((url) => ({ type: "video_url", video_url: { url } })),
+      ...imageReferences(urls(plane, "reference")),
+    ];
+    return { ...body, ...(references.length ? { input_references: references } : {}) };
+  }
   const references = seedance ? seedanceReferencesOf(plane) : imageReferences(urls(plane, "reference"));
   const frames = frameImages(urls(plane, "start")[0], urls(plane, "end")[0]);
 
@@ -75,7 +92,7 @@ function commonVideo(plane: GenerationPlane): Record<string, unknown> {
   return {
     ...(typeof settings.aspectRatio === "string" ? { aspect_ratio: settings.aspectRatio } : {}),
     ...(typeof settings.resolution === "string" ? { resolution: settings.resolution } : {}),
-    ...(typeof settings.duration === "number" ? { duration: settings.duration } : {}),
+    ...(Number.isFinite(Number(settings.duration)) ? { duration: Number(settings.duration) } : {}),
     ...(typeof audio === "boolean" ? { generate_audio: audio } : {}),
     ...(typeof settings.seed === "number" ? { seed: settings.seed } : {}),
   };

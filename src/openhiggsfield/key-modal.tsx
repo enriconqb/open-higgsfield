@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { clearPlatformCredentials, savePlatformCredentials } from "@/generation/actions";
+import type { KeyProvider } from "@/generation/credentials";
 
 import { CloseIcon } from "./icons";
 
@@ -20,6 +21,7 @@ export function KeyModal({
   const ref = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [apiKey, setApiKey] = useState("");
+  const [provider, setProvider] = useState<KeyProvider>("openrouter");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +35,7 @@ export function KeyModal({
     setBusy(true);
     setError(null);
     try {
-      await savePlatformCredentials({ api_key: apiKey });
+      await savePlatformCredentials({ api_key: apiKey, provider });
       onSaved();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save the key");
@@ -73,8 +75,8 @@ export function KeyModal({
             </div>
             <p className="ohf-keys-copy">
               {configured
-                ? "A key is saved in this browser. Enter a new OpenRouter key to replace it."
-                : "Paste your OpenRouter API key. It stays in an httpOnly cookie and is sent as Authorization: Bearer."}
+                ? "A key is saved in this browser. Choose the provider and enter a new key to replace it."
+                : "Choose OpenRouter or Higgsfield, then paste the key. It stays in an httpOnly cookie."}
             </p>
           </div>
           <button type="button" className="ohf-icon-btn" aria-label="Close" onClick={onClose}>
@@ -83,6 +85,27 @@ export function KeyModal({
         </div>
 
         <form className="ohf-keys-form" onSubmit={(event) => void onSubmit(event)}>
+          <fieldset className="ohf-keys-provider">
+            <legend className="ohf-field-label">Provider</legend>
+            <label>
+              <input
+                type="radio"
+                name="provider"
+                checked={provider === "openrouter"}
+                onChange={() => setProvider("openrouter")}
+              />
+              OpenRouter
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="provider"
+                checked={provider === "higgsfield"}
+                onChange={() => setProvider("higgsfield")}
+              />
+              Higgsfield
+            </label>
+          </fieldset>
           <label className="ohf-field">
             <div className="ohf-field-label">API key</div>
             <input
@@ -91,7 +114,7 @@ export function KeyModal({
               type="password"
               autoComplete="off"
               spellCheck={false}
-              placeholder="sk-or-..."
+              placeholder={provider === "higgsfield" ? "id:secret" : "sk-or-..."}
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
             />

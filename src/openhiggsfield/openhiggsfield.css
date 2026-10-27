@@ -2965,6 +2965,19 @@
   gap: 12px;
   padding: 16px 18px 18px;
 }
+.ohf-keys-provider {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ohf-keys-provider label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
 .ohf-keys-actions {
   display: flex;
   align-items: center;

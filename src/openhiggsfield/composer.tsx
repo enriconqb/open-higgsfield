@@ -3,8 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
+import { openRouterCapabilities, openRouterQuote } from "@/generation/actions";
+import { overlayModel, snapSettings } from "@/generation/capabilities";
+import type { OpenRouterCaps } from "@/generation/capabilities";
 import { parseSettings } from "@/generation/catalog";
+import { estimateUsd, formatUsd } from "@/generation/estimate";
+import type { OpenRouterQuote } from "@/generation/estimate";
 import type { ModelEntry, Surface } from "@/generation/catalog";
+import type { KeyProvider } from "@/generation/credentials";
 import { MAX_BATCH, useActive } from "@/generation/stores/active";
 import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
 import { useSettings } from "@/generation/stores/settings";
@@ -48,6 +54,7 @@ function popoverWidth(id: string, model: ModelEntry): number {
 export function Composer({
   surface,
   model,
+  keyKind,
   generating,
   error,
   focusNonce,
@@ -60,6 +67,7 @@ export function Composer({
 }: {
   surface: Surface;
   model: ModelEntry;
+  keyKind: KeyProvider | null;
   generating: boolean;
   error: string | null;
   focusNonce: number;
@@ -83,7 +91,38 @@ export function Composer({
   const videoPrompt = useVideoPrompt();
   const prompt = surface === "image" ? imagePrompt : videoPrompt;
   const settings = useSettings();
-  const values = parseSettings(model, settings.byModel[model.id] ?? {});
+  const [caps, setCaps] = useState<OpenRouterCaps | null>(null);
+  useEffect(() => {
+    if (keyKind !== "openrouter") {
+      setCaps(null);
+      return;
+    }
+    let live = true;
+    void openRouterCapabilities(model.id)
+      .then((next) => {
+        if (live) setCaps(next);
+      })
+      .catch(() => {
+        if (live) setCaps(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [keyKind, model.id]);
+  const tuned = keyKind === "openrouter" ? overlayModel(model, caps) : model;
+  const rawSettings = settings.byModel[model.id] ?? {};
+  const snapped = snapSettings(tuned, rawSettings);
+  useEffect(() => {
+    if (keyKind !== "openrouter" || !caps) return;
+    const next = snapSettings(overlayModel(model, caps), settings.byModel[model.id] ?? {});
+    const current = settings.byModel[model.id] ?? {};
+    const patch: Record<string, unknown> = {};
+    for (const key of ["resolution", "aspectRatio", "duration"] as const) {
+      if (next[key] !== current[key]) patch[key] = next[key];
+    }
+    if (Object.keys(patch).length > 0) settings.set(model.id, patch);
+  }, [caps, keyKind, model, settings]);
+  const values = parseSettings(tuned, snapped);
   const tray = useMediaTray(model, onError);
 
   const [overlay, setOverlay] = useState<string | null>(null);
@@ -103,7 +142,45 @@ export function Composer({
   const native = countSetting(model);
   const counts = native ? native.counts : STUDIO_COUNTS;
   const batchValue = native ? Number(values[native.key]) || counts[0]! : batch;
-  const settingKeys = Object.keys(model.settings).filter((key) => key !== native?.key);
+  const [quote, setQuote] = useState<OpenRouterQuote | null>(null);
+  useEffect(() => {
+    if (keyKind !== "openrouter") {
+      setQuote(null);
+      return;
+    }
+    let live = true;
+    void openRouterQuote(model.id)
+      .then((next) => {
+        if (live) setQuote(next);
+      })
+      .catch(() => {
+        if (live) setQuote(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [keyKind, model.id]);
+  const referenceCounts = tray.items.reduce(
+    (counts, item) => {
+      if (item.role === "video") counts.videos += 1;
+      else if (item.role === "audio") counts.audios += 1;
+      else counts.images += 1;
+      return counts;
+    },
+    { images: 0, videos: 0, audios: 0 },
+  );
+  const estimate = quote
+    ? estimateUsd(quote, {
+        resolution: typeof values.resolution === "string" ? values.resolution : undefined,
+        duration: Number.isFinite(Number(values.duration)) ? Number(values.duration) : undefined,
+        audio: values.generateAudio === true || values.sound === true,
+        images: referenceCounts.images,
+        videos: referenceCounts.videos,
+        audios: referenceCounts.audios,
+        batch: batchValue,
+      })
+    : null;
+  const settingKeys = Object.keys(tuned.settings).filter((key) => key !== native?.key);
 
   function setBatchValue(next: number) {
     if (!native) {
@@ -200,7 +277,7 @@ export function Composer({
       ? Math.min(triggerBox.top, strip.getBoundingClientRect().top)
       : triggerBox.top;
     const available = wrap.clientWidth;
-    const width = Math.min(popoverWidth(next, model), available);
+    const width = Math.min(popoverWidth(next, tuned), available);
     setAnchor({
       x: Math.round(Math.max(0, Math.min(triggerBox.left - wrapBox.left, available - width))),
       y: Math.round(wrapBox.bottom - ceiling + POPOVER_GAP),
@@ -245,7 +322,7 @@ export function Composer({
           </div>
         )}
 
-        {settingKey && <SettingPopover model={model} settingKey={settingKey} values={values} />}
+        {settingKey && <SettingPopover model={tuned} settingKey={settingKey} values={values} />}
         {overlay === ASSETS && (
           <AssetPicker
             model={model}
@@ -263,6 +340,7 @@ export function Composer({
           <ModelPicker
             selectedId={model.id}
             surface={surface}
+            keyKind={keyKind}
             onPick={(next) => {
               setModel(next.id);
               setOverlay(null);
@@ -351,7 +429,7 @@ export function Composer({
                 {settingKeys.map((key) => (
                   <SettingPill
                     key={key}
-                    model={model}
+                    model={tuned}
                     settingKey={key}
                     values={values}
                     open={overlay === `${SETTING}${key}`}
@@ -378,7 +456,9 @@ export function Composer({
                   <span className="ohf-generate-glyph" aria-hidden>
                     <ArrowUpIcon size={15} />
                   </span>
-                  <span className="ohf-generate-label">Generate</span>
+                  <span className="ohf-generate-label">
+                    Generate{estimate !== null ? ` ${formatUsd(estimate)}` : ""}
+                  </span>
                   {shortcut && <kbd className="ohf-kbd">{shortcut}</kbd>}
                 </button>
               </span>

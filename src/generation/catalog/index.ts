@@ -28,6 +28,8 @@ import { qwenImage3 } from "./qwen-image-3";
 import { recraft41 } from "./recraft-4.1";
 import { seedance2, seedance2Fast, seedance2Mini } from "./seedance-2";
 import { seedance25, seedance25Edit, seedance25Extend } from "./seedance-2.5";
+import { OPENROUTER_EXTRAS } from "./openrouter-extra";
+import { listedOnOpenRouter, openRouterSlug, openRouterSlugOrder } from "./openrouter-slugs";
 import { soul2, soulCinema } from "./soul";
 import type { ModelEntry } from "./types";
 import { wan26 } from "./wan-2.6";
@@ -77,8 +79,29 @@ export const MODELS: readonly ModelEntry[] = [
   dop,
 ];
 
+const ALL_MODELS: readonly ModelEntry[] = [...MODELS, ...OPENROUTER_EXTRAS];
+
+export function modelsFor(kind: "higgsfield" | "openrouter" | null): readonly ModelEntry[] {
+  if (kind === "higgsfield") return MODELS;
+  const bySlug = new Map<string, ModelEntry>();
+  for (const entry of ALL_MODELS) {
+    if (!listedOnOpenRouter(entry.id)) continue;
+    const slug = openRouterSlug(entry.id);
+    const current = bySlug.get(slug);
+    if (!current || !entry.id.startsWith("or-")) bySlug.set(slug, entry);
+  }
+  const ordered = openRouterSlugOrder().flatMap((slug) => {
+    const entry = bySlug.get(slug);
+    return entry ? [entry] : [];
+  });
+  for (const entry of bySlug.values()) {
+    if (!ordered.includes(entry)) ordered.push(entry);
+  }
+  return ordered;
+}
+
 export function getModel(id: string): ModelEntry {
-  const model = MODELS.find((entry) => entry.id === id);
+  const model = ALL_MODELS.find((entry) => entry.id === id);
   if (!model) throw new Error(`Unknown model: ${id}`);
   return model;
 }

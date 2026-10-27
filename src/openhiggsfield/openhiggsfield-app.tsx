@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { hasPlatformCredentials, submitGeneration } from "@/generation/actions";
+import { hasPlatformCredentials, platformKeyKind, submitGeneration } from "@/generation/actions";
 import { MissingCredentialsError } from "@/generation/credentials";
-import { MODELS, getModel } from "@/generation/catalog";
+import type { KeyProvider } from "@/generation/credentials";
+import { MODELS, getModel, modelsFor } from "@/generation/catalog";
 import type { Surface } from "@/generation/catalog";
 import { assemblePlane } from "@/generation/plane";
 import type { GenerationStatus } from "@/generation/platform";
@@ -180,6 +181,10 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState<SaveProgress | null>(null);
   const [keyConfigured, setKeyConfigured] = useState(false);
+  const [keyKind, setKeyKind] = useState<KeyProvider | null>(null);
+  const [storeReady, setStoreReady] = useState(false);
+  const [kindReady, setKindReady] = useState(false);
+  const modelBySurface = useActive((state) => state.modelBySurface);
   const [keysOpen, setKeysOpen] = useState(false);
 
   const galleryRef = useRef<HTMLDivElement>(null);
@@ -221,11 +226,30 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   }, [historyLoaded, history]);
 
   useEffect(() => {
-    void hasPlatformCredentials().then((ready) => {
+    void Promise.all([hasPlatformCredentials(), platformKeyKind()]).then(([ready, kind]) => {
       setKeyConfigured(ready);
+      setKeyKind(kind);
+      setKindReady(true);
       if (!ready) setKeysOpen(true);
     });
   }, []);
+
+  useEffect(() => {
+    if (useActive.persist.hasHydrated()) setStoreReady(true);
+    return useActive.persist.onFinishHydration(() => setStoreReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (!storeReady || !kindReady) return;
+    const visible = modelsFor(keyKind === "higgsfield" ? "higgsfield" : "openrouter");
+    const remembered = modelBySurface[surface] || modelId;
+    if (visible.some((entry) => entry.id === remembered)) {
+      if (remembered !== modelId) setModel(remembered);
+      return;
+    }
+    const next = visible.find((entry) => entry.surface === surface);
+    if (next) setModel(next.id);
+  }, [keyKind, kindReady, modelBySurface, modelId, setModel, storeReady, surface]);
 
   useEffect(() => {
     alive.current = true;
@@ -313,11 +337,16 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
     (next: GalleryView) => {
       setView(next);
       galleryRef.current?.scrollTo({ top: 0 });
-      if (CROSS_VIEWS.has(next) || next === surface) return;
-      const first = MODELS.find((entry) => entry.surface === next);
-      if (first) setModel(first.id);
+      if (next !== "image" && next !== "video") return;
+      if (next === surface) return;
+      const list = modelsFor(keyKind === "higgsfield" ? "higgsfield" : "openrouter").filter(
+        (entry) => entry.surface === next,
+      );
+      const remembered = useActive.getState().modelBySurface[next];
+      const pick = list.find((entry) => entry.id === remembered) ?? list[0];
+      if (pick) setModel(pick.id);
     },
-    [setModel, surface],
+    [keyKind, setModel, surface],
   );
 
   /* Presses do not wait on each other. A press snapshots its own plane, opens
@@ -662,6 +691,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
           <Composer
             surface={surface}
             model={model}
+            keyKind={keyKind}
             generating={busy}
             error={error}
             focusNonce={focusNonce}
@@ -715,9 +745,11 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
               setKeyConfigured(true);
               setKeysOpen(false);
               setError(null);
+              void platformKeyKind().then(setKeyKind);
             }}
             onCleared={() => {
               setKeyConfigured(false);
+              setKeyKind(null);
             }}
           />
         )}
