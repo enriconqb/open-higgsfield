@@ -1417,6 +1417,10 @@
 }
 /* The field lights as one surface. The textarea itself keeps no ring — the
    global one was clipped by the composer and read as a stray green hairline. */
+.ohf-composer[data-dropping="true"] {
+  border-color: var(--accent-32);
+  box-shadow: var(--shadow-2), var(--glint), 0 0 0 3px var(--accent-08);
+}
 .ohf-composer:has(.ohf-prompt:focus) {
   border-color: var(--accent-32);
   box-shadow: var(--shadow-2), var(--glint), 0 0 0 3px var(--accent-08);

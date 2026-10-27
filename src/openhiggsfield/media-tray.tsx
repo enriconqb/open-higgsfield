@@ -32,6 +32,8 @@ export interface MediaTray {
   allFull: boolean;
   /** Hidden file input; render it once inside the composer. */
   input: ReactNode;
+  /** Upload these files and attach each one to the role its type fits. */
+  receive: (files: File[]) => Promise<void>;
   /** Set the role the next file takes, then open the OS picker. */
   begin: (role: MediaRole) => void;
   /** Make the role's inputs exactly these URLs — the picker hands back the set
@@ -78,34 +80,51 @@ export function useMediaTray(
   for (const role of roles) {
     counts[role] = media.items.filter((item) => item.role === role).length;
   }
-  const allFull = roles.length > 0 && roles.every((role) => counts[role]! >= (model.roles[role] ?? 0));
+  const allFull = roles.length > 0 && roles.every((role) => (counts[role] ?? 0) >= (model.roles[role] ?? 0));
 
-  async function onFile(file: File | undefined) {
-    if (!file) return;
+  async function receive(files: File[]) {
+    if (files.length === 0) return;
     onError(null);
     setUploading(true);
+    const used = { ...counts };
+    let skipped = 0;
+    let failed: string | null = null;
     try {
-      const uploaded = await uploadMedia(file);
-      /* The file outlives this run: it joins the shelf the picker offers, so a
-         reference used once can be reached again without a second upload. */
-      setStaged(uploaded.url);
-      setUploads((prev) =>
-        rememberUpload(prev, {
-          id: crypto.randomUUID(),
-          url: uploaded.url,
-          kind: kindOfFile(file),
-          name: file.name,
-          createdAt: Date.now(),
-        }),
-      );
+      for (const file of files) {
+        const role = roleForFile(model, file, used);
+        if (!role) {
+          skipped += 1;
+          continue;
+        }
+        const uploaded = await uploadMedia(file);
+        used[role] = (used[role] ?? 0) + 1;
+        media.add({ id: crypto.randomUUID(), url: uploaded.url, role });
+        setStaged(uploaded.url);
+        setUploads((prev) =>
+          rememberUpload(prev, {
+            id: crypto.randomUUID(),
+            url: uploaded.url,
+            kind: kindOfFile(file),
+            name: file.name,
+            createdAt: Date.now(),
+          }),
+        );
+      }
     } catch (caught) {
-      onError(
+      failed =
         caught instanceof Error
           ? `Upload failed — ${caught.message}. Check the Blob store is configured, then retry.`
-          : "Upload failed. Retry, or drop the file and generate from the prompt alone.",
-      );
+          : "Upload failed. Retry, or drop the file and generate from the prompt alone.";
     } finally {
       setUploading(false);
+    }
+    if (failed) onError(failed);
+    else if (skipped > 0) {
+      onError(
+        skipped === 1
+          ? "1 file did not fit this model's inputs."
+          : `${skipped} files did not fit this model's inputs.`,
+      );
     }
   }
 
@@ -123,11 +142,12 @@ export function useMediaTray(
     <input
       ref={inputRef}
       type="file"
+      multiple
       hidden
       onChange={(event) => {
-        const file = event.target.files?.[0];
+        const files = [...(event.target.files ?? [])];
         event.target.value = "";
-        void onFile(file);
+        void receive(files);
       }}
     />
   );
@@ -148,7 +168,34 @@ export function useMediaTray(
     }
   }
 
-  return { roles, items: media.items, uploads, staged, uploading, allFull, input, begin, apply };
+  return { roles, items: media.items, uploads, staged, uploading, allFull, input, receive, begin, apply };
+}
+
+const ROLE_ORDER: Record<"image" | "video" | "audio", MediaRole[]> = {
+  image: ["reference", "start", "end"],
+  video: ["video"],
+  audio: ["audio"],
+};
+
+function fileKind(file: File): "image" | "video" | "audio" | null {
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("audio/")) return "audio";
+  return null;
+}
+
+function roleForFile(
+  model: ModelEntry,
+  file: File,
+  used: Record<string, number>,
+): MediaRole | null {
+  const kind = fileKind(file);
+  if (!kind) return null;
+  for (const role of ROLE_ORDER[kind]) {
+    const cap = model.roles[role] ?? 0;
+    if (cap > 0 && (used[role] ?? 0) < cap) return role;
+  }
+  return null;
 }
 
 /** Attached inputs, above the prompt — the frames read before the words do. */

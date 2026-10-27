@@ -126,6 +126,7 @@ export function Composer({
   const tray = useMediaTray(model, onError);
 
   const [overlay, setOverlay] = useState<string | null>(null);
+  const [dropping, setDropping] = useState(false);
   const [anchor, setAnchor] = useState({ x: 0, y: 0 });
   const [shortcut, setShortcut] = useState<string | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
@@ -354,7 +355,29 @@ export function Composer({
             aligned to the same bottom edge, so the dock never changes height
             and the toolbar rises exactly where the composer's rail was. */}
         <div className="ohf-swap">
-          <div className="ohf-composer">
+            <div
+              className="ohf-composer"
+              data-dropping={dropping || undefined}
+              onDragEnter={(event) => {
+                if (!event.dataTransfer.types.includes("Files")) return;
+                event.preventDefault();
+                setDropping(true);
+              }}
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes("Files")) return;
+                event.preventDefault();
+              }}
+              onDragLeave={(event) => {
+                if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                setDropping(false);
+              }}
+              onDrop={(event) => {
+                if (!event.dataTransfer.types.includes("Files")) return;
+                event.preventDefault();
+                setDropping(false);
+                void tray.receive([...event.dataTransfer.files]);
+              }}
+            >
             <MediaStrip model={model} />
 
             {/* The attachment sits beside the words it belongs to, on the same
