@@ -29,6 +29,8 @@ export type GenerationStatus = {
   images?: Array<{ url: string }>;
   video?: { url: string };
   error?: unknown;
+  /** USD reported by OpenRouter on a finished job. */
+  costUsd?: number;
 };
 
 export type StatusResult =
@@ -142,10 +144,12 @@ export function createPlatformClient(options: PlatformClientOptions) {
       const payload = await send("POST", "/images", input);
       const images = mapImages(payload);
       const requestId = `img-${crypto.randomUUID()}`;
+      const costUsd = readCost(asRecord(payload));
       const immediate: GenerationStatus = {
         status: images.length ? "completed" : "failed",
         requestId,
         ...(images.length ? { images } : { error: "Image response had no data" }),
+        ...(costUsd !== undefined ? { costUsd } : {}),
       };
       return {
         status: immediate.status,
@@ -180,13 +184,23 @@ function mapStatus(payload: unknown, requestId: string): GenerationStatus {
   const id = stringField(data, "id") ?? requestId;
   const videoUrl = playableVideoUrl(data, id);
   const error = data.error;
+  const costUsd = readCost(data);
 
   return {
     status: normalizeStatus(stringField(data, "status") ?? "unknown"),
     requestId: id,
     ...(videoUrl ? { video: { url: videoUrl } } : {}),
     ...(error !== undefined ? { error } : {}),
+    ...(costUsd !== undefined ? { costUsd } : {}),
   };
+}
+
+function readCost(data: Record<string, unknown>): number | undefined {
+  const usage = data.usage;
+  if (!usage || typeof usage !== "object") return undefined;
+  const cost = (usage as { cost?: unknown }).cost;
+  const amount = typeof cost === "number" ? cost : typeof cost === "string" ? Number(cost) : Number.NaN;
+  return Number.isFinite(amount) && amount > 0 ? amount : undefined;
 }
 
 function playableVideoUrl(data: Record<string, unknown>, jobId: string): string | undefined {

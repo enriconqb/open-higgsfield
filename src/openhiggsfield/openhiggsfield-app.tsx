@@ -56,6 +56,7 @@ type RunDraft = {
   badge?: string;
   settings?: Record<string, unknown>;
   createdAt: number;
+  costUsd?: number;
 };
 
 function hueOf(seed: string): number {
@@ -79,6 +80,7 @@ function draftOf(record: RunRecord): RunDraft {
     badge: record.badge,
     settings: record.settings,
     createdAt: record.createdAt,
+    costUsd: record.costUsd,
   };
 }
 
@@ -101,6 +103,7 @@ function runningRows(requestId: string, count: number, draft: RunDraft): RunReco
       art: artFor(draft.surface, hueOf(id), id),
       createdAt: draft.createdAt,
       settings: draft.settings,
+      costUsd: draft.costUsd,
     };
   });
 }
@@ -131,6 +134,7 @@ function terminalRows(requestId: string, draft: RunDraft, status: GenerationStat
       art: artFor(draft.surface, hueOf(id), id),
       createdAt: draft.createdAt,
       settings: draft.settings,
+      costUsd: status.costUsd ?? draft.costUsd,
     };
   });
 }
@@ -352,7 +356,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   /* Presses do not wait on each other. A press snapshots its own plane, opens
      its own skeletons and keeps its own watch, so the composer is free the
      moment the tiles appear and any number of runs can be in flight. */
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (costUsd?: number) => {
     if (!keyConfigured) {
       setKeysOpen(true);
       setError("Add your platform key to generate.");
@@ -399,6 +403,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
       badge,
       settings: plane.settings,
       createdAt: startedAt,
+      costUsd,
     };
 
     setError(null);
@@ -636,7 +641,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
 
   const openViewer = useCallback((id: string) => setViewerId(id), []);
   const openKeys = useCallback(() => setKeysOpen(true), []);
-  const runGenerate = useCallback(() => void generate(), [generate]);
+  const runGenerate = useCallback((costUsd?: number) => void generate(costUsd), [generate]);
   const downloadSelection = useCallback(() => void downloadPicked(), [downloadPicked]);
   const dismissDeleted = useCallback(() => setDeleted(null), []);
   const viewerItem = viewerId

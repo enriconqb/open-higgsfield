@@ -108,6 +108,7 @@ function mapImage(plane: GenerationPlane, slug: string): Record<string, unknown>
     prompt: plane.prompt.text,
     ...(typeof settings.aspectRatio === "string" ? { aspect_ratio: settings.aspectRatio } : {}),
     ...(typeof settings.resolution === "string" ? { resolution: settings.resolution } : {}),
+    ...(typeof settings.quality === "string" ? { quality: settings.quality } : {}),
     ...(Number.isFinite(batch) && batch > 0 ? { n: Math.min(10, batch) } : {}),
     ...(typeof format === "string" && ["png", "jpeg", "webp", "svg"].includes(format)
       ? { output_format: format }

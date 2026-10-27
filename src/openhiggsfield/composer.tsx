@@ -82,7 +82,7 @@ export function Composer({
   selection: ReactNode;
   selecting: boolean;
   onError: (message: string | null) => void;
-  onGenerate: () => void;
+  onGenerate: (costUsd?: number) => void;
 }) {
   const setModel = useActive((state) => state.setModel);
   const batch = useActive((state) => state.batch);
@@ -117,7 +117,7 @@ export function Composer({
     const next = snapSettings(overlayModel(model, caps), settings.byModel[model.id] ?? {});
     const current = settings.byModel[model.id] ?? {};
     const patch: Record<string, unknown> = {};
-    for (const key of ["resolution", "aspectRatio", "duration"] as const) {
+    for (const key of ["resolution", "aspectRatio", "duration", "quality"] as const) {
       if (next[key] !== current[key]) patch[key] = next[key];
     }
     if (Object.keys(patch).length > 0) settings.set(model.id, patch);
@@ -172,7 +172,8 @@ export function Composer({
   const estimate = quote
     ? estimateUsd(quote, {
         resolution: typeof values.resolution === "string" ? values.resolution : undefined,
-        duration: Number.isFinite(Number(values.duration)) ? Number(values.duration) : undefined,
+        aspectRatio: typeof values.aspectRatio === "string" ? values.aspectRatio : undefined,
+        duration: typeof values.duration === "number" ? values.duration : undefined,
         audio: values.generateAudio === true || values.sound === true,
         images: referenceCounts.images,
         videos: referenceCounts.videos,
@@ -399,7 +400,7 @@ export function Composer({
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
                     event.preventDefault();
-                    if (!disabled) onGenerate();
+                    if (!disabled) onGenerate(estimate ?? undefined);
                   }
                 }}
               />
@@ -447,7 +448,7 @@ export function Composer({
                   disabled={disabled}
                   data-busy={generating}
                   aria-label={generateLabel}
-                  onClick={onGenerate}
+                  onClick={() => onGenerate(estimate ?? undefined)}
                 >
                   {/* The sheen is the only thing a run in flight changes here:
                       the label still names what pressing does, because pressing

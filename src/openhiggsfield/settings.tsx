@@ -29,7 +29,7 @@ function glyphFor(key: string, value: unknown) {
       </span>
     );
   }
-  if (key === "resolution") return <GemIcon size={13} />;
+  if (key === "resolution" || key === "quality") return <GemIcon size={13} />;
   if (key === "duration") return <ClockIcon size={13} />;
   if (key === "outputFormat") return <FormatIcon size={13} />;
   if (key === "generateAudio" || key === "sound" || key === "keepOriginalSound") {

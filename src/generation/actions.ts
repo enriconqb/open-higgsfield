@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 
 import { overlayModel, snapSettings } from "./capabilities";
+import { inlineLocalMedia } from "./local-upload";
 import type { OpenRouterCaps } from "./capabilities";
 import { getModel, parseSettings } from "./catalog";
 import { openRouterSlug } from "./catalog/openrouter-slugs";
@@ -39,7 +40,7 @@ export async function hasPlatformCredentials() {
 }
 
 const PRICE_TTL_MS = 5 * 60_000;
-let videoSkuCache: { at: number; models: Map<string, Record<string, number>> } | null = null;
+let videoSkuCache: { at: number; models: Map<string, { skus: Record<string, number>; sizes: string[] }> } | null = null;
 const imagePriceCache = new Map<string, { at: number; lines: ImagePriceLine[] }>();
 
 const capsCache = new Map<string, { at: number; caps: OpenRouterCaps }>();
@@ -72,11 +73,13 @@ async function imageCaps(
   ]);
   const resolution = new Set<string>();
   const aspectRatio = new Set<string>();
+  const quality = new Set<string>();
   const collect = (params: unknown) => {
     if (!params || typeof params !== "object") return;
-    const record = params as { resolution?: unknown; aspect_ratio?: unknown };
+    const record = params as { resolution?: unknown; aspect_ratio?: unknown; quality?: unknown };
     for (const value of enumValues(record.resolution)) resolution.add(value);
     for (const value of enumValues(record.aspect_ratio)) aspectRatio.add(value);
+    for (const value of enumValues(record.quality)) quality.add(value);
   };
   for (const item of asList(list && typeof list === "object" ? (list as { data?: unknown }).data : null)) {
     const row = asObject(item, "caps");
@@ -91,6 +94,7 @@ async function imageCaps(
   return {
     ...(resolution.size ? { resolution: sortResolutions([...resolution]) } : {}),
     ...(aspectRatio.size ? { aspectRatio: [...aspectRatio] } : {}),
+    ...(quality.size ? { quality: [...quality] } : {}),
   };
 }
 
@@ -152,8 +156,8 @@ export async function openRouterQuote(modelId: string): Promise<OpenRouterQuote 
   }
   const model = getModel(modelId);
   if (model.surface === "video") {
-    const skus = await videoSkus(credentials, slug);
-    return skus ? { kind: "video", skus } : null;
+    const priced = await videoSkus(credentials, slug);
+    return priced ? { kind: "video", skus: priced.skus, sizes: priced.sizes } : null;
   }
   const lines = await imageLines(credentials, slug);
   return lines.length ? { kind: "image", lines } : null;
@@ -162,10 +166,10 @@ export async function openRouterQuote(modelId: string): Promise<OpenRouterQuote 
 async function videoSkus(
   credentials: { apiKey: string; baseUrl: string },
   slug: string,
-): Promise<Record<string, number> | null> {
+): Promise<{ skus: Record<string, number>; sizes: string[] } | null> {
   if (!videoSkuCache || Date.now() - videoSkuCache.at > PRICE_TTL_MS) {
     const payload = await openRouterJson(credentials, "/videos/models");
-    const models = new Map<string, Record<string, number>>();
+    const models = new Map<string, { skus: Record<string, number>; sizes: string[] }>();
     for (const item of asList(payload && typeof payload === "object" ? (payload as { data?: unknown }).data : null)) {
       const row = asObject(item, "pricing");
       const id = row.id;
@@ -176,7 +180,7 @@ async function videoSkus(
         const usd = skuUsd(key, String(raw));
         if (usd !== null) skus[key] = usd;
       }
-      models.set(id, skus);
+      models.set(id, { skus, sizes: stringList(row.supported_sizes) });
     }
     videoSkuCache = { at: Date.now(), models };
   }
@@ -230,8 +234,9 @@ export async function submitGeneration(plane: GenerationPlane) {
   const credentials = await readCredentials();
   const caps = credentials.provider === "openrouter" ? await openRouterCapabilities(plane.model) : null;
   const model = overlayModel(getModel(plane.model), caps);
+  const inlined = await inlineLocalMedia(plane);
   const parsed: GenerationPlane = {
-    ...plane,
+    ...inlined,
     settings: parseSettings(model, snapSettings(model, plane.settings)),
   };
   if (credentials.provider === "higgsfield") {

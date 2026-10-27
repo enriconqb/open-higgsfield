@@ -76,6 +76,7 @@ export function pickSamples(surface: Surface, count = 3): string[] {
 const SETTING_LABELS: Record<string, string> = {
   aspectRatio: "Aspect ratio",
   resolution: "Resolution",
+  quality: "Quality",
   outputFormat: "Format",
   duration: "Duration",
   generateAudio: "Generate audio",

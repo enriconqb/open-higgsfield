@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { settingLabel, settingValueLabel } from "./data";
 import { fileNameFor, saveFile } from "./download";
 import { timeAgo, type RunRecord } from "./history";
+import { formatUsd } from "@/generation/estimate";
+
 import { ModelIcon } from "./model-icon";
 import {
   CheckIcon,
@@ -282,6 +284,12 @@ export function Viewer({
                     <dd>{value}</dd>
                   </div>
                 ))}
+                {typeof item.costUsd === "number" && item.costUsd > 0 && (
+                  <div className="ohf-viewer-fact">
+                    <dt>Credit</dt>
+                    <dd>{formatUsd(item.costUsd)}</dd>
+                  </div>
+                )}
                 <div className="ohf-viewer-fact">
                   <dt>Created</dt>
                   <dd>{CREATED.format(item.createdAt)}</dd>

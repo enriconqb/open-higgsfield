@@ -28,6 +28,8 @@ export interface RunRecord {
   /** Resolved catalog settings this run was submitted with, so reuse can
       restore the dials and not just the words. Absent on pre-existing records. */
   settings?: Record<string, unknown>;
+  /** USD charged or estimated for this result. Absent on older records. */
+  costUsd?: number;
 }
 
 export const HISTORY_KEY = "history.v1";
@@ -151,7 +153,8 @@ function isRunRecord(value: unknown): value is RunRecord {
     (record.requestId === undefined || typeof record.requestId === "string") &&
     (record.favorite === undefined || typeof record.favorite === "boolean") &&
     (record.settings === undefined ||
-      (typeof record.settings === "object" && record.settings !== null))
+      (typeof record.settings === "object" && record.settings !== null)) &&
+    (record.costUsd === undefined || typeof record.costUsd === "number")
   );
 }
 
