@@ -380,6 +380,16 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
     const runOne = async (slot: { skeletons: string[] }) => {
       try {
         const queued = await submitGeneration(plane);
+        if (queued.immediate) {
+          const rows = terminalRows(queued.requestId, draft, queued.immediate);
+          setHistory((prev) => {
+            const next = [...rows, ...prev];
+            void saveHistory(next);
+            return next;
+          });
+          setRuns((prev) => prev.filter((active) => !slot.skeletons.includes(active.id)));
+          return;
+        }
         setHistory((prev) => {
           const next = [...runningRows(queued.requestId, slot.skeletons.length, draft), ...prev];
           void saveHistory(next);

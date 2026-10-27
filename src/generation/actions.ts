@@ -12,8 +12,8 @@ import {
   encodeCredentials,
   parseCredentialInput,
 } from "./credentials";
-import { createPlatformClient } from "./platform";
-import type { StatusResult } from "./platform";
+import { createPlatformClient, openRouterBaseUrl } from "./platform";
+import type { QueuedGeneration, StatusResult } from "./platform";
 import { toPlatform } from "./to-platform";
 
 export async function savePlatformCredentials(data: unknown) {
@@ -37,8 +37,11 @@ export async function submitGeneration(plane: GenerationPlane) {
     ...plane,
     settings: parseSettings(model, plane.settings),
   };
-  const { path, body } = toPlatform(parsed);
-  return createPlatformClient(await readCredentials()).submit(path, body);
+  const { surface, body } = toPlatform(parsed);
+  const client = createPlatformClient(await readCredentials());
+  const queued: QueuedGeneration =
+    surface === "image" ? await client.submitImage(body) : await client.submitVideo(body);
+  return queued;
 }
 
 /** Every request in flight, answered in one round trip. Next dispatches server
@@ -66,10 +69,9 @@ async function readStoredCredentials() {
 
 async function readCredentials() {
   const stored = await readStoredCredentials();
-  if (!stored) throw new MissingCredentialsError();
-  const baseUrl = process.env.HF_API_BASE_URL;
-  if (!baseUrl) throw new Error("Missing HF_API_BASE_URL");
-  return { ...stored, baseUrl };
+  const apiKey = stored?.apiKey || process.env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey) throw new MissingCredentialsError();
+  return { apiKey, baseUrl: openRouterBaseUrl() };
 }
 
 function parseRequestIds(data: unknown): string[] {

@@ -9,7 +9,7 @@
 **Hosted version:** [openhiggsfield.ai](https://openhiggsfield.ai)
 
 Image and Video in one studio, in the browser — no Node.js, no setup. Add your
-platform key (`id:secret`) to start generating. The studio itself is free.
+OpenRouter API key to start generating. The studio itself is free.
 
 ---
 
@@ -17,7 +17,7 @@ platform key (`id:secret`) to start generating. The studio itself is free.
 
 - **Free & open-source** — no studio subscription, no vendor lock-in
 - **Self-hosted** — clone it, run it, change it
-- **Your key** — generate with your own platform key
+- **Your key** — generate with your own OpenRouter API key
 - **38 models** — 8 image, 30 video, one catalog, one composer
 
 ---
@@ -88,9 +88,10 @@ Each generate is one object: `{ model, prompt, media, settings }`.
 - **The UI builds that object** and hands it to a server action. The action
   resolves it against the catalog and maps it to the generation API's own
   fields (`image_urls`, `aspect_ratio`, …).
-- **Server actions are the only caller.** The browser never talks to the
-  generation API. Submit is `POST /{model}`; status is
-  `GET /requests/{id}/status`. Auth is `Authorization: Key <api_key>`.
+- **Server actions are the only caller.** The browser never talks to
+  OpenRouter. Video is `POST /api/v1/videos` then `GET /api/v1/videos/{id}`.
+  Image is `POST /api/v1/images`. Auth is `Authorization: Bearer <api_key>`.
+  Seedance 2.5 sends image, video, and audio together as `input_references`.
 - **The catalog is the source of truth** (`src/generation/catalog/`). A new entry
   appears in the picker, brings its own settings rail and media roles, and needs
   no studio changes.
@@ -108,12 +109,13 @@ pnpm install
 pnpm dev            # http://localhost:3000
 ```
 
-Open the studio, press **Add key**, and paste your platform key as `id:secret`.
+Open the studio, press **Add key**, and paste your OpenRouter API key (`sk-or-...`).
 
 ### Environment
 
 ```bash
-HF_API_BASE_URL=                      # generation API origin, server only
+OPENROUTER_API_KEY=                   # optional server fallback when no cookie is set
+OPENROUTER_API_BASE=                  # optional, defaults to https://openrouter.ai/api/v1
 OPEN_HIGGSFIELD_READ_WRITE_TOKEN=     # Vercel Blob read-write token
 ```
 

@@ -73,8 +73,8 @@ export function KeyModal({
             </div>
             <p className="ohf-keys-copy">
               {configured
-                ? "A key is saved in this browser. Enter a new id:secret pair to replace it."
-                : "Paste your platform key as id:secret. It stays in an httpOnly cookie and is sent as Authorization: Key id:secret."}
+                ? "A key is saved in this browser. Enter a new OpenRouter key to replace it."
+                : "Paste your OpenRouter API key. It stays in an httpOnly cookie and is sent as Authorization: Bearer."}
             </p>
           </div>
           <button type="button" className="ohf-icon-btn" aria-label="Close" onClick={onClose}>
@@ -91,6 +91,7 @@ export function KeyModal({
               type="password"
               autoComplete="off"
               spellCheck={false}
+              placeholder="sk-or-..."
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
             />
