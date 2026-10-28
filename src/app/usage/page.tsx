@@ -1,14 +1,25 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Hanken_Grotesk, JetBrains_Mono, Newsreader } from "next/font/google";
 
-import { AuthShell } from "@/openhiggsfield/auth-shell";
 import { UsagePanel } from "@/openhiggsfield/usage-panel";
 
 import "@/openhiggsfield/openhiggsfield.css";
 
-const inter = Inter({
+const newsreader = Newsreader({
   subsets: ["latin"],
-  variable: "--font-ohf-inter",
+  variable: "--font-usage-display",
+  display: "swap",
+});
+
+const hanken = Hanken_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-usage-body",
+  display: "swap",
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-usage-mono",
   display: "swap",
 });
 
@@ -20,8 +31,8 @@ export const metadata: Metadata = {
 
 export default function UsagePage() {
   return (
-    <AuthShell fontClassName={inter.variable} title="Usage" wide>
+    <div className={`ohf ohf-usage-page ${newsreader.variable} ${hanken.variable} ${jetbrains.variable}`}>
       <UsagePanel />
-    </AuthShell>
+    </div>
   );
 }

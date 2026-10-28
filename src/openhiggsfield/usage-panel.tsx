@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -80,15 +81,39 @@ export function UsagePanel() {
   }
 
   const maxCredits = Math.max(1, ...(data?.days.map((day) => day.credits) ?? [1]));
+  const generations = data?.kpis.generations ?? 0;
+  const successRate = generations === 0 ? 0 : (data!.kpis.success / generations) * 100;
+  const failRate = generations === 0 ? 0 : (data!.kpis.failed / generations) * 100;
+  const dayCredits = data?.days.reduce((sum, day) => sum + day.credits, 0) ?? 0;
+  const columns = data?.isSuperadmin ? 8 : 7;
 
   return (
     <div className="ohf-usage">
-      <p className="ohf-usage-lead">
-        {data?.isSuperadmin
-          ? "Credits and generation logs for every account. 1 credit = $0.01."
-          : "Credits and generation logs for your account. 1 credit = $0.01."}
-      </p>
+      <header className="ohf-usage-head">
+        <div>
+          <Link href="/" className="ohf-usage-back">
+            Back to studio
+          </Link>
+          <p className="ohf-usage-eyebrow">Account</p>
+          <h1>Usage</h1>
+          <p className="ohf-usage-lead">
+            {data?.isSuperadmin
+              ? "Credits and generation logs for every account. 1 credit = $0.01."
+              : "Credits and generation logs for your account. 1 credit = $0.01."}
+          </p>
+        </div>
+        <div className="ohf-usage-actions">
+          <button type="button" className="ohf-usage-ghost" onClick={exportCsv} disabled={!data?.rows.length}>
+            Export CSV
+          </button>
+          <button type="submit" form="usage-filters" className="ohf-usage-apply" disabled={loading}>
+            {loading ? "Loading" : "Apply"}
+          </button>
+        </div>
+      </header>
+
       <form
+        id="usage-filters"
         className="ohf-usage-filters"
         onSubmit={(event) => {
           event.preventDefault();
@@ -150,7 +175,7 @@ export function UsagePanel() {
             <option value="pending">Pending</option>
           </select>
         </label>
-        <label>
+        <label className="ohf-usage-search">
           Request
           <input
             value={draft.requestId}
@@ -158,52 +183,73 @@ export function UsagePanel() {
             onChange={(event) => setDraft({ ...draft, requestId: event.target.value })}
           />
         </label>
-        <button type="submit" className="ohf-auth-submit" disabled={loading}>
-          {loading ? "Loading" : "Apply"}
-        </button>
-        <button type="button" className="ohf-auth-submit" onClick={exportCsv} disabled={!data?.rows.length}>
-          Export CSV
-        </button>
       </form>
+
       {error && (
         <div className="ohf-alert" role="alert">
           {error}
         </div>
       )}
+
       {data && (
         <>
-          <div className="ohf-usage-kpis">
-            <Kpi label="Credits used" value={formatCount(data.kpis.credits)} />
-            <Kpi label="Generations" value={formatCount(data.kpis.generations)} />
-            <Kpi label="Success" value={formatCount(data.kpis.success)} />
-            <Kpi label="Failed" value={formatCount(data.kpis.failed)} />
-            {data.isSuperadmin && <Kpi label="Active users" value={formatCount(data.kpis.activeUsers)} />}
-          </div>
-          <section className="ohf-usage-split">
-            <div>
-              <h2>Credits per day</h2>
+          <section className="ohf-usage-kpis" aria-label="Usage summary">
+            <Kpi label="Credits used" value={formatCount(data.kpis.credits)} note={formatUsd(data.kpis.credits)} tone="gold" />
+            <Kpi label="Generations" value={formatCount(data.kpis.generations)} note="In this range" />
+            <Kpi
+              label="Success"
+              value={formatCount(data.kpis.success)}
+              note={generations ? `${successRate.toFixed(1)}% pass rate` : "No generations"}
+              tone="ok"
+            />
+            <Kpi
+              label="Failed"
+              value={formatCount(data.kpis.failed)}
+              note={generations ? `${failRate.toFixed(1)}% fail rate` : "No generations"}
+              tone="bad"
+            />
+            {data.isSuperadmin && (
+              <Kpi label="Active users" value={formatCount(data.kpis.activeUsers)} note="In this range" />
+            )}
+          </section>
+
+          <section className={`ohf-usage-split${data.isSuperadmin ? "" : " is-solo"}`}>
+            <article className="ohf-usage-card">
+              <div className="ohf-usage-card-head">
+                <div>
+                  <h2>Credits per day</h2>
+                  <p>Successful credits across the selected dates.</p>
+                </div>
+              </div>
               {data.days.length === 0 ? (
                 <p className="ohf-usage-empty">No usage in this range.</p>
               ) : (
                 <div className="ohf-usage-bars" aria-label="Credits per day">
                   {data.days.map((day) => (
-                    <div key={day.day} className="ohf-usage-bar" title={`${day.day}: ${day.credits}`}>
+                    <div key={day.day} className="ohf-usage-bar" title={`${day.day}: ${formatCount(day.credits)} credits`}>
                       <span style={{ height: `${Math.max(4, (day.credits / maxCredits) * 100)}%` }} />
-                      <em>{day.day.slice(5)}</em>
+                      <em>{day.day.slice(8)}</em>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+              <p className="ohf-usage-footnote">Daily total {formatCount(dayCredits)} credits</p>
+            </article>
             {data.isSuperadmin && (
-              <div>
-                <h2>Top users</h2>
+              <article className="ohf-usage-card">
+                <div className="ohf-usage-card-head">
+                  <div>
+                    <h2>Top users</h2>
+                    <p>Ranked by credits in this range.</p>
+                  </div>
+                </div>
                 {data.topUsers.length === 0 ? (
                   <p className="ohf-usage-empty">No users in this range.</p>
                 ) : (
                   <ol className="ohf-usage-top">
-                    {data.topUsers.map((user) => (
+                    {data.topUsers.map((user, index) => (
                       <li key={user.username}>
+                        <span className="ohf-usage-rank">{index + 1}</span>
                         <strong>{user.username}</strong>
                         <span>
                           {formatCount(user.credits)} cr · {formatCount(user.generations)}
@@ -212,70 +258,99 @@ export function UsagePanel() {
                     ))}
                   </ol>
                 )}
-              </div>
+              </article>
             )}
           </section>
-          <div className="ohf-admin-table-wrap">
-            <table className="ohf-admin-table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  {data.isSuperadmin && <th>User</th>}
-                  <th>Model</th>
-                  <th>Type</th>
-                  <th>Spec</th>
-                  <th>Credits</th>
-                  <th>Status</th>
-                  <th>Request</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.length === 0 ? (
+
+          <section className="ohf-usage-card ohf-usage-ledger">
+            <div className="ohf-usage-card-head">
+              <div>
+                <h2>Generation log</h2>
+                <p>
+                  Showing {formatCount(data.rows.length)}
+                  {data.rows.length === 500 ? " of the latest 500" : ""} events
+                </p>
+              </div>
+            </div>
+            <div className="ohf-usage-table-wrap">
+              <table className="ohf-usage-table">
+                <thead>
                   <tr>
-                    <td colSpan={data.isSuperadmin ? 8 : 7}>No generations in this range.</td>
+                    <th>Time</th>
+                    {data.isSuperadmin && <th>User</th>}
+                    <th>Model</th>
+                    <th>Type</th>
+                    <th>Spec</th>
+                    <th>Credits</th>
+                    <th>Status</th>
+                    <th>Request</th>
                   </tr>
-                ) : (
-                  data.rows.map((row) => <LogRow key={row.requestId} row={row} showUser={data.isSuperadmin} />)
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {data.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={columns}>No generations in this range.</td>
+                    </tr>
+                  ) : (
+                    data.rows.map((row) => <LogRow key={`${row.requestId}-${row.createdAt}`} row={row} showUser={data.isSuperadmin} />)
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
       )}
     </div>
   );
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({
+  label,
+  value,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  tone?: "gold" | "ok" | "bad";
+}) {
   return (
-    <div className="ohf-usage-kpi">
+    <article className="ohf-usage-kpi" data-tone={tone}>
       <span>{label}</span>
       <strong>{value}</strong>
-    </div>
+      <em>{note}</em>
+    </article>
   );
 }
 
 function LogRow({ row, showUser }: { row: UsageRow; showUser: boolean }) {
   return (
     <tr>
-      <td>{formatTime(row.createdAt)}</td>
+      <td className="ohf-usage-mono">{formatTime(row.createdAt)}</td>
       {showUser && <td>{row.username}</td>}
       <td>{row.modelId}</td>
-      <td>{row.kind}</td>
+      <td className="ohf-usage-kind">{row.kind}</td>
       <td>{row.spec || "—"}</td>
-      <td>{formatCount(row.credits)}</td>
+      <td className="ohf-usage-mono">{formatCount(row.credits)}</td>
       <td>
-        <span className="ohf-admin-status" data-status={row.status === "success" ? "active" : row.status === "failed" ? "disabled" : "pending"}>
+        <span className="ohf-usage-status" data-status={row.status}>
           {row.status}
         </span>
       </td>
-      <td>{row.requestId}</td>
+      <td className="ohf-usage-mono ohf-usage-request" title={row.requestId}>
+        {row.requestId}
+      </td>
     </tr>
   );
 }
 
 function formatCount(value: number): string {
   return new Intl.NumberFormat("id-ID").format(value);
+}
+
+function formatUsd(credits: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(credits * 0.01);
 }
 
 function formatTime(value: string): string {
