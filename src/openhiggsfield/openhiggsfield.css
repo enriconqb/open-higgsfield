@@ -2813,6 +2813,70 @@
   opacity: 1;
   transform: none;
 }
+.ohf-asset-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: none;
+  border-radius: inherit;
+}
+.ohf-asset[data-blocked="true"] .ohf-asset-hit {
+  cursor: default;
+}
+.ohf-asset[data-blocked="true"] {
+  opacity: 0.35;
+}
+.ohf-asset-tools {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+}
+.ohf-asset-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--plate-ink);
+  background: var(--plate);
+  box-shadow: var(--shadow-1);
+}
+.ohf-asset-tool:hover {
+  background: var(--s4);
+  color: var(--tx);
+}
+.ohf-asset-undo {
+  margin: 14px 14px 0;
+}
+.ohf-asset-preview {
+  width: min(720px, calc(100vw - 32px));
+}
+.ohf-asset-preview-stage {
+  padding: 14px 18px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ohf-asset-preview-stage img,
+.ohf-asset-preview-stage video {
+  max-width: 100%;
+  max-height: min(70vh, 640px);
+  border-radius: 12px;
+  background: var(--s1);
+}
+.ohf-asset-confirm {
+  width: min(380px, calc(100vw - 32px));
+}
+.ohf-asset-confirm-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 18px 18px;
+}
 
 /* The one dashed edge on the surface: a slot waiting to be filled, not a
    drawn control. */

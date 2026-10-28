@@ -335,6 +335,8 @@ export function Composer({
             uploading={tray.uploading}
             onUpload={tray.begin}
             onApply={tray.apply}
+            onForget={tray.forgetUpload}
+            onRestore={tray.restoreUpload}
             onClose={() => setOverlay(null)}
           />
         )}

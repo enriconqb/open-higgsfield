@@ -11,7 +11,9 @@ import {
   AudioIcon,
   CheckIcon,
   CloseIcon,
+  EyeIcon,
   PlayBadgeIcon,
+  TrashIcon,
   UploadIcon,
 } from "./icons";
 import type { UploadRecord } from "./uploads";
@@ -31,6 +33,8 @@ interface Asset {
   /** The tile's name — a file name, or the prompt the run was made from. It is
       the alt text and the pointer title: a grey plate has no other handle. */
   title: string;
+  /** Present only for a file on the Uploads shelf, so it can be previewed and removed. */
+  uploadId?: string;
   /** The run's layered-gradient art, so a tile whose media is slow to arrive or
       has aged off the platform's CDN is still a picture rather than a hole. */
   art?: string;
@@ -48,6 +52,8 @@ export function AssetPicker({
   uploading,
   onUpload,
   onApply,
+  onForget,
+  onRestore,
   onClose,
 }: {
   model: ModelEntry;
@@ -60,6 +66,8 @@ export function AssetPicker({
   uploading: boolean;
   onUpload: (role: MediaRole) => void;
   onApply: (role: MediaRole, urls: string[]) => void;
+  onForget: (id: string) => void;
+  onRestore: (record: UploadRecord) => void;
   onClose: () => void;
 }) {
   const roles = rolesOf(model);
@@ -73,6 +81,9 @@ export function AssetPicker({
      off again. An array, not a Set: the order picked is the order attached,
      and a start/end pair is not order-blind. */
   const [selected, setSelected] = useState<string[]>(() => urlsOf(items, defaultRole(model)));
+  const [preview, setPreview] = useState<Asset | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Asset | null>(null);
+  const [undo, setUndo] = useState<UploadRecord | null>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
 
   const kind = ROLE_KINDS[role];
@@ -84,7 +95,12 @@ export function AssetPicker({
     () =>
       uploads
         .filter((record) => record.kind === kind)
-        .map((record) => ({ url: record.url, kind: record.kind, title: record.name })),
+        .map((record) => ({
+          url: record.url,
+          kind: record.kind,
+          title: record.name,
+          uploadId: record.id,
+        })),
     [uploads, kind],
   );
 
@@ -153,6 +169,25 @@ export function AssetPicker({
     }
     setSelected((prev) => (prev.includes(staged) ? prev : [...prev, staged]));
   }, [staged]);
+
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), UNDO_MS);
+    return () => clearTimeout(timer);
+  }, [undo]);
+
+  function confirmDelete() {
+    if (!pendingDelete?.uploadId) return;
+    const record = uploads.find((row) => row.id === pendingDelete.uploadId);
+    if (!record) {
+      setPendingDelete(null);
+      return;
+    }
+    onForget(record.id);
+    setSelected((prev) => prev.filter((url) => url !== record.url));
+    setPendingDelete(null);
+    setUndo(record);
+  }
 
   function toggle(url: string) {
     if (max === 1) {
@@ -270,6 +305,22 @@ export function AssetPicker({
       )}
 
       <div className="ohf-assets-body ohf-scroll">
+        {undo && (
+          <div className="ohf-undo ohf-asset-undo" role="status">
+            <span className="ohf-undo-drain" style={{ animationDuration: `${UNDO_MS}ms` }} aria-hidden />
+            <span className="ohf-undo-text">Upload removed</span>
+            <button
+              type="button"
+              className="ohf-undo-act"
+              onClick={() => {
+                onRestore(undo);
+                setUndo(null);
+              }}
+            >
+              Undo
+            </button>
+          </div>
+        )}
         {assets.length === 0 ? (
           <div className="ohf-picker-empty">
             <span className="ohf-picker-empty-ic">
@@ -309,11 +360,13 @@ export function AssetPicker({
               const on = picked.has(asset.url);
               return (
                 <AssetTile
-                  key={asset.url}
+                  key={asset.uploadId ?? asset.url}
                   asset={asset}
                   picked={on}
                   blocked={!on && room === 0}
                   onToggle={toggle}
+                  onPreview={asset.uploadId ? () => setPreview(asset) : undefined}
+                  onDelete={asset.uploadId ? () => setPendingDelete(asset) : undefined}
                 />
               );
             })}
@@ -336,9 +389,19 @@ export function AssetPicker({
           {applyLabel}
         </button>
       </div>
+      {preview && <PreviewDialog asset={preview} onClose={() => setPreview(null)} />}
+      {pendingDelete && (
+        <ConfirmDeleteDialog
+          name={pendingDelete.title}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={confirmDelete}
+        />
+      )}
     </div>
   );
 }
+
+const UNDO_MS = 6000;
 
 function urlsOf(items: MediaItem[], role: MediaRole): string[] {
   return items.filter((item) => item.role === role).map((item) => item.url);
@@ -364,38 +427,27 @@ function emptyCopy(source: Source, kind: AssetKind): { title: string; hint: stri
 }
 
 /* Video assets preview on hover, the same reflex the gallery teaches, so the
-   tile carries its own element and its own ref. */
+   tile carries its own element and its own ref. The select control is a
+   stretched button so preview and delete can sit beside it, not inside it. */
 const AssetTile = memo(function AssetTile({
   asset,
   picked,
   blocked,
   onToggle,
+  onPreview,
+  onDelete,
 }: {
   asset: Asset;
   picked: boolean;
   blocked: boolean;
   onToggle: (url: string) => void;
+  onPreview?: () => void;
+  onDelete?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   return (
-    <button
-      type="button"
-      className="ohf-asset"
-      data-picked={picked}
-      disabled={blocked}
-      title={asset.title}
-      aria-pressed={picked}
-      aria-label={asset.title}
-      onClick={() => onToggle(asset.url)}
-      onMouseEnter={() => void videoRef.current?.play().catch(() => {})}
-      onMouseLeave={() => {
-        const video = videoRef.current;
-        if (!video) return;
-        video.pause();
-        video.currentTime = 0;
-      }}
-    >
+    <div className="ohf-asset" data-picked={picked} data-blocked={blocked || undefined} title={asset.title}>
       <span className="ohf-asset-art" style={asset.art ? { background: asset.art } : undefined} />
 
       {asset.kind === "video" ? (
@@ -406,7 +458,8 @@ const AssetTile = memo(function AssetTile({
           muted
           loop
           playsInline
-          preload="metadata"
+          preload="auto"
+          onLoadedMetadata={(event) => paintFirstFrame(event.currentTarget)}
         />
       ) : asset.kind === "audio" ? (
         <span className="ohf-asset-glyph">
@@ -416,7 +469,7 @@ const AssetTile = memo(function AssetTile({
         /* Blob and platform CDN hosts both; next/image would need every
            provider domain allow-listed up front for a 112px thumb. */
         /* eslint-disable-next-line @next/next/no-img-element */
-        <img className="ohf-asset-media" src={asset.url} alt="" loading="lazy" />
+        <img className="ohf-asset-media" src={asset.url} alt="" loading="eager" />
       )}
 
       {asset.kind === "video" && (
@@ -425,9 +478,121 @@ const AssetTile = memo(function AssetTile({
         </span>
       )}
 
+      <button
+        type="button"
+        className="ohf-asset-hit"
+        disabled={blocked}
+        aria-pressed={picked}
+        aria-label={asset.title}
+        onClick={() => onToggle(asset.url)}
+        onMouseEnter={() => void videoRef.current?.play().catch(() => {})}
+        onMouseLeave={() => {
+          const video = videoRef.current;
+          if (!video) return;
+          video.pause();
+          video.currentTime = 0;
+        }}
+      />
+
       <span className="ohf-asset-mark" aria-hidden>
         <CheckIcon size={12} />
       </span>
-    </button>
+
+      {(onPreview || onDelete) && (
+        <span className="ohf-asset-tools">
+          {onPreview && (
+            <button type="button" className="ohf-asset-tool" aria-label={`Preview ${asset.title}`} onClick={onPreview}>
+              <EyeIcon size={12} />
+            </button>
+          )}
+          {onDelete && (
+            <button type="button" className="ohf-asset-tool" aria-label={`Delete ${asset.title}`} onClick={onDelete}>
+              <TrashIcon size={12} />
+            </button>
+          )}
+        </span>
+      )}
+    </div>
   );
 });
+
+function paintFirstFrame(video: HTMLVideoElement) {
+  const span = Number.isFinite(video.duration) && video.duration > 0 ? video.duration * 0.1 : 0.1;
+  const nudge = Math.min(0.1, Math.max(span, 0.001));
+  const back = () => {
+    video.currentTime = 0;
+  };
+  video.addEventListener("seeked", back, { once: true });
+  try {
+    video.currentTime = nudge;
+  } catch {
+    video.removeEventListener("seeked", back);
+  }
+}
+
+function PreviewDialog({ asset, onClose }: { asset: Asset; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  return (
+    <dialog ref={ref} className="ohf" aria-label={`Preview ${asset.title}`} onClose={onClose} onCancel={onClose}>
+      <div className="ohf-dialog-panel ohf-asset-preview">
+        <div className="ohf-keys-head">
+          <div>
+            <div className="ohf-keys-title">Preview</div>
+            <p className="ohf-keys-copy">{asset.title}</p>
+          </div>
+          <button type="button" className="ohf-icon-btn ohf-icon-btn--ghost" aria-label="Close preview" onClick={onClose}>
+            <CloseIcon size={14} />
+          </button>
+        </div>
+        <div className="ohf-asset-preview-stage">
+          {asset.kind === "video" ? (
+            <video src={asset.url} controls playsInline />
+          ) : asset.kind === "audio" ? (
+            <audio src={asset.url} controls />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={asset.url} alt={asset.title} />
+          )}
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function ConfirmDeleteDialog({
+  name,
+  onCancel,
+  onConfirm,
+}: {
+  name: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  return (
+    <dialog ref={ref} className="ohf" aria-label="Delete upload" onCancel={onCancel}>
+      <div className="ohf-dialog-panel ohf-asset-confirm">
+        <div className="ohf-keys-head">
+          <div>
+            <div className="ohf-keys-title">Hapus unggahan ini?</div>
+            <p className="ohf-keys-copy">{name}</p>
+          </div>
+        </div>
+        <div className="ohf-asset-confirm-acts">
+          <button type="button" className="ohf-btn-solid" onClick={onCancel}>
+            Batal
+          </button>
+          <button type="button" className="ohf-btn-accent" onClick={onConfirm}>
+            Hapus
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}

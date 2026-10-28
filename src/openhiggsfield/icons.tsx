@@ -300,6 +300,15 @@ export function TrashIcon({ size = 13 }: IconProps) {
   );
 }
 
+export function EyeIcon({ size = 13 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M1.6 8S4 3.4 8 3.4 14.4 8 14.4 8 12 12.6 8 12.6 1.6 8 1.6 8Z" />
+      <circle cx="8" cy="8" r="1.8" />
+    </svg>
+  );
+}
+
 export function UndoIcon({ size = 13 }: IconProps) {
   return (
     <svg {...base(size)}>

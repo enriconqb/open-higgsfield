@@ -46,6 +46,10 @@ export interface MediaTray {
   /** Make the role's inputs exactly these URLs — the picker hands back the set
       it edited, so one press both attaches and detaches. */
   apply: (role: MediaRole, urls: string[]) => void;
+  /** Drop one file from the local upload shelf. The blob URL stays. */
+  forgetUpload: (id: string) => void;
+  /** Put a forgotten upload back on the shelf. */
+  restoreUpload: (record: UploadRecord) => void;
 }
 
 export function useMediaTray(
@@ -175,7 +179,15 @@ export function useMediaTray(
     }
   }
 
-  return { roles, items: media.items, uploads, staged, uploading, allFull, input, receive, begin, apply };
+  function forgetUpload(id: string) {
+    setUploads((prev) => prev.filter((row) => row.id !== id));
+  }
+
+  function restoreUpload(record: UploadRecord) {
+    setUploads((prev) => rememberUpload(prev, record));
+  }
+
+  return { roles, items: media.items, uploads, staged, uploading, allFull, input, receive, begin, apply, forgetUpload, restoreUpload };
 }
 
 const ROLE_ORDER: Record<"image" | "video" | "audio", MediaRole[]> = {
