@@ -1,9 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { PublicUser } from "@/auth/types";
+
 import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
-import { AssetsIcon, HeartIcon, ImageIcon, KeyIcon, VideoIcon } from "./icons";
+import { AssetsIcon, HeartIcon, ImageIcon, KeyIcon, UserIcon, VideoIcon } from "./icons";
 
 const VIEW_ICONS: Record<GalleryView, () => React.ReactNode> = {
   image: () => <ImageIcon />,
@@ -18,12 +21,16 @@ export function Topbar({
   busy,
   keyConfigured,
   onKeys,
+  user,
+  onLogout,
 }: {
   view: GalleryView;
   onView: (next: GalleryView) => void;
   busy: boolean;
   keyConfigured: boolean;
   onKeys: () => void;
+  user: PublicUser | null;
+  onLogout: () => void;
 }) {
   const tabsRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
@@ -120,23 +127,45 @@ export function Topbar({
         </div>
       </div>
 
-      {/* Generations run on the visitor's own platform key, so this both states
-          whether one is held and opens the modal that sets it — and its lamp is
-          the studio's liveness, the one place accent moves. */}
-      <div className="ohf-bar ohf-enter-1">
-        <button
-          type="button"
-          className="ohf-key"
-          data-busy={busy}
-          data-ready={keyConfigured}
-          onClick={onKeys}
-          aria-label={keyConfigured ? "Edit platform key" : "Add platform key"}
-          title={keyConfigured ? "Edit platform key" : "Add platform key"}
-        >
-          <KeyIcon />
-          <span className="ohf-key-text">{keyConfigured ? "Your key" : "Add key"}</span>
-          <span className="ohf-lamp" />
-        </button>
+      <div className="ohf-bar ohf-enter-1 ohf-topbar-actions">
+        {user ? (
+          <>
+            {user.role === "superadmin" && (
+              <Link href="/admin" className="ohf-key ohf-key-link" title="Manage users">
+                <UserIcon />
+                <span className="ohf-key-text">Users</span>
+              </Link>
+            )}
+            <button
+              type="button"
+              className="ohf-key"
+              data-busy={busy}
+              data-ready={keyConfigured}
+              onClick={onKeys}
+              aria-label={keyConfigured ? "Edit platform key" : "Add platform key"}
+              title={keyConfigured ? "Edit platform key" : "Add platform key"}
+            >
+              <KeyIcon />
+              <span className="ohf-key-text">{keyConfigured ? "Your key" : "Add key"}</span>
+              <span className="ohf-lamp" />
+            </button>
+            <button
+              type="button"
+              className="ohf-key"
+              onClick={onLogout}
+              title={`Sign out (${user.username})`}
+              aria-label={`Sign out (${user.username})`}
+            >
+              <UserIcon />
+              <span className="ohf-key-text">Sign out</span>
+            </button>
+          </>
+        ) : (
+          <Link href="/login" className="ohf-key ohf-key-link" title="Sign in to generate">
+            <UserIcon />
+            <span className="ohf-key-text">Sign in</span>
+          </Link>
+        )}
       </div>
     </div>
   );

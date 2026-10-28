@@ -1,6 +1,12 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { clearEncryptedPlatformKey, saveEncryptedPlatformKey } from "@/auth/actions";
+import { AuthRequiredError } from "@/auth/errors";
+import {
+  encryptedPlatformKeyKind,
+  hasEncryptedPlatformKey,
+  resolveUserCredentials,
+} from "@/auth/resolve-credentials";
 
 import { overlayModel, snapSettings } from "./capabilities";
 import { inlineLocalMedia } from "./local-upload";
@@ -10,14 +16,7 @@ import { openRouterSlug } from "./catalog/openrouter-slugs";
 import type { ImagePriceLine, OpenRouterQuote } from "./estimate";
 import { skuUsd } from "./estimate";
 import type { GenerationPlane } from "./catalog/types";
-import {
-  MissingCredentialsError,
-  PLATFORM_KEY_COOKIE,
-  PLATFORM_KEY_COOKIE_OPTIONS,
-  decodeCredentials,
-  encodeCredentials,
-  parseCredentialInput,
-} from "./credentials";
+import { MissingCredentialsError } from "./credentials";
 import type { KeyProvider } from "./credentials";
 import { createHiggsfieldClient, createPlatformClient, openRouterBaseUrl } from "./platform";
 import type { QueuedGeneration, StatusResult } from "./platform";
@@ -25,18 +24,15 @@ import { toHiggsfield } from "./to-higgsfield";
 import { toPlatform } from "./to-platform";
 
 export async function savePlatformCredentials(data: unknown) {
-  const { apiKey, provider } = parseCredentialInput(data);
-  const jar = await cookies();
-  jar.set(PLATFORM_KEY_COOKIE, encodeCredentials(apiKey, provider), PLATFORM_KEY_COOKIE_OPTIONS);
+  await saveEncryptedPlatformKey(data);
 }
 
 export async function clearPlatformCredentials() {
-  const jar = await cookies();
-  jar.set(PLATFORM_KEY_COOKIE, "", { ...PLATFORM_KEY_COOKIE_OPTIONS, maxAge: 0 });
+  await clearEncryptedPlatformKey();
 }
 
 export async function hasPlatformCredentials() {
-  return (await readStoredCredentials()) !== null || Boolean(process.env.OPENROUTER_API_KEY?.trim());
+  return hasEncryptedPlatformKey();
 }
 
 const PRICE_TTL_MS = 5 * 60_000;
@@ -224,10 +220,7 @@ function asList(value: unknown): unknown[] {
 }
 
 export async function platformKeyKind(): Promise<KeyProvider | null> {
-  const stored = await readStoredCredentials();
-  if (stored) return stored.provider;
-  if (process.env.OPENROUTER_API_KEY?.trim()) return "openrouter";
-  return null;
+  return encryptedPlatformKeyKind();
 }
 
 export async function submitGeneration(plane: GenerationPlane) {
@@ -272,22 +265,24 @@ export async function getGenerationStatuses(data: unknown): Promise<StatusResult
   );
 }
 
-async function readStoredCredentials() {
-  const jar = await cookies();
-  return decodeCredentials(jar.get(PLATFORM_KEY_COOKIE)?.value);
-}
-
 async function readCredentials() {
-  const stored = await readStoredCredentials();
-  const apiKey = stored?.apiKey || process.env.OPENROUTER_API_KEY?.trim();
-  if (!apiKey) throw new MissingCredentialsError();
-  const provider = stored?.provider ?? "openrouter";
-  if (provider === "higgsfield") {
-    const baseUrl = process.env.HF_API_BASE_URL;
-    if (!baseUrl) throw new Error("Missing HF_API_BASE_URL");
-    return { apiKey, baseUrl, provider };
+  try {
+    const stored = await resolveUserCredentials();
+    const { apiKey, provider } = stored;
+    if (provider === "higgsfield") {
+      const baseUrl = process.env.HF_API_BASE_URL;
+      if (!baseUrl) throw new Error("Missing HF_API_BASE_URL");
+      return { apiKey, baseUrl, provider };
+    }
+    return { apiKey, baseUrl: openRouterBaseUrl(), provider };
+  } catch (caught) {
+    if (caught instanceof MissingCredentialsError) throw caught;
+    if (caught instanceof AuthRequiredError) throw caught;
+    if (caught instanceof Error && caught.message.includes("Missing platform key")) {
+      throw new MissingCredentialsError();
+    }
+    throw caught;
   }
-  return { apiKey, baseUrl: openRouterBaseUrl(), provider };
 }
 
 function parseRequestIds(data: unknown): string[] {

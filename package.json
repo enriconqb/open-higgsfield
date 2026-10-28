@@ -6,11 +6,16 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start",
-    "brand": "node scripts/build-brand-assets.mjs"
+    "brand": "node scripts/build-brand-assets.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:status": "node scripts/db-status.mjs",
+    "db:seed": "node scripts/db-seed.mjs",
+    "db:seed-admin": "node scripts/db-seed-admin.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.10",
     "@vercel/blob": "^2.8.0",
+    "mysql2": "^3.24.6",
     "next": "^16.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -20,6 +25,8 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "dotenv": "^18.0.9",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.2"
   }
 }

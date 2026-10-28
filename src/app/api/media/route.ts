@@ -1,7 +1,8 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { PLATFORM_KEY_COOKIE, decodeCredentials } from "@/generation/credentials";
+import { AuthRequiredError } from "@/auth/errors";
+import { resolveUserCredentials } from "@/auth/resolve-credentials";
+import { MissingCredentialsError } from "@/generation/credentials";
 import { openRouterBaseUrl } from "@/generation/platform";
 
 const JOB_ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -15,9 +16,22 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ detail: "Invalid media request" }, { status: 400 });
   }
 
-  const jar = await cookies();
-  const apiKey = decodeCredentials(jar.get(PLATFORM_KEY_COOKIE)?.value)?.apiKey || process.env.OPENROUTER_API_KEY?.trim();
-  if (!apiKey) return NextResponse.json({ detail: "Missing platform key" }, { status: 401 });
+  let apiKey: string;
+  try {
+    const credentials = await resolveUserCredentials();
+    if (credentials.provider !== "openrouter") {
+      return NextResponse.json({ detail: "OpenRouter key required" }, { status: 401 });
+    }
+    apiKey = credentials.apiKey;
+  } catch (caught) {
+    if (caught instanceof AuthRequiredError) {
+      return NextResponse.json({ detail: "Login required" }, { status: 401 });
+    }
+    if (caught instanceof MissingCredentialsError) {
+      return NextResponse.json({ detail: "Missing platform key" }, { status: 401 });
+    }
+    return NextResponse.json({ detail: "Missing platform key" }, { status: 401 });
+  }
 
   const upstream = await fetch(
     `${openRouterBaseUrl()}/videos/${encodeURIComponent(job)}/content?index=${index}`,

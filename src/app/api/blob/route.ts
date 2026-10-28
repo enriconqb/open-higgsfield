@@ -2,6 +2,8 @@ import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { AuthRequiredError } from "@/auth/errors";
+import { requireActiveUser } from "@/auth/guard";
 import {
   DEVICE_COOKIE,
   DEVICE_COOKIE_OPTIONS,
@@ -9,9 +11,16 @@ import {
   resolveDeviceId,
 } from "@/generation/device";
 
-// Anyone who can hit this route can upload. Gate it when auth exists.
-
 export async function POST(request: Request): Promise<NextResponse> {
+  try {
+    await requireActiveUser();
+  } catch (caught) {
+    if (caught instanceof AuthRequiredError) {
+      return NextResponse.json({ error: "Login required" }, { status: 401 });
+    }
+    throw caught;
+  }
+
   const incoming = (await request.json()) as HandleUploadBody;
   const device =
     incoming.type === "blob.generate-client-token" ? await readDeviceId() : null;

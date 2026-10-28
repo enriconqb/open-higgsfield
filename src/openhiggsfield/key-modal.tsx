@@ -75,8 +75,8 @@ export function KeyModal({
             </div>
             <p className="ohf-keys-copy">
               {configured
-                ? "A key is saved in this browser. Choose the provider and enter a new key to replace it."
-                : "Choose OpenRouter or Higgsfield, then paste the key. It stays in an httpOnly cookie."}
+                ? "A key is encrypted on the server for your account. Choose the provider and enter a new key to replace it. Admins cannot read the plaintext."
+                : "Choose OpenRouter or Higgsfield, then paste the key. It is encrypted with your password and never shown again."}
             </p>
           </div>
           <button type="button" className="ohf-icon-btn" aria-label="Close" onClick={onClose}>

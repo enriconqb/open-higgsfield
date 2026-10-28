@@ -71,6 +71,15 @@ export function KeyIcon({ size = 15 }: IconProps) {
   );
 }
 
+export function UserIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="8" cy="5.5" r="2.6" />
+      <path d="M2.8 13.4c.6-2.6 2.6-3.9 5.2-3.9s4.6 1.3 5.2 3.9" />
+    </svg>
+  );
+}
+
 export function CaretDownIcon({ size = 10 }: IconProps) {
   return (
     <svg {...base(size)}>

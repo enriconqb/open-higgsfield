@@ -75,9 +75,10 @@ Next.js 16 App Router on Vercel · React 19 · plain CSS · Zustand · pnpm
   generation platform, so old history can outlive its CDN lifetime and show gaps.
 - **Failed, NSFW and canceled runs** are recorded as failed tiles carrying the
   reason and a retry that restores the prompt and model.
-- **Your own platform key.** Entered in a modal, stored by a server action in an
-  httpOnly cookie. A missing key opens the modal — it never fails silently. The
-  topbar lamp states whether a key is held and whether a run is in flight.
+- **Your own platform key.** Sign in, then enter a key in the modal. It is
+  encrypted per account (admins cannot read plaintext). Guests can browse;
+  generate requires an approved login. The topbar lamp states whether a key is
+  held and whether a run is in flight.
 
 ---
 
@@ -109,14 +110,33 @@ pnpm install
 pnpm dev            # http://localhost:3000
 ```
 
-Open the studio, press **Add key**, and paste your OpenRouter API key (`sk-or-...`).
+Sign in (or request access and wait for superadmin approval), press **Add key**,
+and paste your OpenRouter API key (`sk-or-...`).
+
+### Database & accounts
+
+```bash
+# .env — see .env.example
+DATABASE_URL=mysql://root@127.0.0.1:3306/video_gen
+SESSION_SECRET=change-me-to-a-long-random-string
+SUPERADMIN_USERNAME=admin
+SUPERADMIN_PASSWORD=your-secure-password
+
+pnpm db:migrate      # apply SQL in database/migrations
+pnpm db:status       # ran / pending
+pnpm db:seed         # seed data (superadmin from SUPERADMIN_*)
+pnpm db:seed-admin   # superadmin only (same as above for now)
+```
 
 ### Environment
 
 ```bash
-OPENROUTER_API_KEY=                   # optional server fallback when no cookie is set
 OPENROUTER_API_BASE=                  # optional, defaults to https://openrouter.ai/api/v1
 OPEN_HIGGSFIELD_READ_WRITE_TOKEN=     # Vercel Blob read-write token
+DATABASE_URL=                         # MySQL connection string
+SESSION_SECRET=                       # seals login cookies
+SUPERADMIN_USERNAME=                  # for pnpm db:seed (3–32: a-z, 0-9, _)
+SUPERADMIN_PASSWORD=
 ```
 
 ### Commands
