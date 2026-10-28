@@ -32,10 +32,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       process.env.OPEN_HIGGSFIELD_READ_WRITE_TOKEN?.trim() ||
       process.env.BLOB_READ_WRITE_TOKEN?.trim();
     if (!token) {
-      return withDeviceCookie(
-        NextResponse.json({ error: "Blob store is not configured" }, { status: 503 }),
-        device,
-      );
+      return withDeviceCookie(NextResponse.json({ mode: "local" }), device);
     }
     const json = await handleUpload({
       body,

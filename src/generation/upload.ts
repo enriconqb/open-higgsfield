@@ -14,10 +14,12 @@ export async function uploadMedia(file: File): Promise<{ url: string }> {
     });
     if (res.status === 401) throw new Error("Login required");
     if (res.ok) {
-      const { clientToken, pathname } = (await res.json()) as {
+      const { mode, clientToken, pathname } = (await res.json()) as {
+        mode?: unknown;
         clientToken?: unknown;
         pathname?: unknown;
       };
+      if (mode === "local") return uploadLocal(file);
       if (typeof clientToken === "string" && typeof pathname === "string") {
         try {
           const blob = await put(pathname, file, { access: "public", token: clientToken });
