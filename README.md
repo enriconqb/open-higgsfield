@@ -136,6 +136,7 @@ OPEN_HIGGSFIELD_READ_WRITE_TOKEN=     # Vercel Blob read-write token
 DATABASE_URL=                         # MySQL connection string
 SESSION_SECRET=                       # seals login cookies
 COOKIE_SECURE=                        # true only behind HTTPS; leave false for http://LAN
+NEXT_PUBLIC_BASE_PATH=                # e.g. /video-gen when served below the host root; rebuild after change
 SUPERADMIN_USERNAME=                  # for pnpm db:seed (3–32: a-z, 0-9, _)
 SUPERADMIN_PASSWORD=
 ```

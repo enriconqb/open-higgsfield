@@ -5,7 +5,8 @@ import type { GenerationPlane, MediaRole } from "./catalog/types";
 
 export const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
 
-const LOCAL_URL = /^\/api\/uploads\/([0-9a-f-]{36})$/i;
+/** Canonical `/api/uploads/<id>`, or the same path under NEXT_PUBLIC_BASE_PATH. */
+const LOCAL_URL = /^(?:\/[^/]+)?\/api\/uploads\/([0-9a-f-]{36})$/i;
 
 export function uploadFilePath(id: string): string {
   return path.join(UPLOAD_ROOT, id);
@@ -16,7 +17,7 @@ export function uploadTypePath(id: string): string {
 }
 
 /** Local files are not reachable by OpenRouter, so the server reads them and
-    sends a data URL. The browser only ever stores the short path. */
+    sends a data URL. Stored paths are `/api/uploads/<id>`, with the mount prefix when set. */
 export async function inlineLocalMedia(plane: GenerationPlane): Promise<GenerationPlane> {
   const media: GenerationPlane["media"] = {};
   for (const [role, items] of Object.entries(plane.media) as Array<[MediaRole, GenerationPlane["media"][MediaRole]]>) {

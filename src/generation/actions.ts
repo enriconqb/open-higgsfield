@@ -22,6 +22,7 @@ import { createHiggsfieldClient, createPlatformClient, openRouterBaseUrl } from 
 import type { QueuedGeneration, StatusResult } from "./platform";
 import { toHiggsfield } from "./to-higgsfield";
 import { toPlatform } from "./to-platform";
+import { estimatePlaneUsd, recordUsage, settleUsage, usageSpec, usageStatusFromPlatform } from "@/usage/record";
 
 export async function savePlatformCredentials(data: unknown) {
   await saveEncryptedPlatformKey(data);
@@ -234,13 +235,36 @@ export async function submitGeneration(plane: GenerationPlane) {
   };
   if (credentials.provider === "higgsfield") {
     const { path, body } = toHiggsfield(parsed);
-    return createHiggsfieldClient(credentials).submit(path, body);
+    const queued = await createHiggsfieldClient(credentials).submit(path, body);
+    await rememberUsage(parsed, queued);
+    return queued;
   }
   const { surface, body } = toPlatform(parsed);
   const client = createPlatformClient(credentials);
   const queued: QueuedGeneration =
     surface === "image" ? await client.submitImage(body) : await client.submitVideo(body);
+  await rememberUsage(parsed, queued);
   return queued;
+}
+
+async function rememberUsage(plane: GenerationPlane, queued: QueuedGeneration) {
+  try {
+    const quote = await openRouterQuote(plane.model).catch(() => null);
+    const estimated = estimatePlaneUsd(quote, plane);
+    const immediate = queued.immediate;
+    const settled = immediate ? usageStatusFromPlatform(immediate.status) : null;
+    const costUsd = immediate?.costUsd ?? estimated;
+    await recordUsage({
+      requestId: queued.requestId,
+      modelId: plane.model,
+      kind: getModel(plane.model).surface,
+      spec: usageSpec(plane.settings),
+      costUsd,
+      status: settled ?? "pending",
+    });
+  } catch (caught) {
+    console.error("[usage] record failed", caught instanceof Error ? caught.message : caught);
+  }
 }
 
 /** Every request in flight, answered in one round trip. Next dispatches server
@@ -257,7 +281,14 @@ export async function getGenerationStatuses(data: unknown): Promise<StatusResult
   return Promise.all(
     requestIds.map(async (requestId): Promise<StatusResult> => {
       try {
-        return { requestId, status: await client.status(requestId) };
+        const status = await client.status(requestId);
+        const settled = usageStatusFromPlatform(status.status);
+        if (settled) {
+          await settleUsage({ requestId, status: settled, costUsd: status.costUsd }).catch((caught) => {
+            console.error("[usage] settle failed", caught instanceof Error ? caught.message : caught);
+          });
+        }
+        return { requestId, status };
       } catch (caught) {
         return { requestId, error: caught instanceof Error ? caught.message : String(caught) };
       }

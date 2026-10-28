@@ -180,6 +180,9 @@ export function Topbar({
                   <Link href="/account" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                     Change password
                   </Link>
+                  <Link href="/usage" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                    Usage
+                  </Link>
                   {user.role === "superadmin" && (
                     <Link href="/admin" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                       Users management

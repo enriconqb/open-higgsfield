@@ -3917,7 +3917,141 @@ a.ohf-key-link {
 }
 
 .ohf-auth-card[data-wide="true"] {
-  width: min(820px, 100%);
+  width: min(1080px, 100%);
+}
+
+.ohf-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ohf-usage-lead {
+  margin: 0;
+  color: var(--tx-2, rgba(242, 244, 243, 0.65));
+  font-size: 0.85rem;
+}
+
+.ohf-usage-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.ohf-usage-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--tx-2, rgba(242, 244, 243, 0.65));
+}
+
+.ohf-usage-filters input,
+.ohf-usage-filters select {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line-1, rgba(255, 255, 255, 0.12));
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.ohf-usage-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.ohf-usage-kpi {
+  border: 1px solid var(--line-1, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ohf-usage-kpi span {
+  font-size: 0.75rem;
+  color: var(--tx-2, rgba(242, 244, 243, 0.65));
+}
+
+.ohf-usage-kpi strong {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ohf-usage-split {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr;
+  gap: 14px;
+}
+
+.ohf-usage-split h2 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.ohf-usage-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 140px;
+}
+
+.ohf-usage-bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ohf-usage-bar span {
+  display: block;
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: #c8f542;
+}
+
+.ohf-usage-bar em {
+  font-style: normal;
+  font-size: 0.65rem;
+  color: var(--tx-2, rgba(242, 244, 243, 0.55));
+}
+
+.ohf-usage-top {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ohf-usage-top li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.ohf-usage-empty {
+  margin: 0;
+  color: var(--tx-2, rgba(242, 244, 243, 0.65));
+  font-size: 0.85rem;
+}
+
+@media (max-width: 800px) {
+  .ohf-usage-split {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---------- reduced motion ---------- */
