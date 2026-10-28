@@ -11,6 +11,13 @@ import { ROLE_ACCEPT, ROLE_LABELS, ROLE_TAGS, rolesOf } from "./data";
 import { AudioIcon, CloseIcon, VideoIcon } from "./icons";
 import { kindOfFile, loadUploads, mergeUploads, rememberUpload, saveUploads, type UploadRecord } from "./uploads";
 
+function localId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function useMedia(model: ModelEntry) {
   const imageMedia = useImageMedia();
   const videoMedia = useVideoMedia();
@@ -22,7 +29,7 @@ export interface MediaTray {
   /** The current surface's attachments, so the picker can derive its own caps
       from the same list the strip below renders. */
   items: MediaItem[];
-  /** Every file this browser has sent to Blob, newest first. */
+  /** Every file this browser has uploaded locally, newest first. */
   uploads: UploadRecord[];
   /** The URL of the last file uploaded from the picker. It goes onto the shelf
       and into the panel's selection, not onto the plane — the panel stages the
@@ -98,11 +105,11 @@ export function useMediaTray(
         }
         const uploaded = await uploadMedia(file);
         used[role] = (used[role] ?? 0) + 1;
-        media.add({ id: crypto.randomUUID(), url: uploaded.url, role });
+        media.add({ id: localId(), url: uploaded.url, role });
         setStaged(uploaded.url);
         setUploads((prev) =>
           rememberUpload(prev, {
-            id: crypto.randomUUID(),
+            id: localId(),
             url: uploaded.url,
             kind: kindOfFile(file),
             name: file.name,
@@ -113,7 +120,7 @@ export function useMediaTray(
     } catch (caught) {
       failed =
         caught instanceof Error
-          ? `Upload failed — ${caught.message}. Check the Blob store is configured, then retry.`
+          ? `Upload failed — ${caught.message}. Retry the file.`
           : "Upload failed. Retry, or drop the file and generate from the prompt alone.";
     } finally {
       setUploading(false);
@@ -164,7 +171,7 @@ export function useMediaTray(
       else media.remove(item.id);
     }
     for (const url of urls) {
-      if (!held.has(url)) media.add({ id: crypto.randomUUID(), url, role });
+      if (!held.has(url)) media.add({ id: localId(), url, role });
     }
   }
 

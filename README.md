@@ -98,8 +98,8 @@ Each generate is one object: `{ model, prompt, media, settings }`.
   no studio changes.
 - **Five small Zustand stores** — shared image/video prompt, shared image/video
   media, `settings[modelId]`, and a tiny `active` store. No store per model.
-- **Uploads** go client-direct to Vercel Blob through `/api/blob`, which issues
-  scoped tokens. `blob:` URLs are preview-only.
+- **Uploads** go to local storage through `POST /api/uploads`. `blob:` URLs are
+  preview-only.
 
 ---
 
