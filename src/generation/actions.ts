@@ -18,7 +18,7 @@ import { skuUsd } from "./estimate";
 import type { GenerationPlane } from "./catalog/types";
 import { MissingCredentialsError } from "./credentials";
 import type { KeyProvider } from "./credentials";
-import { createHiggsfieldClient, createPlatformClient, openRouterBaseUrl } from "./platform";
+import { createHiggsfieldClient, createPlatformClient, openRouterBaseUrl, PlatformError } from "./platform";
 import type { QueuedGeneration, StatusResult } from "./platform";
 import { toHiggsfield } from "./to-higgsfield";
 import { toPlatform } from "./to-platform";
@@ -224,27 +224,56 @@ export async function platformKeyKind(): Promise<KeyProvider | null> {
   return encryptedPlatformKeyKind();
 }
 
-export async function submitGeneration(plane: GenerationPlane) {
-  const credentials = await readCredentials();
-  const caps = credentials.provider === "openrouter" ? await openRouterCapabilities(plane.model) : null;
-  const model = overlayModel(getModel(plane.model), caps);
-  const inlined = await inlineLocalMedia(plane);
-  const parsed: GenerationPlane = {
-    ...inlined,
-    settings: parseSettings(model, snapSettings(model, plane.settings)),
-  };
-  if (credentials.provider === "higgsfield") {
-    const { path, body } = toHiggsfield(parsed);
-    const queued = await createHiggsfieldClient(credentials).submit(path, body);
+export type GenerationSubmit = QueuedGeneration | { error: string };
+
+export async function submitGeneration(plane: GenerationPlane): Promise<GenerationSubmit> {
+  try {
+    const credentials = await readCredentials();
+    const caps = credentials.provider === "openrouter" ? await openRouterCapabilities(plane.model) : null;
+    const model = overlayModel(getModel(plane.model), caps);
+    const inlined = await inlineLocalMedia(plane);
+    const parsed: GenerationPlane = {
+      ...inlined,
+      settings: parseSettings(model, snapSettings(model, plane.settings)),
+    };
+    if (credentials.provider === "higgsfield") {
+      const { path, body } = toHiggsfield(parsed);
+      const queued = await createHiggsfieldClient(credentials).submit(path, body);
+      await rememberUsage(parsed, queued);
+      return queued;
+    }
+    const { surface, body } = toPlatform(parsed);
+    const client = createPlatformClient(credentials);
+    const queued: QueuedGeneration =
+      surface === "image" ? await client.submitImage(body) : await client.submitVideo(body);
     await rememberUsage(parsed, queued);
     return queued;
+  } catch (caught) {
+    return { error: submitError(caught) };
   }
-  const { surface, body } = toPlatform(parsed);
-  const client = createPlatformClient(credentials);
-  const queued: QueuedGeneration =
-    surface === "image" ? await client.submitImage(body) : await client.submitVideo(body);
-  await rememberUsage(parsed, queued);
-  return queued;
+}
+
+function submitError(caught: unknown): string {
+  if (caught instanceof AuthRequiredError || (caught instanceof Error && caught.message.includes("Login required"))) {
+    return "Sign in to generate.";
+  }
+  if (
+    caught instanceof MissingCredentialsError ||
+    (caught instanceof Error && caught.message.includes("Missing platform key"))
+  ) {
+    return "Add your platform key to generate.";
+  }
+  if (caught instanceof PlatformError) return clip(caught.message);
+  if (caught instanceof Error && caught.message === "Reference image is missing on the server") return caught.message;
+  if (caught instanceof Error && caught.message.startsWith("Invalid ")) return clip(caught.message);
+  if (caught instanceof Error && caught.message.startsWith("Unknown model")) return clip(caught.message);
+  if (caught instanceof Error && caught.message.startsWith("No ")) return clip(caught.message);
+  return "Generation failed. Try again.";
+}
+
+function clip(message: string): string {
+  const clean = message.replace(/\s+/g, " ").trim();
+  return clean.length > 240 ? `${clean.slice(0, 240)}…` : clean;
 }
 
 async function rememberUsage(plane: GenerationPlane, queued: QueuedGeneration) {

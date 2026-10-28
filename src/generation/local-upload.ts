@@ -27,11 +27,15 @@ export async function inlineLocalMedia(plane: GenerationPlane): Promise<Generati
         const match = LOCAL_URL.exec(item.url);
         if (!match) return item;
         const id = match[1]!;
-        const [bytes, type] = await Promise.all([
-          readFile(uploadFilePath(id)),
-          readFile(uploadTypePath(id), "utf8"),
-        ]);
-        return { ...item, url: `data:${type.trim()};base64,${bytes.toString("base64")}` };
+        try {
+          const [bytes, type] = await Promise.all([
+            readFile(uploadFilePath(id)),
+            readFile(uploadTypePath(id), "utf8"),
+          ]);
+          return { ...item, url: `data:${type.trim()};base64,${bytes.toString("base64")}` };
+        } catch {
+          throw new Error("Reference image is missing on the server");
+        }
       }),
     );
   }

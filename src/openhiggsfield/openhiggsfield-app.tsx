@@ -7,6 +7,7 @@ import { apiUrl } from "@/base-path";
 import { AuthRequiredError } from "@/auth/errors";
 import type { PublicUser } from "@/auth/types";
 import { platformKeyKind, submitGeneration } from "@/generation/actions";
+import { rehostDataMedia } from "@/generation/upload";
 import { MissingCredentialsError } from "@/generation/credentials";
 import type { KeyProvider } from "@/generation/credentials";
 import { MODELS, getModel, modelsFor } from "@/generation/catalog";
@@ -475,7 +476,9 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
 
     const runOne = async (slot: { skeletons: string[] }) => {
       try {
-        const queued = await submitGeneration(plane);
+        const hosted = await rehostDataMedia(plane);
+        const queued = await submitGeneration(hosted);
+        if ("error" in queued) throw new Error(queued.error);
         if (queued.immediate) {
           const rows = terminalRows(queued.requestId, draft, queued.immediate);
           setHistory((prev) => {
