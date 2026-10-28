@@ -2,13 +2,14 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 
 import { cookies } from "next/headers";
 
+import { cookieSecure } from "./cookie-secure";
 import type { SessionUser } from "./types";
 
 export const SESSION_COOKIE = "ohf_session";
 
 export const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  secure: cookieSecure(),
   sameSite: "lax" as const,
   path: "/",
   maxAge: 60 * 60 * 24 * 14,
