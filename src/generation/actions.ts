@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { clearEncryptedPlatformKey, saveEncryptedPlatformKey } from "@/auth/actions";
 import { AuthRequiredError } from "@/auth/errors";
 import {
@@ -18,7 +19,7 @@ import { skuUsd } from "./estimate";
 import type { GenerationPlane, MediaRole } from "./catalog/types";
 import { MissingCredentialsError, toAuthorizationHeader } from "./credentials";
 import type { KeyProvider } from "./credentials";
-import { createHiggsfieldClient, createPlatformClient, openRouterBaseUrl, PlatformError } from "./platform";
+import { createHiggsfieldClient, createPlatformClient, firstPublicVideoUrl, openRouterBaseUrl, PlatformError } from "./platform";
 import type { QueuedGeneration, StatusResult } from "./platform";
 import { toHiggsfield } from "./to-higgsfield";
 import { toPlatform } from "./to-platform";
@@ -339,18 +340,22 @@ function mediaJobId(url: string): string | null {
   }
 }
 
-/** `/api/media` is only playable in this app. OpenRouter needs the job's absolute URL. */
+/** `/api/media` is only playable in this app. A public job URL replaces it when one exists. */
 async function resolveMediaProxies(plane: GenerationPlane, apiKey: string): Promise<GenerationPlane> {
+  const origin = await requestOrigin();
   const resolved = new Map<string, string>();
   async function absolute(url: string): Promise<string> {
     const job = mediaJobId(url);
-    if (!job) return url;
-    const cached = resolved.get(job);
-    if (cached) return cached;
-    const signed = await signedVideoUrl(apiKey, job);
-    if (!signed) throw new Error("No source clip is available for this extend.");
-    resolved.set(job, signed);
-    return signed;
+    if (job) {
+      const cached = resolved.get(job);
+      if (cached) return cached;
+      const signed = await signedVideoUrl(apiKey, job);
+      if (signed) {
+        resolved.set(job, signed);
+        return signed;
+      }
+    }
+    return url.startsWith("/") && origin ? `${origin}${url}` : url;
   }
   const media: GenerationPlane["media"] = { ...plane.media };
   for (const role of ["video", "audio"] as const satisfies readonly MediaRole[]) {
@@ -361,16 +366,54 @@ async function resolveMediaProxies(plane: GenerationPlane, apiKey: string): Prom
   return { ...plane, media };
 }
 
+async function requestOrigin(): Promise<string> {
+  const incoming = await headers();
+  const host = incoming.get("x-forwarded-host") ?? incoming.get("host");
+  if (!host) return "";
+  const proto = incoming.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
 async function signedVideoUrl(apiKey: string, jobId: string): Promise<string | null> {
-  const response = await fetch(`${openRouterBaseUrl()}/videos/${encodeURIComponent(jobId)}`, {
-    headers: { Authorization: toAuthorizationHeader(apiKey, "openrouter") },
+  const auth = toAuthorizationHeader(apiKey, "openrouter");
+  const base = openRouterBaseUrl();
+  const status = await fetch(`${base}/videos/${encodeURIComponent(jobId)}`, {
+    headers: { Authorization: auth },
   });
-  if (!response.ok) return null;
-  const payload = (await response.json().catch(() => null)) as { urls?: unknown } | null;
-  const urls = payload?.urls;
-  if (!Array.isArray(urls)) return null;
-  const first = urls.find((url) => typeof url === "string" && /^https?:\/\//.test(url));
-  return typeof first === "string" ? first : null;
+  if (status.ok) {
+    const payload = (await status.json().catch(() => null)) as { urls?: unknown; unsigned_urls?: unknown } | null;
+    const listed = Array.isArray(payload?.urls) ? payload.urls : [];
+    for (const item of listed) {
+      const url = absoluteMediaUrl(item);
+      if (url) return url;
+    }
+    const published = firstPublicVideoUrl(payload?.unsigned_urls);
+    if (published) return published;
+  }
+  return publicContentUrl(`${base}/videos/${encodeURIComponent(jobId)}/content?index=0`, auth);
+}
+
+function absoluteMediaUrl(value: unknown): string | null {
+  if (typeof value === "string" && /^https?:\/\//.test(value)) return value;
+  if (value !== null && typeof value === "object" && "url" in value) {
+    const url = (value as { url?: unknown }).url;
+    if (typeof url === "string" && /^https?:\/\//.test(url)) return url;
+  }
+  return null;
+}
+
+/** The content route redirects to a CDN URL the provider can fetch. */
+async function publicContentUrl(start: string, auth: string): Promise<string | null> {
+  let current = start;
+  for (let hop = 0; hop < 5; hop += 1) {
+    const response = await fetch(current, { headers: { Authorization: auth }, redirect: "manual" });
+    const location = response.headers.get("location");
+    if (!location || response.status < 300 || response.status >= 400) return null;
+    const next = new URL(location, current).href;
+    if (/^https?:\/\//.test(next) && !/openrouter\.ai/i.test(new URL(next).host)) return next;
+    current = next;
+  }
+  return null;
 }
 
 async function readCredentials() {

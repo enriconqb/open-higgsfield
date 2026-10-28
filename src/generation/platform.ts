@@ -208,8 +208,31 @@ function readCost(data: Record<string, unknown>): number | undefined {
 function playableVideoUrl(data: Record<string, unknown>, jobId: string): string | undefined {
   const signed = stringList(data.urls)[0];
   if (signed) return signed;
+  const published = firstPublicVideoUrl(data.unsigned_urls);
+  if (published) return published;
   if (stringList(data.unsigned_urls).length && jobId) {
     return withBasePath(`/api/media?job=${encodeURIComponent(jobId)}&index=0`);
+  }
+  return undefined;
+}
+
+/** An unsigned URL the provider can fetch without our API key. */
+export function firstPublicVideoUrl(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  for (const item of value) {
+    const url =
+      typeof item === "string"
+        ? item
+        : item !== null && typeof item === "object" && "url" in item
+          ? (item as { url?: unknown }).url
+          : undefined;
+    if (typeof url !== "string" || !/^https?:\/\//.test(url)) continue;
+    try {
+      if (/(^|\.)openrouter\.ai$/i.test(new URL(url).hostname)) continue;
+    } catch {
+      continue;
+    }
+    return url;
   }
   return undefined;
 }

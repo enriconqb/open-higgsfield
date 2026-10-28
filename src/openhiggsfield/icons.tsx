@@ -52,6 +52,15 @@ export function AudioIcon({ size = 16 }: IconProps) {
 /* Assets holds every finished run, so the mark is a stack of frames seen
    edge-on — the same frame the Image and Video icons draw, with the ones
    behind it showing only their top edge. */
+export function TimelineIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <rect x="1.5" y="3.25" width="13" height="9.5" rx="2" />
+      <path d="M5.6 3.25v9.5M10.4 3.25v9.5" />
+    </svg>
+  );
+}
+
 export function AssetsIcon({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

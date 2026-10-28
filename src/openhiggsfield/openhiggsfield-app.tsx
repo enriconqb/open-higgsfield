@@ -36,6 +36,7 @@ import { loadHistory, mergeHistory, replaceRequest, saveHistory, historyKeyFor, 
 import { loadGenerationResults, saveGenerationResults } from "@/generation/result-actions";
 import { CloseIcon, UndoIcon } from "./icons";
 import { SelectionBar, type SaveProgress } from "./selection-bar";
+import { Timeline } from "./timeline";
 import { Topbar } from "./topbar";
 import { Viewer } from "./viewer";
 
@@ -760,23 +761,28 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
             }}
           />
 
-          <Gallery
-            view={view}
-            surface={surface}
-            items={visible}
-            runs={runsHere}
-            freshIds={freshIds}
-            picked={pickedSet}
-            onOpen={openViewer}
-            onPick={togglePick}
-            onReuse={retry}
-            onFavorite={toggleFavorite}
-            onDownload={downloadRun}
-            onDelete={deleteRun}
-            onStarter={applyStarter}
-            galleryRef={galleryRef}
-          />
+          {view === "timeline" ? (
+            <Timeline history={history} ready={historyLoaded} />
+          ) : (
+            <Gallery
+              view={view}
+              surface={surface}
+              items={visible}
+              runs={runsHere}
+              freshIds={freshIds}
+              picked={pickedSet}
+              onOpen={openViewer}
+              onPick={togglePick}
+              onReuse={retry}
+              onFavorite={toggleFavorite}
+              onDownload={downloadRun}
+              onDelete={deleteRun}
+              onStarter={applyStarter}
+              galleryRef={galleryRef}
+            />
+          )}
 
+          {view !== "timeline" && (
           <Composer
             surface={surface}
             model={model}
@@ -808,6 +814,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
               )
             }
           />
+          )}
         </main>
 
         {viewerItem && (

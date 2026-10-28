@@ -9,17 +9,18 @@ export const SURFACE_LABELS: Record<Surface, string> = {
 
 /** What the gallery is scoped to. "assets" is every run, both surfaces;
     "favorites" is every run the visitor kept, both surfaces. */
-export type GalleryView = Surface | "assets" | "favorites";
+export type GalleryView = Surface | "assets" | "favorites" | "timeline";
 
 /** Scopes that span both surfaces, so switching to them leaves the model alone. */
-export const CROSS_VIEWS = new Set<GalleryView>(["assets", "favorites"]);
+export const CROSS_VIEWS = new Set<GalleryView>(["assets", "favorites", "timeline"]);
 
-export const VIEWS: readonly GalleryView[] = ["image", "video", "assets", "favorites"];
+export const VIEWS: readonly GalleryView[] = ["image", "video", "assets", "favorites", "timeline"];
 
 export const VIEW_LABELS: Record<GalleryView, string> = {
   ...SURFACE_LABELS,
   assets: "Assets",
   favorites: "Favorites",
+  timeline: "Timeline",
 };
 
 export const PROMPT_PLACEHOLDERS: Record<Surface, string> = {

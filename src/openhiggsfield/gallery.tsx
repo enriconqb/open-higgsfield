@@ -39,6 +39,10 @@ const EMPTY: Record<GalleryView, { title: string; hint: string }> = {
     title: "Nothing kept yet",
     hint: "Hover a run and press its heart to keep it here. Kept runs stay put when older ones age out of the history.",
   },
+  timeline: {
+    title: "Timeline",
+    hint: "Finished videos are arranged on the Timeline tab.",
+  },
 };
 
 /* Action labels name the run they act on — tabbing a long grid otherwise
