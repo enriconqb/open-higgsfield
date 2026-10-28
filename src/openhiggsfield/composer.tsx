@@ -41,6 +41,25 @@ const STUDIO_COUNTS = Array.from({ length: MAX_BATCH }, (_, index) => index + 1)
 /** Breathing room between a popover and the control it opened from. */
 const POPOVER_GAP = 8;
 
+/** Images copied to the clipboard (screenshot, copy image) become reference files. */
+function clipboardImageFiles(data: DataTransfer | null): File[] {
+  if (!data) return [];
+  const files: File[] = [];
+  for (const item of data.items) {
+    if (item.kind !== "file" || !item.type.startsWith("image/")) continue;
+    const file = item.getAsFile();
+    if (!file) continue;
+    if (file.name) {
+      files.push(file);
+      continue;
+    }
+    const subtype = file.type.slice("image/".length).split("+")[0] || "png";
+    const ext = subtype === "jpeg" ? "jpg" : subtype;
+    files.push(new File([file], `clipboard.${ext}`, { type: file.type }));
+  }
+  return files;
+}
+
 /** Declared widths keep an opening popover inside the composer's own column. */
 function popoverWidth(id: string, model: ModelEntry): number {
   if (id === PICKER || id === ASSETS) return 560;
@@ -378,6 +397,12 @@ export function Composer({
                 event.preventDefault();
                 setDropping(false);
                 void tray.receive([...event.dataTransfer.files]);
+              }}
+              onPaste={(event) => {
+                const files = clipboardImageFiles(event.clipboardData);
+                if (files.length === 0) return;
+                event.preventDefault();
+                void tray.receive(files);
               }}
             >
             <MediaStrip model={model} />
