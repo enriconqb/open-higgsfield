@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getAuthState, logoutAccount } from "@/auth/actions";
+import { apiUrl } from "@/base-path";
 import { AuthRequiredError } from "@/auth/errors";
 import type { PublicUser } from "@/auth/types";
 import { platformKeyKind, submitGeneration } from "@/generation/actions";
@@ -30,7 +31,8 @@ import {
   type GalleryView,
 } from "./data";
 import { Gallery } from "./gallery";
-import { loadHistory, mergeHistory, replaceRequest, saveHistory, stepRun, type RunRecord } from "./history";
+import { loadHistory, mergeHistory, replaceRequest, saveHistory, historyKeyFor, stepRun, type RunRecord } from "./history";
+import { loadGenerationResults, saveGenerationResults } from "@/generation/result-actions";
 import { CloseIcon, UndoIcon } from "./icons";
 import { SelectionBar, type SaveProgress } from "./selection-bar";
 import { Topbar } from "./topbar";
@@ -183,6 +185,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const [view, setView] = useState<GalleryView>(surface);
   const [focusNonce, setFocusNonce] = useState(0);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [syncServer, setSyncServer] = useState(false);
   /* Deleting drops the only copy of a run — the platform's result URLs are not
      re-derivable — so the records are held aside until the bar times out. */
   const [deleted, setDeleted] = useState<RunRecord[] | null>(null);
@@ -208,6 +211,14 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const freshTimers = useRef<number[]>([]);
   const historyRef = useRef(history);
   historyRef.current = history;
+  const userIdRef = useRef<number | null>(null);
+  userIdRef.current = user?.id ?? null;
+
+  function persistLocal(records: RunRecord[]) {
+    const id = userIdRef.current;
+    if (!id) return;
+    void saveHistory(records, undefined, undefined, historyKeyFor(id));
+  }
 
   /* The model picker can cross surfaces, so the scope follows it — unless the
      visitor parked on a scope that spans both. */
@@ -215,26 +226,54 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
     setView((current) => (CROSS_VIEWS.has(current) ? current : surface));
   }, [surface]);
 
-  /* Read once on mount. A load that finishes after unmount must not mark the
-     next mount hydrated, or the empty initial list is written over the store. */
+  /* Gallery stays empty until the session is known. A guest never reads or
+     writes the log, so another person's results on this browser stay hidden
+     and are not wiped. A signed-in account merges this browser with the
+     server copy for the same user. */
   useEffect(() => {
+    if (!user) {
+      setHistory([]);
+      setHistoryLoaded(false);
+      setSyncServer(false);
+      return;
+    }
     let live = true;
-    void loadHistory()
-      .then((rows) => {
-        if (!live) return;
-        setHistory((current) => mergeHistory(rows, current));
-        setHistoryLoaded(true);
-      })
-      .catch(() => {
-        if (live) setHistoryLoaded(true);
-      });
+    void (async () => {
+      const key = historyKeyFor(user.id);
+      let local = await loadHistory(undefined, undefined, key).catch(() => [] as RunRecord[]);
+      if (local.length === 0) {
+        const older = await loadHistory().catch(() => [] as RunRecord[]);
+        if (older.length > 0) {
+          local = older;
+          await saveHistory(older, undefined, undefined, key);
+          await saveHistory([]);
+        }
+      }
+      let remote: RunRecord[] = [];
+      let remoteOk = false;
+      try {
+        remote = await loadGenerationResults();
+        remoteOk = true;
+      } catch {
+        remoteOk = false;
+      }
+      if (!live) return;
+      setHistory((current) => mergeHistory(mergeHistory(remote, local), current));
+      setSyncServer(remoteOk);
+      setHistoryLoaded(true);
+    })();
     return () => {
       live = false;
     };
-  }, []);
+  }, [user]);
   useEffect(() => {
-    if (historyLoaded) void saveHistory(history);
-  }, [historyLoaded, history]);
+    if (!historyLoaded || !user) return;
+    void saveHistory(history, undefined, undefined, historyKeyFor(user.id));
+    if (!syncServer) return;
+    void saveGenerationResults(history).catch(() => {
+      /* The local log still saved; the next successful load can retry. */
+    });
+  }, [historyLoaded, history, user, syncServer]);
 
   useEffect(() => {
     void getAuthState()
@@ -306,7 +345,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
         const records = terminalRows(requestId, draft, status);
         setHistory((prev) => {
           const next = replaceRequest(prev, requestId, records);
-          void saveHistory(next);
+          persistLocal(next);
           return next;
         });
         markFresh(records.filter((record) => record.status === "completed").map((record) => record.id));
@@ -323,7 +362,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
         if (message.includes("platform key")) setKeysOpen(true);
         setHistory((prev) => {
           const next = replaceRequest(prev, requestId, failedRows(requestId, expected, draft, message));
-          void saveHistory(next);
+          persistLocal(next);
           return next;
         });
         setError((prev) => prev ?? message);
@@ -377,7 +416,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const generate = useCallback(async (costUsd?: number) => {
     if (!user) {
       setError("Sign in to generate.");
-      window.location.href = "/login";
+      window.location.href = apiUrl("/login");
       return;
     }
     if (!keyConfigured) {
@@ -441,7 +480,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
           const rows = terminalRows(queued.requestId, draft, queued.immediate);
           setHistory((prev) => {
             const next = [...rows, ...prev];
-            void saveHistory(next);
+            persistLocal(next);
             return next;
           });
           setRuns((prev) => prev.filter((active) => !slot.skeletons.includes(active.id)));
@@ -449,7 +488,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
         }
         setHistory((prev) => {
           const next = [...runningRows(queued.requestId, slot.skeletons.length, draft), ...prev];
-          void saveHistory(next);
+          persistLocal(next);
           return next;
         });
         setRuns((prev) => prev.filter((active) => !slot.skeletons.includes(active.id)));
@@ -458,7 +497,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
         if (!alive.current) return;
         const message = describeError(caught);
         if (message.includes("Sign in")) {
-          window.location.href = "/login";
+          window.location.href = apiUrl("/login");
         } else if (message.includes("platform key")) {
           setKeysOpen(true);
         }
@@ -669,7 +708,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const openViewer = useCallback((id: string) => setViewerId(id), []);
   const openKeys = useCallback(() => {
     if (!user) {
-      window.location.href = "/login";
+      window.location.href = apiUrl("/login");
       return;
     }
     setKeysOpen(true);

@@ -36,12 +36,17 @@ export const HISTORY_KEY = "history.v1";
 export const LEGACY_HISTORY_KEY = "openhiggsfield.history.v1";
 const MAX_RECORDS = 60;
 
+export function historyKeyFor(userId: number): string {
+  return `${HISTORY_KEY}.${userId}`;
+}
+
 export async function loadHistory(
   kv: Kv = defaultKv(),
   legacy: LegacyStore | undefined = browserLegacy(),
+  key: string = HISTORY_KEY,
 ): Promise<RunRecord[]> {
-  const stored = await readIdb(kv);
-  const fromLegacy = readLegacy(legacy);
+  const stored = await readIdb(kv, key);
+  const fromLegacy = key === HISTORY_KEY ? readLegacy(legacy) : [];
   if (stored.length === 0) return fromLegacy;
   if (fromLegacy.length === 0) return stored;
   return mergeHistory(stored, fromLegacy);
@@ -51,13 +56,15 @@ export async function saveHistory(
   records: RunRecord[],
   kv: Kv = defaultKv(),
   legacy: LegacyStore | undefined = browserLegacy(),
+  key: string = HISTORY_KEY,
 ): Promise<void> {
   const next = capHistory(records.filter(isRunRecord));
   try {
-    await kv.set(HISTORY_KEY, next);
+    await kv.set(key, next);
   } catch {
     /* private mode or a denied store */
   }
+  if (key !== HISTORY_KEY) return;
   try {
     legacy?.setItem(LEGACY_HISTORY_KEY, JSON.stringify(next));
   } catch {
@@ -76,9 +83,9 @@ export function mergeHistory(stored: RunRecord[], live: RunRecord[]): RunRecord[
   return capHistory([...byId.values()].sort((a, b) => b.createdAt - a.createdAt));
 }
 
-async function readIdb(kv: Kv): Promise<RunRecord[]> {
+async function readIdb(kv: Kv, key: string): Promise<RunRecord[]> {
   try {
-    const stored = await kv.get<unknown>(HISTORY_KEY);
+    const stored = await kv.get<unknown>(key);
     if (!Array.isArray(stored)) return [];
     return capHistory(stored.filter(isRunRecord));
   } catch {
@@ -137,7 +144,7 @@ function newerRecord(row: RunRecord, prev: RunRecord): boolean {
   return row.createdAt >= prev.createdAt;
 }
 
-function isRunRecord(value: unknown): value is RunRecord {
+export function isRunRecord(value: unknown): value is RunRecord {
   if (value === null || typeof value !== "object") return false;
   const record = value as Partial<RunRecord>;
   return (
