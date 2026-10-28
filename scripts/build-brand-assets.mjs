@@ -1,9 +1,7 @@
-/* Builds every raster brand asset from the one mark geometry.
+/* Builds raster brand assets.
 
-   The mark is authored once as SVG (src/app/icon.svg for the favicon,
-   src/components/OpenHiggsfieldMark.tsx for the interface). Apple, the web app
-   manifest and Open Graph all need rasters, so this script draws the same
-   32-unit field in a headless Chromium and screenshots it at each size.
+   App icons are resized from public/logo.png. The Open Graph card still draws
+   the bracket mark in a headless Chromium screenshot.
 
      node scripts/build-brand-assets.mjs
 
@@ -15,14 +13,15 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /* ---------- the mark ---------- */
 
 const PLATE = "#0e1011";
-const ACCENT = "#6fe3c0";
+const ACCENT = "#7b88ff";
 const INK = "#c2c9c8";
 
-/** The two brackets on a 32-unit field. Keep in step with src/app/icon.svg. */
+/** Bracket geometry kept for the Open Graph card only. App icons use public/logo.png. */
 function brackets({ stroke = 2.5, accent = ACCENT, ink = INK } = {}) {
   return `<g fill="none" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round">
     <path d="M19.5 6.5H8.9A2.4 2.4 0 0 0 6.5 8.9V17" stroke="${accent}"/>
@@ -115,16 +114,16 @@ const shell = (body, bg = "transparent") =>
 
 /* ---------- app icons ---------- */
 
+const LOGO = pathToFileURL(join(ROOT, "public/logo.png")).href;
+const logoPlate = (size) =>
+  `<img src="${LOGO}" width="${size}" height="${size}" alt="" style="display:block;width:${size}px;height:${size}px">`;
+
 console.log("app icons");
-shoot(join(ROOT, "public/icon-512.png"), shell(roundedPlate(512)), 512, 512, {
-  transparent: true,
-});
-shoot(join(ROOT, "public/icon-192.png"), shell(roundedPlate(192)), 192, 192, {
-  transparent: true,
-});
-// Maskable keeps the mark inside the 80%-diameter safe circle.
-shoot(join(ROOT, "public/icon-maskable-512.png"), shell(bleedPlate(512, 0.82)), 512, 512);
-shoot(join(ROOT, "src/app/apple-icon.png"), shell(bleedPlate(180, 1)), 180, 180);
+shoot(join(ROOT, "public/icon-512.png"), shell(logoPlate(512)), 512, 512);
+shoot(join(ROOT, "public/icon-192.png"), shell(logoPlate(192)), 192, 192);
+shoot(join(ROOT, "public/icon-maskable-512.png"), shell(logoPlate(512)), 512, 512);
+shoot(join(ROOT, "src/app/apple-icon.png"), shell(logoPlate(180)), 180, 180);
+shoot(join(ROOT, "src/app/icon.png"), shell(logoPlate(512)), 512, 512);
 
 /* ---------- open graph card ----------
    No stand-in tiles standing in for generated work we do not have. The only
@@ -164,10 +163,10 @@ const og = `<!doctype html><meta charset="utf-8">
   .rule{margin:34px 0 28px;width:455px;height:1px;background:rgba(255,255,255,.09)}
   p{font-size:24px;line-height:1.45;color:#a8aeaf;max-width:530px;letter-spacing:-.011em}
 </style>
-<div class="field">${markSvg(454, { stroke: 1.15, accent: "rgba(111,227,192,0.17)", ink: "rgba(255,255,255,0.085)" })}</div>
+<div class="field">${markSvg(454, { stroke: 1.15, accent: "rgba(123,136,255,0.17)", ink: "rgba(255,255,255,0.085)" })}</div>
 <div class="band mark">${markSvg(58, { stroke: 2.5 })}</div>
 <div class="mid"><div class="band">
-  <h1>OpenHiggsfield AI</h1>
+  <h1>Vicend VTA AI</h1>
   <div class="descriptor">Open source AI studio</div>
   <div class="rule"></div>
   <p>One prompt bar for image and video. Each model&rsquo;s own settings, and every finished run in one gallery.</p>
