@@ -3781,6 +3781,58 @@ a.ohf-btn-solid {
   gap: 8px;
 }
 
+.ohf-user-menu {
+  position: relative;
+}
+
+.ohf-user-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 196px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--line-1, rgba(255, 255, 255, 0.08));
+  background: var(--s2, #161618);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+}
+
+.ohf-user-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ohf-user-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ohf-profile {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.ohf-profile dt {
+  font-size: 0.75rem;
+  color: var(--tx-2, rgba(242, 244, 243, 0.65));
+}
+
+.ohf-profile dd {
+  margin: 2px 0 0;
+}
+
 a.ohf-key-link {
   text-decoration: none;
   color: inherit;
@@ -3825,6 +3877,19 @@ a.ohf-key-link {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.ohf-admin-create {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+
+@media (max-width: 720px) {
+  .ohf-admin-create {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ohf-admin-status {

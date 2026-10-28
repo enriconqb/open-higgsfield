@@ -16,6 +16,7 @@ import {
   changeOwnPassword,
   createUser,
   deleteApiKey,
+  deleteUser,
   findUserById,
   findUserByUsername,
   getApiKeyRow,
@@ -124,6 +125,37 @@ export async function adminSetUserStatus(data: unknown): Promise<PublicUser[]> {
 
   const ok = await updateUserStatus(id, status as UserStatus);
   if (!ok) throw new Error("Could not update user");
+  return listUsers();
+}
+
+export async function adminCreateUser(data: unknown): Promise<PublicUser[]> {
+  await requireSuperadmin();
+  const body = asObject(data);
+  const username = requireUsername(body.username);
+  const password = requirePassword(body.password);
+  const existing = await findUserByUsername(username);
+  if (existing) throw new Error("Username is already taken");
+  await createUser({
+    username,
+    passwordHash: await hashPassword(password),
+    passwordSalt: createPasswordSalt(),
+    role: "user",
+    status: "active",
+  });
+  return listUsers();
+}
+
+export async function adminDeleteUser(data: unknown): Promise<PublicUser[]> {
+  const admin = await requireSuperadmin();
+  const body = asObject(data);
+  const id = Number(body.id);
+  if (!Number.isInteger(id) || id < 1) throw new Error("Invalid user");
+  if (id === admin.id) throw new Error("Cannot delete your own account");
+  const target = await findUserById(id);
+  if (!target) throw new Error("User not found");
+  if (target.role === "superadmin") throw new Error("Cannot delete a superadmin");
+  const ok = await deleteUser(id);
+  if (!ok) throw new Error("Could not delete user");
   return listUsers();
 }
 

@@ -107,6 +107,11 @@ export async function changeOwnPassword(input: {
   }
 }
 
+export async function deleteUser(id: number): Promise<boolean> {
+  const result = await execute(`DELETE FROM users WHERE id = ? AND role = 'user'`, [id]);
+  return result.affectedRows > 0;
+}
+
 export async function getApiKeyRow(userId: number): Promise<ApiKeyRow | null> {
   return queryOne<KeyPacket>(
     `SELECT user_id, provider, ciphertext, iv, auth_tag FROM user_api_keys WHERE user_id = ?`,

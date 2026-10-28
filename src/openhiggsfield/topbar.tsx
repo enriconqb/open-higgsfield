@@ -33,7 +33,9 @@ export function Topbar({
   onLogout: () => void;
 }) {
   const tabsRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   /* The indicator is measured rather than derived from equal columns, so it
      morphs to each label's real width instead of padding the short ones. */
@@ -55,6 +57,22 @@ export function Topbar({
       observer.disconnect();
     };
   }, [view]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -130,12 +148,6 @@ export function Topbar({
       <div className="ohf-bar ohf-enter-1 ohf-topbar-actions">
         {user ? (
           <>
-            {user.role === "superadmin" && (
-              <Link href="/admin" className="ohf-key ohf-key-link" title="Manage users">
-                <UserIcon />
-                <span className="ohf-key-text">Users</span>
-              </Link>
-            )}
             <button
               type="button"
               className="ohf-key"
@@ -149,20 +161,44 @@ export function Topbar({
               <span className="ohf-key-text">{keyConfigured ? "Your key" : "Add key"}</span>
               <span className="ohf-lamp" />
             </button>
-            <Link href="/account" className="ohf-key ohf-key-link" title="Change password">
-              <UserIcon />
-              <span className="ohf-key-text">Password</span>
-            </Link>
-            <button
-              type="button"
-              className="ohf-key"
-              onClick={onLogout}
-              title={`Sign out (${user.username})`}
-              aria-label={`Sign out (${user.username})`}
-            >
-              <UserIcon />
-              <span className="ohf-key-text">Sign out</span>
-            </button>
+            <div className="ohf-user-menu" ref={menuRef}>
+              <button
+                type="button"
+                className="ohf-key"
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                <UserIcon />
+                <span className="ohf-key-text">{user.username}</span>
+              </button>
+              {menuOpen && (
+                <div className="ohf-user-panel" role="menu">
+                  <Link href="/profile" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                    Profile
+                  </Link>
+                  <Link href="/account" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                    Change password
+                  </Link>
+                  {user.role === "superadmin" && (
+                    <Link href="/admin" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                      Users management
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="ohf-user-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onLogout();
+                    }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <Link href="/login" className="ohf-key ohf-key-link" title="Sign in to generate">

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
-import { adminListUsers, adminSetUserStatus, getAuthState } from "@/auth/actions";
+import { adminCreateUser, adminDeleteUser, adminListUsers, adminSetUserStatus, getAuthState } from "@/auth/actions";
 import type { PublicUser, UserStatus } from "@/auth/types";
 
 export function AdminPanel() {
@@ -12,6 +12,9 @@ export function AdminPanel() {
   const [users, setUsers] = useState<PublicUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -50,6 +53,36 @@ export function AdminPanel() {
     }
   }
 
+  async function remove(id: number) {
+    if (!window.confirm("Delete this user and their encrypted API key?")) return;
+    setBusyId(id);
+    setError(null);
+    try {
+      const list = await adminDeleteUser({ id });
+      setUsers(list);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Delete failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function create(event: FormEvent) {
+    event.preventDefault();
+    setCreating(true);
+    setError(null);
+    try {
+      const list = await adminCreateUser({ username, password });
+      setUsers(list);
+      setUsername("");
+      setPassword("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not create user");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   if (!users) {
     return <p className="ohf-keys-copy">Loading users…</p>;
   }
@@ -57,9 +90,40 @@ export function AdminPanel() {
   return (
     <div className="ohf-admin">
       <p className="ohf-keys-copy">
-        Approve registrations, disable accounts, or reopen pending ones. API keys stay encrypted —
-        plaintext is never shown here.
+        Create an active user, change status, or delete an account. Encrypted API keys are removed
+        with the user and are never shown here.
       </p>
+      <form className="ohf-admin-create" onSubmit={(event) => void create(event)}>
+        <label className="ohf-field">
+          <div className="ohf-field-label">Username</div>
+          <input
+            className="ohf-input"
+            value={username}
+            required
+            minLength={3}
+            maxLength={32}
+            pattern="[A-Za-z0-9_]+"
+            autoCapitalize="none"
+            spellCheck={false}
+            onChange={(event) => setUsername(event.target.value)}
+          />
+        </label>
+        <label className="ohf-field">
+          <div className="ohf-field-label">Initial password</div>
+          <input
+            className="ohf-input"
+            type="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <button type="submit" className="ohf-keys-save" disabled={creating}>
+          {creating ? "Creating…" : "Create user"}
+        </button>
+      </form>
       {error && (
         <div className="ohf-alert" role="alert">
           <span className="ohf-alert-text">{error}</span>
@@ -120,6 +184,14 @@ export function AdminPanel() {
                           Disable
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="ohf-btn-quiet"
+                        disabled={busyId === user.id}
+                        onClick={() => void remove(user.id)}
+                      >
+                        Delete
+                      </button>
                     </>
                   )}
                 </td>
