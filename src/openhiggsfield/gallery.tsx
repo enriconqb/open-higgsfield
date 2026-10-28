@@ -3,6 +3,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
+import { withBasePath } from "@/base-path";
 import type { Surface } from "@/generation/catalog";
 
 import { swatchFor } from "./artwork";
@@ -123,7 +124,7 @@ const Tile = memo(function Tile({
   onDelete: (item: RunRecord) => void;
 }) {
   const delay = `${Math.min(index * 0.035, 0.28).toFixed(3)}s`;
-  const poster = item.urls[0];
+  const poster = item.urls[0] ? withBasePath(item.urls[0]) : undefined;
   const videoRef = useRef<HTMLVideoElement>(null);
   /* The keep beat is driven from the click, never from mount: a CSS animation
      bound to the saved state alone would re-fire on every scope switch. */

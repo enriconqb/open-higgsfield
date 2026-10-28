@@ -3,6 +3,8 @@
 import { useRef } from "react";
 import type { CSSProperties } from "react";
 
+import { withBasePath } from "@/base-path";
+
 import type { RunRecord } from "./history";
 import { CloseIcon, DownloadIcon, HeartIcon, PlayBadgeIcon, TrashIcon } from "./icons";
 
@@ -80,7 +82,7 @@ export function SelectionBar({
                 /* Platform CDN host, same as the grid: next/image would need
                    every provider domain allow-listed up front. */
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={record.urls[0]} alt="" />
+                <img src={withBasePath(record.urls[0]!)} alt="" />
               ) : (
                 record.kind === "video" && (
                   <span className="ohf-selchip-play">

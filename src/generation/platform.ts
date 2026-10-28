@@ -1,3 +1,5 @@
+import { withBasePath } from "@/base-path";
+
 import { toAuthorizationHeader } from "./credentials";
 
 const DEFAULT_BASE = "https://openrouter.ai/api/v1";
@@ -207,7 +209,7 @@ function playableVideoUrl(data: Record<string, unknown>, jobId: string): string 
   const signed = stringList(data.urls)[0];
   if (signed) return signed;
   if (stringList(data.unsigned_urls).length && jobId) {
-    return `/api/media?job=${encodeURIComponent(jobId)}&index=0`;
+    return withBasePath(`/api/media?job=${encodeURIComponent(jobId)}&index=0`);
   }
   return undefined;
 }

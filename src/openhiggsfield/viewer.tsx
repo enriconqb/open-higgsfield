@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { withBasePath } from "@/base-path";
+
 import { settingLabel, settingValueLabel } from "./data";
 import { fileNameFor, saveFile } from "./download";
 import { timeAgo, type RunRecord } from "./history";
@@ -134,7 +136,7 @@ export function Viewer({
     setCopied(false);
   }
   const aspect = delivered ?? w / h;
-  const url = item.urls[0];
+  const url = item.urls[0] ? withBasePath(item.urls[0]) : undefined;
 
   /* Measured on attach as well as on load: the grid has already fetched this
      URL, so the element is usually complete before React can hear its event. */

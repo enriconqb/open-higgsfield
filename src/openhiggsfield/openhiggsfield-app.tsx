@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getAuthState, logoutAccount } from "@/auth/actions";
-import { apiUrl } from "@/base-path";
+import { apiUrl, withBasePath } from "@/base-path";
 import { AuthRequiredError } from "@/auth/errors";
 import type { PublicUser } from "@/auth/types";
 import { platformKeyKind, submitGeneration } from "@/generation/actions";
@@ -664,7 +664,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
      composer already reserves for it — a 32px button on a picture has no room
      to explain itself, and the viewer's own Download states what to do next. */
   const downloadRun = useCallback(async (record: RunRecord) => {
-    const url = record.urls[0];
+    const url = record.urls[0] ? withBasePath(record.urls[0]) : undefined;
     if (!url) return;
     const ok = await saveFile(url, fileNameFor(record, 0));
     if (!ok) {
@@ -683,7 +683,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
     setSaving({ done: 0, total: files.length });
     let refused = 0;
     for (const [index, record] of files.entries()) {
-      const ok = await saveFile(record.urls[0]!, fileNameFor(record, index));
+      const ok = await saveFile(withBasePath(record.urls[0]!), fileNameFor(record, index));
       if (!ok) refused++;
       setSaving({ done: index + 1, total: files.length });
     }

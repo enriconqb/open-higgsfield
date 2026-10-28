@@ -11,3 +11,11 @@ export function apiUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${configuredBasePath()}${normalized}`;
 }
+
+/** Root-relative app paths need the mount prefix. Absolute and data URLs stay. */
+export function withBasePath(url: string): string {
+  if (!url.startsWith("/")) return url;
+  const base = configuredBasePath();
+  if (!base || url === base || url.startsWith(`${base}/`)) return url;
+  return `${base}${url}`;
+}
