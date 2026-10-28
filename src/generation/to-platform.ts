@@ -14,6 +14,13 @@ export function toPlatform(plane: GenerationPlane): MappedRequest {
   return { surface: "video", body: mapVideo(plane, slug, seedanceReferences(model.id)) };
 }
 
+function seedanceSourceRatio(modelId: string): Record<string, unknown> {
+  if (modelId === "seedance-2.5-edit" || modelId === "seedance-2.5-extend") {
+    return { aspect_ratio: "adaptive" };
+  }
+  return {};
+}
+
 function urls(plane: GenerationPlane, role: "start" | "end" | "reference" | "video" | "audio") {
   return (plane.media[role] ?? []).map((item) => item.url).filter(Boolean);
 }
@@ -23,6 +30,7 @@ function mapVideo(plane: GenerationPlane, slug: string, seedance: boolean): Reco
     model: slug,
     prompt: plane.prompt.text,
     ...commonVideo(plane),
+    ...seedanceSourceRatio(plane.model),
   };
   if (slug.includes("upscale")) {
     const factor = Number(plane.settings.upscaleFactor);

@@ -1,6 +1,6 @@
 import { OPENROUTER_EXTRA_SLUGS } from "./openrouter-extra";
 
-/** Studio model id → OpenRouter slug. One studio id owns each slug in the picker. */
+/** Studio model id → OpenRouter slug. Seedance 2.5, Edit, and Extend share one slug. */
 const SLUGS: Record<string, string> = {
   "seedance-2.5": "bytedance/seedance-2.5",
   "seedance-2.5-edit": "bytedance/seedance-2.5",
@@ -27,9 +27,6 @@ const SLUGS: Record<string, string> = {
   "qwen-image-3": "qwen/qwen-image-3",
 };
 
-/** Same OpenRouter slug as Seedance 2.5, so they stay Higgsfield-only in the picker. */
-const OPENROUTER_DUPLICATES = new Set(["seedance-2.5-edit", "seedance-2.5-extend"]);
-
 export function openRouterSlug(modelId: string): string {
   const slug = SLUGS[modelId] ?? OPENROUTER_EXTRA_SLUGS[modelId];
   if (!slug) throw new Error(`No OpenRouter model for ${modelId}`);
@@ -37,7 +34,6 @@ export function openRouterSlug(modelId: string): string {
 }
 
 export function listedOnOpenRouter(modelId: string): boolean {
-  if (OPENROUTER_DUPLICATES.has(modelId)) return false;
   return modelId in SLUGS || modelId in OPENROUTER_EXTRA_SLUGS;
 }
 

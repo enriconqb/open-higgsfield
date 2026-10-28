@@ -16,9 +16,11 @@ export function overlayModel(model: ModelEntry, caps: OpenRouterCaps | null): Mo
   else delete settings.resolution;
   const quality = enumField(caps.quality, model.settings.quality);
   if (!resolution && quality) settings.quality = quality;
-  if (aspectRatio) settings.aspectRatio = aspectRatio;
-  else delete settings.aspectRatio;
-  const duration = durationField(caps.duration, model.settings.duration);
+  if (model.settings.aspectRatio) {
+    if (aspectRatio) settings.aspectRatio = aspectRatio;
+    else delete settings.aspectRatio;
+  }
+  const duration = model.settings.duration ? durationField(caps.duration, model.settings.duration) : undefined;
   if (duration) settings.duration = duration;
   return { ...model, settings };
 }

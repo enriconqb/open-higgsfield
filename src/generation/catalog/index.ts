@@ -83,19 +83,23 @@ const ALL_MODELS: readonly ModelEntry[] = [...MODELS, ...OPENROUTER_EXTRAS];
 
 export function modelsFor(kind: "higgsfield" | "openrouter" | null): readonly ModelEntry[] {
   if (kind === "higgsfield") return MODELS;
-  const bySlug = new Map<string, ModelEntry>();
+  const bySlug = new Map<string, ModelEntry[]>();
   for (const entry of ALL_MODELS) {
     if (!listedOnOpenRouter(entry.id)) continue;
     const slug = openRouterSlug(entry.id);
-    const current = bySlug.get(slug);
-    if (!current || !entry.id.startsWith("or-")) bySlug.set(slug, entry);
+    const list = bySlug.get(slug) ?? [];
+    list.push(entry);
+    bySlug.set(slug, list);
   }
-  const ordered = openRouterSlugOrder().flatMap((slug) => {
-    const entry = bySlug.get(slug);
-    return entry ? [entry] : [];
-  });
-  for (const entry of bySlug.values()) {
-    if (!ordered.includes(entry)) ordered.push(entry);
+  const pick = (list: ModelEntry[]) => {
+    const studio = list.filter((entry) => !entry.id.startsWith("or-"));
+    return studio.length ? studio : list.slice(0, 1);
+  };
+  const ordered = openRouterSlugOrder().flatMap((slug) => pick(bySlug.get(slug) ?? []));
+  for (const list of bySlug.values()) {
+    for (const entry of pick(list)) {
+      if (!ordered.includes(entry)) ordered.push(entry);
+    }
   }
   return ordered;
 }
