@@ -15,8 +15,8 @@ import { getModel, parseSettings } from "./catalog";
 import { openRouterSlug } from "./catalog/openrouter-slugs";
 import type { ImagePriceLine, OpenRouterQuote } from "./estimate";
 import { skuUsd } from "./estimate";
-import type { GenerationPlane } from "./catalog/types";
-import { MissingCredentialsError } from "./credentials";
+import type { GenerationPlane, MediaRole } from "./catalog/types";
+import { MissingCredentialsError, toAuthorizationHeader } from "./credentials";
 import type { KeyProvider } from "./credentials";
 import { createHiggsfieldClient, createPlatformClient, openRouterBaseUrl, PlatformError } from "./platform";
 import type { QueuedGeneration, StatusResult } from "./platform";
@@ -232,8 +232,10 @@ export async function submitGeneration(plane: GenerationPlane): Promise<Generati
     const caps = credentials.provider === "openrouter" ? await openRouterCapabilities(plane.model) : null;
     const model = overlayModel(getModel(plane.model), caps);
     const inlined = await inlineLocalMedia(plane);
+    const hosted =
+      credentials.provider === "openrouter" ? await resolveMediaProxies(inlined, credentials.apiKey) : inlined;
     const parsed: GenerationPlane = {
-      ...inlined,
+      ...hosted,
       settings: parseSettings(model, snapSettings(model, plane.settings)),
     };
     if (credentials.provider === "higgsfield") {
@@ -323,6 +325,52 @@ export async function getGenerationStatuses(data: unknown): Promise<StatusResult
       }
     }),
   );
+}
+
+const MEDIA_JOB = /\/api\/media\?job=([^&#]+)/;
+
+function mediaJobId(url: string): string | null {
+  const match = MEDIA_JOB.exec(url);
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+/** `/api/media` is only playable in this app. OpenRouter needs the job's absolute URL. */
+async function resolveMediaProxies(plane: GenerationPlane, apiKey: string): Promise<GenerationPlane> {
+  const resolved = new Map<string, string>();
+  async function absolute(url: string): Promise<string> {
+    const job = mediaJobId(url);
+    if (!job) return url;
+    const cached = resolved.get(job);
+    if (cached) return cached;
+    const signed = await signedVideoUrl(apiKey, job);
+    if (!signed) throw new Error("No source clip is available for this extend.");
+    resolved.set(job, signed);
+    return signed;
+  }
+  const media: GenerationPlane["media"] = { ...plane.media };
+  for (const role of ["video", "audio"] as const satisfies readonly MediaRole[]) {
+    const items = media[role];
+    if (!items) continue;
+    media[role] = await Promise.all(items.map(async (item) => ({ ...item, url: await absolute(item.url) })));
+  }
+  return { ...plane, media };
+}
+
+async function signedVideoUrl(apiKey: string, jobId: string): Promise<string | null> {
+  const response = await fetch(`${openRouterBaseUrl()}/videos/${encodeURIComponent(jobId)}`, {
+    headers: { Authorization: toAuthorizationHeader(apiKey, "openrouter") },
+  });
+  if (!response.ok) return null;
+  const payload = (await response.json().catch(() => null)) as { urls?: unknown } | null;
+  const urls = payload?.urls;
+  if (!Array.isArray(urls)) return null;
+  const first = urls.find((url) => typeof url === "string" && /^https?:\/\//.test(url));
+  return typeof first === "string" ? first : null;
 }
 
 async function readCredentials() {
