@@ -3,30 +3,45 @@ import path from "path";
 
 import type { GenerationPlane, MediaRole } from "./catalog/types";
 
-export const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
+const UPLOAD_ID = /\/api\/uploads\/([0-9a-f-]{36})$/i;
 
-/** Canonical `/api/uploads/<id>`, or the same path under NEXT_PUBLIC_BASE_PATH. */
-const LOCAL_URL = /^(?:\/[^/]+)?\/api\/uploads\/([0-9a-f-]{36})$/i;
+/** Directory for local uploads. `UPLOAD_DIR` overrides when the process cwd is
+    not the app root (for example `/var/www/html/video-gen`). */
+export function uploadRoot(): string {
+  const override = process.env.UPLOAD_DIR?.trim();
+  return override ? path.resolve(override) : path.join(process.cwd(), "uploads");
+}
 
 export function uploadFilePath(id: string): string {
-  return path.join(UPLOAD_ROOT, id);
+  return path.join(uploadRoot(), id);
 }
 
 export function uploadTypePath(id: string): string {
-  return path.join(UPLOAD_ROOT, `${id}.type`);
+  return path.join(uploadRoot(), `${id}.type`);
+}
+
+/** UUID from `/api/uploads/<id>`, including a base path and an absolute origin
+    such as `http://192.168.1.100/video-gen/api/uploads/<id>`. */
+export function uploadIdFrom(url: string): string | null {
+  if (!url || url.startsWith("data:")) return null;
+  try {
+    const pathname = new URL(url, "http://local").pathname;
+    return UPLOAD_ID.exec(pathname)?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Local files are not reachable by OpenRouter, so the server reads them and
-    sends a data URL. Stored paths are `/api/uploads/<id>`, with the mount prefix when set. */
+    sends a data URL. Public https URLs and existing data URLs are left as-is. */
 export async function inlineLocalMedia(plane: GenerationPlane): Promise<GenerationPlane> {
   const media: GenerationPlane["media"] = {};
   for (const [role, items] of Object.entries(plane.media) as Array<[MediaRole, GenerationPlane["media"][MediaRole]]>) {
     if (!items) continue;
     media[role] = await Promise.all(
       items.map(async (item) => {
-        const match = LOCAL_URL.exec(item.url);
-        if (!match) return item;
-        const id = match[1]!;
+        const id = uploadIdFrom(item.url);
+        if (!id) return item;
         try {
           const [bytes, type] = await Promise.all([
             readFile(uploadFilePath(id)),
