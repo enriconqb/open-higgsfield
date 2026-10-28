@@ -264,7 +264,7 @@ function submitError(caught: unknown): string {
     return "Add your platform key to generate.";
   }
   if (caught instanceof PlatformError) return clip(caught.message);
-  if (caught instanceof Error && caught.message === "Reference image is missing on the server") return caught.message;
+  if (caught instanceof Error && caught.message.startsWith("Reference image")) return clip(caught.message);
   if (caught instanceof Error && caught.message.startsWith("Invalid ")) return clip(caught.message);
   if (caught instanceof Error && caught.message.startsWith("Unknown model")) return clip(caught.message);
   if (caught instanceof Error && caught.message.startsWith("No ")) return clip(caught.message);

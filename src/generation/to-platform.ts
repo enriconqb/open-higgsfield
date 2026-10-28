@@ -63,8 +63,17 @@ function seedanceReferencesOf(plane: GenerationPlane) {
   ];
 }
 
+const ACCEPTED_IMAGE =
+  /^https:\/\/.+$|^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/;
+
 function imageReferences(images: string[]) {
-  return images.map((url) => ({ type: "image_url", image_url: { url } }));
+  return images.map((url) => ({ type: "image_url", image_url: { url: acceptedImageUrl(url) } }));
+}
+
+function acceptedImageUrl(url: string): string {
+  if (ACCEPTED_IMAGE.test(url)) return url;
+  const shown = url.startsWith("data:") ? url.slice(0, Math.min(url.length, url.indexOf(",") + 1 || 80)) : url.slice(0, 80);
+  throw new Error(`Reference image URL was not accepted: ${shown}`);
 }
 
 function frameImages(start?: string, end?: string) {
@@ -72,14 +81,14 @@ function frameImages(start?: string, end?: string) {
   if (start) {
     frames.push({
       type: "image_url",
-      image_url: { url: start },
+      image_url: { url: acceptedImageUrl(start) },
       frame_type: "first_frame",
     });
   }
   if (end) {
     frames.push({
       type: "image_url",
-      image_url: { url: end },
+      image_url: { url: acceptedImageUrl(end) },
       frame_type: "last_frame",
     });
   }
