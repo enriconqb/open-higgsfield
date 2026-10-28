@@ -3,7 +3,8 @@ import path from "path";
 
 import type { GenerationPlane, MediaRole } from "./catalog/types";
 
-const UPLOAD_ID = /\/api\/uploads\/([0-9a-f-]{36})/i;
+const UPLOAD_FILE = /\/uploads\/([0-9a-f-]{36})(?:\.([a-z0-9]+))?/i;
+const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "gif"];
 const VALID_IMAGE_DATA = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** Directory for local uploads. `UPLOAD_DIR` overrides when the process cwd is
@@ -21,11 +22,34 @@ export function uploadTypePath(id: string): string {
   return path.join(uploadRoot(), `${id}.type`);
 }
 
-/** UUID from `/api/uploads/<id>` anywhere in the string, including an absolute
-    origin such as `http://192.168.1.100/video-gen/api/uploads/<id>`. */
+/** UUID from `/api/uploads/<id>` or `/uploads/<id>.png`, with or without an
+    origin and base path such as `http://192.168.1.100/video-gen`. */
 export function uploadIdFrom(url: string): string | null {
   if (!url || url.startsWith("data:")) return null;
-  return UPLOAD_ID.exec(url)?.[1] ?? null;
+  return UPLOAD_FILE.exec(url)?.[1] ?? null;
+}
+
+function uploadExtFrom(url: string): string | null {
+  const ext = UPLOAD_FILE.exec(url)?.[2]?.toLowerCase() ?? "";
+  return IMAGE_EXT.includes(ext) ? ext : null;
+}
+
+async function readUploadBytes(id: string, ext: string | null): Promise<Buffer> {
+  const names = [id];
+  if (ext) names.push(`${id}.${ext}`);
+  for (const fallback of IMAGE_EXT) {
+    const named = `${id}.${fallback}`;
+    if (!names.includes(named)) names.push(named);
+  }
+  let last: unknown;
+  for (const name of names) {
+    try {
+      return await readFile(path.join(uploadRoot(), name));
+    } catch (caught) {
+      last = caught;
+    }
+  }
+  throw last instanceof Error ? last : new Error("Reference image is missing on the server");
 }
 
 function sniffImageMime(bytes: Buffer): "image/png" | "image/jpeg" | "image/webp" | "image/gif" | null {
@@ -63,7 +87,7 @@ async function normalizeItemUrl(url: string, role: MediaRole): Promise<string> {
   const id = uploadIdFrom(url);
   if (!id) return url;
   try {
-    const bytes = await readFile(uploadFilePath(id));
+    const bytes = await readUploadBytes(id, uploadExtFrom(url));
     if (sniffImageMime(bytes)) return imageDataUrl(bytes);
     if (role === "video" || role === "audio") {
       const type = (await readFile(uploadTypePath(id), "utf8")).trim();
