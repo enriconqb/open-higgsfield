@@ -149,6 +149,10 @@ export function Topbar({
               <span className="ohf-key-text">{keyConfigured ? "Your key" : "Add key"}</span>
               <span className="ohf-lamp" />
             </button>
+            <Link href="/account" className="ohf-key ohf-key-link" title="Change password">
+              <UserIcon />
+              <span className="ohf-key-text">Password</span>
+            </Link>
             <button
               type="button"
               className="ohf-key"

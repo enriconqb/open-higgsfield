@@ -1,6 +1,6 @@
 "use server";
 
-import { encryptApiKey } from "./crypto-key";
+import { decryptApiKey, encryptApiKey } from "./crypto-key";
 import { requireActiveUser, requireSuperadmin } from "./guard";
 import {
   createPasswordSalt,
@@ -13,6 +13,7 @@ import {
 import { clearSession, readSession, writeSession } from "./session";
 import type { PublicUser, SessionUser, UserStatus } from "./types";
 import {
+  changeOwnPassword,
   createUser,
   deleteApiKey,
   findUserById,
@@ -152,6 +153,67 @@ export async function saveEncryptedPlatformKey(data: unknown): Promise<AuthState
     },
     hasApiKey: true,
   };
+}
+
+export async function changePassword(data: unknown): Promise<{ message: string }> {
+  const session = await requireActiveUser();
+  const body = asObject(data);
+  const currentPassword = requirePassword(body.currentPassword);
+  const nextPassword = requirePassword(body.nextPassword);
+  if (currentPassword === nextPassword) {
+    throw new Error("New password must be different");
+  }
+
+  const user = await findUserById(session.id);
+  if (!user || user.status !== "active") throw new Error("Account is not active");
+  if (!(await verifyPassword(currentPassword, user.password_hash))) {
+    throw new Error("Current password is incorrect");
+  }
+
+  const oldWrap = await deriveWrappingKey(currentPassword, user.password_salt);
+  const passwordSalt = createPasswordSalt();
+  const passwordHash = await hashPassword(nextPassword);
+  const newWrap = await deriveWrappingKey(nextPassword, passwordSalt);
+
+  const row = await getApiKeyRow(session.id);
+  let rewrapped: {
+    provider: string;
+    ciphertext: Buffer;
+    iv: Buffer;
+    authTag: Buffer;
+  } | null = null;
+  if (row) {
+    let plain: ReturnType<typeof decryptApiKey>;
+    try {
+      plain = decryptApiKey(row, oldWrap);
+    } catch {
+      throw new Error("Could not unlock the saved API key. Re-save the key, then change the password.");
+    }
+    const encrypted = encryptApiKey(plain.apiKey, plain.provider, newWrap);
+    rewrapped = {
+      provider: encrypted.provider,
+      ciphertext: encrypted.ciphertext,
+      iv: encrypted.iv,
+      authTag: encrypted.authTag,
+    };
+  }
+
+  await changeOwnPassword({
+    userId: session.id,
+    passwordHash,
+    passwordSalt,
+    rewrapped,
+  });
+
+  await writeSession({
+    id: session.id,
+    username: session.username,
+    role: session.role,
+    status: session.status,
+    wrappingKey: newWrap.toString("base64"),
+  });
+
+  return { message: "Password updated." };
 }
 
 export async function clearEncryptedPlatformKey(): Promise<AuthState> {

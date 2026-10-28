@@ -1,6 +1,6 @@
 import type { RowDataPacket } from "mysql2/promise";
 
-import { execute, queryOne, queryRows } from "@/db/client";
+import { execute, getPool, queryOne, queryRows } from "@/db/client";
 
 import type { ApiKeyRow, PublicUser, UserRole, UserRow, UserStatus } from "./types";
 
@@ -69,6 +69,42 @@ export async function updateUserRole(id: number, role: UserRole): Promise<boolea
     [role, id],
   );
   return result.affectedRows > 0;
+}
+
+export async function changeOwnPassword(input: {
+  userId: number;
+  passwordHash: string;
+  passwordSalt: Buffer;
+  rewrapped: { provider: string; ciphertext: Buffer; iv: Buffer; authTag: Buffer } | null;
+}): Promise<void> {
+  const conn = await getPool().getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query(
+      `UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ? AND status = 'active'`,
+      [input.passwordHash, input.passwordSalt, input.userId],
+    );
+    if (input.rewrapped) {
+      await conn.query(
+        `UPDATE user_api_keys
+         SET provider = ?, ciphertext = ?, iv = ?, auth_tag = ?
+         WHERE user_id = ?`,
+        [
+          input.rewrapped.provider,
+          input.rewrapped.ciphertext,
+          input.rewrapped.iv,
+          input.rewrapped.authTag,
+          input.userId,
+        ],
+      );
+    }
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
 }
 
 export async function getApiKeyRow(userId: number): Promise<ApiKeyRow | null> {
