@@ -141,7 +141,7 @@ export async function deleteApiKey(userId: number): Promise<void> {
 
 export function toPublic(row: UserRow): PublicUser {
   return {
-    id: row.id,
+    id: Number(row.id),
     username: row.username,
     role: row.role,
     status: row.status,

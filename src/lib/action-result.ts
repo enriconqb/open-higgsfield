@@ -1,3 +1,5 @@
+import { unstable_rethrow } from "next/navigation";
+
 /* Server actions must not throw at their boundary.
    In Next 16 a thrown action error is answered with HTTP 500 and a Flight
    payload the browser cannot turn back into a message, so the studio showed
@@ -24,6 +26,10 @@ export async function run<T>(body: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { ok: true, data: await body() };
   } catch (caught) {
+    /* redirect, notFound, and the cookie-mutation signal must reach Next.
+       Turning them into `{ ok: false }` leaves the Flight response half-written
+       and the browser shows React #441. */
+    unstable_rethrow(caught);
     const digest = (caught as { digest?: unknown } | null)?.digest;
     /* Full detail stays on the server: the digest is what a Next error page
        shows, so a user report can be matched to this line. */

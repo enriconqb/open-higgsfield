@@ -93,10 +93,15 @@ async function registerAccountHandler(data: unknown): Promise<{ message: string 
 }
 
 export async function loginAccount(data: unknown): Promise<ActionResult<AuthState>> {
-  return run(() => loginAccountHandler(data));
+  const result = await run(() => loginAccountHandler(data));
+  if (!result.ok) return result;
+  /* Cookie writes must stay outside `run`. Next signals Set-Cookie with an
+     internal error; catching it breaks the Flight response (React #441). */
+  await writeSession(result.data.session);
+  return { ok: true, data: { user: result.data.user, hasApiKey: result.data.hasApiKey } };
 }
 
-async function loginAccountHandler(data: unknown): Promise<AuthState> {
+async function loginAccountHandler(data: unknown): Promise<AuthState & { session: SessionUser }> {
   const body = asObject(data);
   const username = requireUsername(body.username);
   const password = requirePassword(body.password);
@@ -113,21 +118,18 @@ async function loginAccountHandler(data: unknown): Promise<AuthState> {
   }
 
   const wrappingKey = await deriveWrappingKey(password, user.password_salt);
+  const publicUser = toPublic(user);
   const session: SessionUser = {
-    id: user.id,
-    username: user.username,
-    role: user.role,
-    status: user.status,
+    ...publicUser,
     wrappingKey: wrappingKey.toString("base64"),
   };
-  await writeSession(session);
-
-  const key = await getApiKeyRow(user.id);
-  return { user: toPublic(user), hasApiKey: key !== null };
+  const key = await getApiKeyRow(publicUser.id);
+  return { user: publicUser, hasApiKey: key !== null, session };
 }
 
 export async function logoutAccount(): Promise<ActionResult<void>> {
-  return run(clearSession);
+  await clearSession();
+  return { ok: true, data: undefined };
 }
 
 export async function adminListUsers(): Promise<ActionResult<PublicUser[]>> {
@@ -235,10 +237,13 @@ async function saveEncryptedPlatformKeyHandler(data: unknown): Promise<AuthState
 }
 
 export async function changePassword(data: unknown): Promise<ActionResult<{ message: string }>> {
-  return run(() => changePasswordHandler(data));
+  const result = await run(() => changePasswordHandler(data));
+  if (!result.ok) return result;
+  await writeSession(result.data.session);
+  return { ok: true, data: { message: result.data.message } };
 }
 
-async function changePasswordHandler(data: unknown): Promise<{ message: string }> {
+async function changePasswordHandler(data: unknown): Promise<{ message: string; session: SessionUser }> {
   const session = await requireActiveUser();
   const body = asObject(data);
   const currentPassword = requirePassword(body.currentPassword);
@@ -288,14 +293,6 @@ async function changePasswordHandler(data: unknown): Promise<{ message: string }
     rewrapped,
   });
 
-  await writeSession({
-    id: session.id,
-    username: session.username,
-    role: session.role,
-    status: session.status,
-    wrappingKey: newWrap.toString("base64"),
-  });
-
   /** Every token holds a copy of the old wrapping key, which the new password
       just made useless. Revoking is honest: the client sees 401, not a mystery. */
   const revoked = await revokeAllApiTokens(session.id);
@@ -304,6 +301,13 @@ async function changePasswordHandler(data: unknown): Promise<{ message: string }
     message: revoked
       ? `Password updated. ${revoked} API token(s) revoked — create a new one for OpenMontage.`
       : "Password updated.",
+    session: {
+      id: session.id,
+      username: session.username,
+      role: session.role,
+      status: session.status,
+      wrappingKey: newWrap.toString("base64"),
+    },
   };
 }
 
