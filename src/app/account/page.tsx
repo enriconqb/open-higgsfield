@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
+import { ApiTokensPanel } from "@/openhiggsfield/api-tokens-panel";
 import { AuthShell } from "@/openhiggsfield/auth-shell";
 import { ChangePasswordForm } from "@/openhiggsfield/change-password-form";
 
@@ -13,15 +14,16 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Password",
+  title: "Account",
   alternates: { canonical: "/account" },
   robots: { index: false, follow: false },
 };
 
 export default function AccountPage() {
   return (
-    <AuthShell fontClassName={inter.variable} title="Change password">
+    <AuthShell fontClassName={inter.variable} title="Account">
       <ChangePasswordForm />
+      <ApiTokensPanel />
     </AuthShell>
   );
 }

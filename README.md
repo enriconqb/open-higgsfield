@@ -32,6 +32,9 @@ Next.js 16 App Router on Vercel · React 19 · plain CSS · Zustand · pnpm
 
 - **One composer for Image and Video.** A single prompt bar drives both; the
   model you pick decides image or video. `⌘/Ctrl + Enter` submits.
+- **A token API for machine clients.** `/api/v1` lets OpenMontage, a script, or
+  `curl` generate as a specific user with a personal token — same catalog, same
+  platform key, same usage ledger. See [`docs/VICEND-API.md`](docs/VICEND-API.md).
 - **38 models in the catalog** — 8 image, 30 video: Soul 2, Soul Cinema, Seedance
   2.5 (Edit / Extend), Seedance 2.0 (Fast / Mini), Kling 3 (Turbo / Std / Pro / 4K / Motion), Wan, Flux,
   Ideogram, Recraft, LTX, MiniMax, PixVerse, Grok, Qwen and more. Searchable
@@ -113,6 +116,23 @@ pnpm dev            # http://localhost:3000
 Sign in (or request access and wait for superadmin approval), press **Add key**,
 and paste your OpenRouter API key (`sk-or-...`).
 
+### Machine clients (API tokens)
+
+Tools that are not a browser — OpenMontage, a script, `curl` — use a personal
+token instead of a login. Mint one at `/account` → **API tokens**, then:
+
+```bash
+curl -s -H "Authorization: Bearer vic_..." \
+  http://localhost:3000/api/v1/me
+```
+
+A token spends the platform key of the account that owns it and every job it
+starts appears on that account's usage page. Tokens carry `read` and/or
+`generate` scopes, can expire, can be revoked at any time, and are revoked
+automatically when the password changes.
+
+Full reference, error table, and examples: [`docs/VICEND-API.md`](docs/VICEND-API.md).
+
 ### Database & accounts
 
 ```bash
@@ -139,6 +159,8 @@ COOKIE_SECURE=                        # true only behind HTTPS; leave false for 
 NEXT_PUBLIC_BASE_PATH=                # e.g. /video-gen when served below the host root; rebuild after change
 SUPERADMIN_USERNAME=                  # for pnpm db:seed (3–32: a-z, 0-9, _)
 SUPERADMIN_PASSWORD=
+VICEND_API_PER_MIN=                   # optional, /api/v1 generation rate limit per token (default 12)
+VICEND_API_PER_HOUR=                  # optional, default 120
 ```
 
 ### Commands
@@ -157,9 +179,12 @@ SUPERADMIN_PASSWORD=
 ```
 src/
   app/          /  is the full-viewport studio and the only page
+                /account manages the password and API tokens
                 /api/blob issues upload tokens
+                /api/v1/* is the token API for machine clients
                 base.css owns the document canvas
-  generation/   generate requests, server actions, API mapping, catalog, stores
+  auth/         sessions, password wrapping, API tokens and their bearer auth
+  generation/   generate requests, server actions, engine, API mapping, catalog, stores
   openhiggsfield/
                 the studio surface: composer, gallery, viewer, model picker,
                 settings, asset picker, selection bar — and openhiggsfield.css

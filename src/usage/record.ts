@@ -42,8 +42,11 @@ export async function recordUsage(input: {
   spec: string;
   costUsd: number | null;
   status: UsageStatus;
+  /** Owner of the charge. Defaults to the signed-in session; /api/v1 passes the
+      token owner because there is no cookie on those requests. */
+  userId?: number;
 }): Promise<void> {
-  const user = await requireActiveUser();
+  const userId = input.userId ?? (await requireActiveUser()).id;
   const credits = creditsFromUsd(input.costUsd);
   await execute(
     `INSERT INTO usage_events (user_id, request_id, model_id, kind, spec, cost_usd, credits, status)
@@ -53,7 +56,7 @@ export async function recordUsage(input: {
        cost_usd = COALESCE(VALUES(cost_usd), cost_usd),
        credits = IF(VALUES(cost_usd) IS NULL, credits, VALUES(credits))`,
     [
-      user.id,
+      userId,
       input.requestId.slice(0, 128),
       input.modelId.slice(0, 128),
       input.kind,
@@ -75,11 +78,12 @@ export async function settleUsage(input: {
   requestId: string;
   status: UsageStatus;
   costUsd?: number;
+  userId?: number;
 }): Promise<void> {
-  const user = await requireActiveUser();
+  const userId = input.userId ?? (await requireActiveUser()).id;
   const existing = await queryOne<RowDataPacket & { cost_usd: string | null }>(
     `SELECT cost_usd FROM usage_events WHERE request_id = ? AND user_id = ?`,
-    [input.requestId, user.id],
+    [input.requestId, userId],
   );
   if (!existing) return;
   const costUsd =
@@ -92,6 +96,6 @@ export async function settleUsage(input: {
     `UPDATE usage_events
      SET status = ?, cost_usd = ?, credits = ?
      WHERE request_id = ? AND user_id = ?`,
-    [input.status, costUsd, creditsFromUsd(costUsd), input.requestId, user.id],
+    [input.status, costUsd, creditsFromUsd(costUsd), input.requestId, userId],
   );
 }

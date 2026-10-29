@@ -1,7 +1,16 @@
 "use server";
 
+import {
+  createApiToken,
+  listApiTokens,
+  normalizeScopes,
+  revokeAllApiTokens,
+  revokeApiToken,
+  type PublicApiToken,
+} from "./api-tokens";
 import { decryptApiKey, encryptApiKey } from "./crypto-key";
 import { requireActiveUser, requireSuperadmin } from "./guard";
+import { sealSecret } from "./sealed-key";
 import {
   createPasswordSalt,
   deriveWrappingKey,
@@ -245,7 +254,57 @@ export async function changePassword(data: unknown): Promise<{ message: string }
     wrappingKey: newWrap.toString("base64"),
   });
 
-  return { message: "Password updated." };
+  /** Every token holds a copy of the old wrapping key, which the new password
+      just made useless. Revoking is honest: the client sees 401, not a mystery. */
+  const revoked = await revokeAllApiTokens(session.id);
+
+  return {
+    message: revoked
+      ? `Password updated. ${revoked} API token(s) revoked — create a new one for OpenMontage.`
+      : "Password updated.",
+  };
+}
+
+export type CreatedApiToken = {
+  token: string;
+  record: PublicApiToken;
+  tokens: PublicApiToken[];
+};
+
+export async function listApiTokensAction(): Promise<PublicApiToken[]> {
+  const session = await requireActiveUser();
+  return listApiTokens(session.id);
+}
+
+/** Returns the plaintext once; only its SHA-256 hash is stored afterwards. */
+export async function createApiTokenAction(data: unknown): Promise<CreatedApiToken> {
+  const session = await requireActiveUser();
+  const body = asObject(data);
+  const label = typeof body.label === "string" ? body.label.trim().slice(0, 64) : "";
+  const days = Number(body.expiresInDays ?? 0);
+  const expiresAt =
+    Number.isFinite(days) && days > 0 ? new Date(Date.now() + Math.min(days, 3650) * 86_400_000) : null;
+  const wrappingKey = Buffer.from(session.wrappingKey, "base64");
+  if (wrappingKey.length !== 32) throw new Error("Session key is unusable. Log in again.");
+
+  const created = await createApiToken({
+    userId: session.id,
+    label: label || "OpenMontage",
+    scopes: normalizeScopes(body.scopes),
+    expiresAt,
+    sealedWrappingKey: sealSecret(session.wrappingKey),
+  });
+
+  return { token: created.token, record: created.record, tokens: await listApiTokens(session.id) };
+}
+
+export async function revokeApiTokenAction(data: unknown): Promise<PublicApiToken[]> {
+  const session = await requireActiveUser();
+  const body = asObject(data);
+  const id = Number(body.id);
+  if (!Number.isInteger(id) || id < 1) throw new Error("Invalid token");
+  await revokeApiToken(session.id, id);
+  return listApiTokens(session.id);
 }
 
 export async function clearEncryptedPlatformKey(): Promise<AuthState> {

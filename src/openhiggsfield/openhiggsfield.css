@@ -4702,3 +4702,138 @@ a.ohf-key-link {
   }
 }
 
+/* ---------- account: API tokens ---------- */
+
+/* Second panel on /account. The token is a credential, so the reveal is the one
+   place in the app that uses the accent plate for text rather than a control. */
+.ohf-tokens {
+  margin-top: 22px;
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.ohf-tokens .ohf-keys-head {
+  padding: 14px 0 0;
+}
+
+.ohf-tokens .ohf-keys-form {
+  padding: 14px 0 0;
+}
+
+.ohf-token-fresh {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--accent-32);
+  border-radius: 12px;
+  background: var(--accent-08);
+}
+
+.ohf-token-fresh-title {
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.ohf-token-code {
+  display: block;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--tx);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.ohf-token-code--env {
+  white-space: pre-wrap;
+}
+
+.ohf-token-fresh-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ohf-token-ghost {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tx2);
+  font-size: 12.5px;
+  font-weight: 560;
+}
+
+.ohf-token-ghost:hover:not(:disabled) {
+  border-color: var(--accent-32);
+  color: var(--tx);
+}
+
+.ohf-token-ghost:disabled {
+  opacity: 0.5;
+}
+
+.ohf-token-list {
+  padding-top: 16px;
+}
+
+.ohf-token-list-title {
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.ohf-token-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+
+.ohf-token-row-main {
+  min-width: 0;
+}
+
+.ohf-token-row-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 560;
+}
+
+.ohf-token-row-meta {
+  margin-top: 3px;
+  color: var(--tx4);
+  font-size: 11.5px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.ohf-token-state {
+  padding: 1px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--tx3);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ohf-token-state.is-live {
+  border-color: var(--accent-32);
+  color: var(--accent-strong);
+}
+
+.ohf-token-state.is-dead {
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+

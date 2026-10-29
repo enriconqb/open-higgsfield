@@ -35,3 +35,11 @@ export async function execute(sql: string, params: QueryValues = []): Promise<Re
   const [result] = await getPool().query<ResultSetHeader>(sql, params);
   return result;
 }
+
+/** Let a one-shot script exit instead of waiting on the pool's idle sockets. */
+export async function closePool(): Promise<void> {
+  if (!pool) return;
+  const current = pool;
+  pool = null;
+  await current.end();
+}
