@@ -6,6 +6,7 @@ import { withBasePath } from "@/base-path";
 import type { MediaItem, MediaRole, ModelEntry } from "@/generation/catalog";
 import { preferCdnForVideo } from "@/generation/media-https";
 
+import { rememberClipSeconds } from "./clip-length";
 import { ROLE_KINDS, ROLE_LABELS, defaultRole, roleNoun, rolesOf, type AssetKind } from "./data";
 import type { RunRecord } from "./history";
 import {
@@ -477,7 +478,12 @@ const AssetTile = memo(function AssetTile({
           loop
           playsInline
           preload="auto"
-          onLoadedMetadata={(event) => paintFirstFrame(event.currentTarget)}
+          onLoadedMetadata={(event) => {
+            paintFirstFrame(event.currentTarget);
+            /* The preview already fetched this clip's header, so its length is
+               free here — worth keeping for a model that edits clips. */
+            rememberClipSeconds(asset.url, event.currentTarget.duration);
+          }}
         />
       ) : asset.kind === "audio" ? (
         <span className="ohf-asset-glyph">

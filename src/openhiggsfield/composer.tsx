@@ -18,7 +18,7 @@ import { useSettings } from "@/generation/stores/settings";
 
 import { swatchFor } from "./artwork";
 import { AssetPicker } from "./asset-picker";
-import { clipSeconds, editsClip } from "./clip-length";
+import { clipSeconds, editsClip, knownClipSeconds } from "./clip-length";
 import { PROMPT_PLACEHOLDERS, countSetting } from "./data";
 import type { RunRecord } from "./history";
 import { ArrowUpIcon, CaretDownIcon, CloseIcon, MinusIcon, PlusIcon, WarningIcon } from "./icons";
@@ -169,7 +169,10 @@ export function Composer({
     if (!editsClip(model.id) || !clipUrl) return;
     if (minDuration === null || maxDuration === null || defaultDuration === null) return;
     let live = true;
-    void clipSeconds(clipUrl).then((seconds) => {
+    /* Measured when the clip arrived, if it did: only a clip the studio has
+       never handled has to be fetched to be measured. */
+    const length = knownClipSeconds(clipUrl) ?? clipSeconds(clipUrl);
+    void Promise.resolve(length).then((seconds) => {
       if (!live || seconds === null) return;
       const rounded = Math.min(maxDuration, Math.max(minDuration, Math.round(seconds)));
       const auto = autoDuration.current[model.id];

@@ -7,6 +7,7 @@ import type { MediaItem, MediaRole, ModelEntry } from "@/generation/catalog";
 import { useImageMedia, useVideoMedia } from "@/generation/stores/media";
 import { uploadMedia } from "@/generation/upload";
 
+import { fileSeconds, rememberClipSeconds } from "./clip-length";
 import { ROLE_ACCEPT, ROLE_LABELS, ROLE_TAGS, rolesOf } from "./data";
 import { AudioIcon, CloseIcon, VideoIcon } from "./icons";
 import { kindOfFile, loadUploads, mergeUploads, rememberUpload, saveUploads, type UploadRecord } from "./uploads";
@@ -108,6 +109,13 @@ export function useMediaTray(
           continue;
         }
         const uploaded = await uploadMedia(file);
+        if (role === "video") {
+          /* The clip's own length is what an edit should output. It is measured
+             here, while the file is still in hand, so the composer never has to
+             fetch megabytes of video back to ask the same question. */
+          const seconds = await fileSeconds(file);
+          if (seconds !== null) rememberClipSeconds(uploaded.url, seconds);
+        }
         used[role] = (used[role] ?? 0) + 1;
         media.add({ id: localId(), url: uploaded.url, role });
         setStaged(uploaded.url);
