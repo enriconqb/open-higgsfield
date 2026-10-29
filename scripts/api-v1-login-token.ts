@@ -21,7 +21,7 @@ import path from "node:path";
 
 import { createApiToken } from "@/auth/api-tokens";
 import { decryptApiKey } from "@/auth/crypto-key";
-import { deriveWrappingKey } from "@/auth/password";
+import { deriveWrappingKey, verifyPassword } from "@/auth/password";
 import { sealSecret } from "@/auth/sealed-key";
 import { closePool } from "@/db/client";
 import { findUserByUsername, getApiKeyRow } from "@/auth/users";
@@ -66,6 +66,16 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  /** Exactly what the login form checks first. Failing here means the form would
+      refuse the same password, so say so instead of blaming the token. */
+  if (!(await verifyPassword(password, user.password_hash))) {
+    console.error(
+      `Password does not match account "${username}" in this database. The login form runs this ` +
+        "same check, so it would refuse it too — check which Vicend instance you are signing in to.",
+    );
+    process.exit(2);
+  }
+
   const wrappingKey = (await deriveWrappingKey(password, user.password_salt)).toString("base64");
   const keyRow = await getApiKeyRow(user.id);
   let keyState = "no platform key saved (generate will answer 409 until one is added)";
@@ -78,7 +88,6 @@ async function main(): Promise<void> {
       process.exit(2);
     }
   }
-
   const created = await createApiToken({
     userId: user.id,
     label: flag("label", "local test") ?? "local test",
@@ -94,6 +103,8 @@ async function main(): Promise<void> {
   await writeFile(outPath, `VICEND_BASE_URL=${base}\nVICEND_API_TOKEN=${created.token}\n`, "utf8");
 
   console.log(`Account : ${username} (id ${user.id}, ${user.role})`);
+  console.log(`Database: ${new URL(raw).host}${new URL(raw).pathname}`);
+  console.log(`Password: matches the stored hash (login form would accept it)`);
   console.log(`Key     : ${keyState}`);
   console.log(`Token   : ${created.record.hint} … written to ${outPath}`);
   console.log(`Revoke it later at ${base}/account (label: ${created.record.label}).`);

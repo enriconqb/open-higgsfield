@@ -45,18 +45,22 @@ export async function recordUsage(input: {
   /** Owner of the charge. Defaults to the signed-in session; /api/v1 passes the
       token owner because there is no cookie on those requests. */
   userId?: number;
+  /** Which API token started the job, when one did. Browser sessions pass nothing. */
+  tokenId?: number | null;
 }): Promise<void> {
   const userId = input.userId ?? (await requireActiveUser()).id;
   const credits = creditsFromUsd(input.costUsd);
   await execute(
-    `INSERT INTO usage_events (user_id, request_id, model_id, kind, spec, cost_usd, credits, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO usage_events (user_id, token_id, request_id, model_id, kind, spec, cost_usd, credits, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        status = IF(VALUES(status) = 'pending', status, VALUES(status)),
        cost_usd = COALESCE(VALUES(cost_usd), cost_usd),
-       credits = IF(VALUES(cost_usd) IS NULL, credits, VALUES(credits))`,
+       credits = IF(VALUES(cost_usd) IS NULL, credits, VALUES(credits)),
+       token_id = COALESCE(VALUES(token_id), token_id)`,
     [
       userId,
+      input.tokenId ?? null,
       input.requestId.slice(0, 128),
       input.modelId.slice(0, 128),
       input.kind,

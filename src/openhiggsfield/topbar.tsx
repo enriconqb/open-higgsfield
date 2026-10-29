@@ -178,6 +178,9 @@ export function Topbar({
                   <Link href="/profile" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                     Profile
                   </Link>
+                  <Link href="/tokens" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                    API tokens
+                  </Link>
                   <Link href="/account" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                     Change password
                   </Link>

@@ -33,6 +33,8 @@ export type GenerationContext = {
   credentials: GenerationCredentials;
   /** Absolute origin of the incoming request, for URLs the platform must fetch. */
   origin: string;
+  /** API token that started the work, so usage rows can point back at it. */
+  tokenId?: number | null;
 };
 
 const PRICE_TTL_MS = 5 * 60_000;
@@ -287,6 +289,7 @@ async function rememberUsage(
     const costUsd = immediate?.costUsd ?? estimated;
     await recordUsage({
       userId: context.userId,
+      tokenId: context.tokenId ?? null,
       requestId: queued.requestId,
       modelId: plane.model,
       kind: getModel(plane.model).surface,

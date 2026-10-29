@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
-import { createApiTokenAction, getAuthState, listApiTokensAction, revokeApiTokenAction } from "@/auth/actions";
+import { createApiTokenAction, getAuthState, getPublicApiInfo, listApiTokensAction, revokeApiTokenAction } from "@/auth/actions";
 import { configuredBasePath } from "@/base-path";
 
 type TokenView = {
@@ -35,7 +36,10 @@ function when(value: string | null): string {
 export function ApiTokensPanel() {
   const [tokens, setTokens] = useState<TokenView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [signedIn, setSignedIn] = useState(true);
   const [hasApiKey, setHasApiKey] = useState(true);
+  const [apiBase, setApiBase] = useState("");
+  const [models, setModels] = useState<{ image: string; video: string } | null>(null);
   const [label, setLabel] = useState("");
   const [expiry, setExpiry] = useState("0");
   const [canGenerate, setCanGenerate] = useState(true);
@@ -47,7 +51,15 @@ export function ApiTokensPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      const [state, list] = await Promise.all([getAuthState(), listApiTokensAction()]);
+      const [info, state] = await Promise.all([getPublicApiInfo(), getAuthState()]);
+      setApiBase(info.apiBase);
+      setModels(info.models);
+      setSignedIn(state.user !== null);
+      if (!state.user) {
+        setTokens([]);
+        return;
+      }
+      const list = await listApiTokensAction();
       setHasApiKey(state.hasApiKey);
       setTokens(list as TokenView[]);
     } catch (caught) {
@@ -127,7 +139,36 @@ export function ApiTokensPanel() {
         </div>
       </div>
 
-      {!hasApiKey && (
+      {apiBase && (
+        <div className="ohf-token-endpoint">
+          <div className="ohf-token-endpoint-label">API address to paste into OpenMontage</div>
+          <code className="ohf-token-code">{apiBase}</code>
+          <div className="ohf-token-fresh-actions">
+            <button type="button" className="ohf-token-ghost" onClick={() => void copy(apiBase, "base")}>
+              {copied === "base" ? "Copied" : "Copy address"}
+            </button>
+            {models && (
+              <span className="ohf-keys-copy">
+                Example models: {models.video} (video) · {models.image} (image)
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!signedIn && !loading && (
+        <div className="ohf-token-signin">
+          <p className="ohf-keys-copy">
+            Sign in to create a token. Each token belongs to one account, spends that account&apos;s
+            platform key, and every job it starts is recorded against that account.
+          </p>
+          <Link href="/login" className="ohf-keys-save ohf-token-signin-link">
+            Sign in to create a token
+          </Link>
+        </div>
+      )}
+
+      {signedIn && !hasApiKey && (
         <div className="ohf-alert" role="alert">
           <span className="ohf-alert-text">
             Save a platform key in the studio first: a token has nothing to spend without one.
@@ -148,7 +189,8 @@ export function ApiTokensPanel() {
             </button>
           </div>
           <p className="ohf-keys-copy">
-            In OpenMontage, put the base URL and this token in <code>.env</code>:
+            In OpenMontage, open the <strong>Settings → API</strong> page on the board (or put these two
+            lines in <code>.env</code>):
           </p>
           <code className="ohf-token-code ohf-token-code--env">
             {`VICEND_BASE_URL=${baseUrl}\nVICEND_API_TOKEN=${fresh}`}
@@ -165,6 +207,7 @@ export function ApiTokensPanel() {
         </div>
       )}
 
+      {signedIn && (
       <form className="ohf-keys-form" onSubmit={(event) => void onCreate(event)}>
         <label className="ohf-field">
           <div className="ohf-field-label">Label</div>
@@ -176,8 +219,7 @@ export function ApiTokensPanel() {
             value={label}
             onChange={(event) => setLabel(event.target.value)}
           />
-        </label>
-        <label className="ohf-field">
+        </label>        <label className="ohf-field">
           <div className="ohf-field-label">Expires</div>
           <select
             className="ohf-input"
@@ -220,11 +262,14 @@ export function ApiTokensPanel() {
           </button>
         </div>
       </form>
+      )}
 
       <div className="ohf-token-list">
         <div className="ohf-token-list-title">Existing tokens</div>
         {loading ? (
           <p className="ohf-keys-copy">Loading…</p>
+        ) : !signedIn ? (
+          <p className="ohf-keys-copy">Sign in to see your tokens.</p>
         ) : tokens.length === 0 ? (
           <p className="ohf-keys-copy">No tokens yet.</p>
         ) : (

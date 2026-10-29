@@ -23,8 +23,10 @@ import { createPasswordSalt, deriveWrappingKey, hashPassword } from "@/auth/pass
 import { sealSecret } from "@/auth/sealed-key";
 import { sealSession } from "@/auth/session";
 import { createUser, deleteUser, upsertApiKey } from "@/auth/users";
-import { createApiJob, storeJobImages } from "@/generation/api-jobs";
+import { createApiJob, findApiJob, storeJobImages } from "@/generation/api-jobs";
+import { galleryHas, mirrorJobToGallery } from "@/generation/gallery";
 import { uploadFilePath } from "@/generation/local-upload";
+import { listGenerationResultsFor, replaceGenerationResultsFor } from "@/generation/results";
 
 const BASE = (process.env.VICEND_SELFTEST_BASE ?? "http://127.0.0.1:3000").replace(/\/$/, "");
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -211,12 +213,21 @@ async function runTests(alice: Account, bob: Account, files: string[]): Promise<
   const readOnlyMe = await call("/api/v1/me", { token: alice.readOnlyToken });
   report("read-only token can still read /me", readOnlyMe.status === 200, `${readOnlyMe.status}`);
 
-  // --- account page renders the panel ------------------------------------
-  const page = await call("/account", { cookie: alice.sessionCookie });
+  // --- the API tokens page renders its own module -------------------------
+  const page = await call("/tokens", { cookie: alice.sessionCookie });
   report(
-    "GET /account shows the API tokens panel",
+    "GET /tokens shows the API tokens module",
     page.status === 200 && typeof page.body === "string" && page.body.includes("API tokens"),
     `${page.status}`,
+  );
+  const accountPage = await call("/account", { cookie: alice.sessionCookie });
+  report(
+    "GET /account stays a password-only page",
+    accountPage.status === 200 &&
+      typeof accountPage.body === "string" &&
+      accountPage.body.includes("Change password") &&
+      !accountPage.body.includes("Create token"),
+    `${accountPage.status}`,
   );
 
   // --- generate validation ------------------------------------------------
@@ -359,6 +370,38 @@ async function runTests(alice: Account, bob: Account, files: string[]): Promise<
     "job json points at the token-authenticated file url",
     jobJson.status === 200 && (jobBody.images?.[0]?.url ?? "").endsWith(`/api/v1/jobs/${imageJobId}/files/0`),
     String(jobBody.images?.[0]?.url ?? ""),
+  );
+
+  // --- gallery mirroring -------------------------------------------------
+  // A token generation has no browser to save it, so the job must appear in the
+  // owner's own studio gallery by itself.
+  const aliceJob = (await findApiJob(imageJobId))!;
+  await mirrorJobToGallery(alice.userId, aliceJob);
+  report("mirroring a finished job writes a gallery row", await galleryHas(alice.userId, imageJobId));
+  await mirrorJobToGallery(alice.userId, aliceJob);
+  const mineRows = await listGenerationResultsFor(alice.userId);
+  const mirroredRows = mineRows.filter((row) => row.requestId === imageJobId);
+  const mirroredRow = mirroredRows[0];
+  report("mirroring twice still leaves exactly one row", mirroredRows.length === 1, `${mirroredRows.length} rows`);
+  report(
+    "the mirrored row is a valid studio record",
+    Boolean(mirroredRow) && mirroredRow?.via === "api" && mirroredRow?.urls.length === 1,
+    JSON.stringify(mirroredRow ?? null).slice(0, 160),
+  );
+  const foreignRows = await listGenerationResultsFor(bob.userId);
+  report(
+    "a mirrored row belongs only to its owner",
+    !foreignRows.some((row) => row.requestId === imageJobId),
+    `${foreignRows.length} rows for bob`,
+  );
+
+  // The studio saves by replacing the browser-owned rows; it must not sweep away
+  // the token-made ones it has never seen.
+  await replaceGenerationResultsFor(alice.userId, []);
+  report(
+    "a studio save does not delete token-made rows",
+    await galleryHas(alice.userId, imageJobId),
+    "after replace with an empty browser list",
   );
 
   // --- video redirect ----------------------------------------------------

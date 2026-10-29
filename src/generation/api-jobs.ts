@@ -18,6 +18,8 @@ export type StoredImage = {
   bytes: number;
   id?: string;
   url?: string;
+  /** File extension hint for archived video bytes. */
+  ext?: string;
 };
 
 export type ApiJobResult = {
@@ -30,6 +32,8 @@ export type ApiJobRow = {
   user_id: number;
   token_id: number | null;
   model_id: string;
+  prompt: string | null;
+  settings: unknown;
   kind: ApiJobKind;
   status: string;
   cost_usd: string | number | null;
@@ -42,8 +46,8 @@ export type ApiJobRow = {
 
 type JobPacket = ApiJobRow & RowDataPacket;
 
-const SELECT_COLUMNS = `request_id, user_id, token_id, model_id, kind, status, cost_usd, error, result,
-   idempotency_key, created_at, updated_at`;
+const SELECT_COLUMNS = `request_id, user_id, token_id, model_id, prompt, settings, kind, status, cost_usd, error,
+   result, idempotency_key, created_at, updated_at`;
 
 export async function createApiJob(input: {
   requestId: string;
@@ -55,16 +59,20 @@ export async function createApiJob(input: {
   idempotencyKey: string | null;
   costUsd?: number | null;
   result?: ApiJobResult | null;
+  prompt?: string | null;
+  settings?: Record<string, unknown> | null;
 }): Promise<void> {
   await execute(
     `INSERT INTO api_jobs
-       (request_id, user_id, token_id, model_id, kind, status, cost_usd, result, idempotency_key)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (request_id, user_id, token_id, model_id, prompt, settings, kind, status, cost_usd, result, idempotency_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.requestId.slice(0, 128),
       input.userId,
       input.tokenId,
       input.modelId.slice(0, 128),
+      input.prompt ? input.prompt.slice(0, 8000) : null,
+      input.settings ? JSON.stringify(input.settings) : null,
       input.kind,
       input.status.slice(0, 32),
       input.costUsd ?? null,
@@ -75,9 +83,27 @@ export async function createApiJob(input: {
 }
 
 export async function findApiJob(requestId: string): Promise<ApiJobRow | null> {
-  return queryOne<JobPacket>(`SELECT ${SELECT_COLUMNS} FROM api_jobs WHERE request_id = ? LIMIT 1`, [
+  const row = await queryOne<JobPacket>(`SELECT ${SELECT_COLUMNS} FROM api_jobs WHERE request_id = ? LIMIT 1`, [
     requestId,
   ]);
+  return row ? { ...row, settings: parseSettingsColumn(row.settings) } : null;
+}
+
+/** MySQL hands JSON back as a string through some drivers and as an object
+    through others; callers should only ever see the object form. */
+function parseSettingsColumn(value: unknown): Record<string, unknown> | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 export async function findApiJobByIdempotency(

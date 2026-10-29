@@ -2,6 +2,7 @@ import { withBasePath } from "@/base-path";
 import { ApiError } from "@/auth/api-auth";
 import { findApiJob, parseJobResult, updateApiJob, type ApiJobResult, type ApiJobRow } from "@/generation/api-jobs";
 import { statusesFor, type GenerationContext } from "@/generation/engine";
+import { mirrorJobToGallery } from "@/generation/gallery";
 
 import { originOf } from "./http";
 
@@ -91,7 +92,13 @@ export async function refreshJob(context: GenerationContext, job: ApiJobRow): Pr
         ? null
         : Number(job.cost_usd);
   await updateApiJob(job.request_id, { status: status.status, costUsd, error, result: next });
-  return { ...job, status: status.status, cost_usd: costUsd, error, result: next };
+  const settled: ApiJobRow = { ...job, status: status.status, cost_usd: costUsd, error, result: next };
+  // The job just reached a terminal state and there is no browser to save it, so
+  // it is mirrored into the owner's gallery before answering.
+  if (TERMINAL.has(status.status)) {
+    await mirrorJobToGallery(job.user_id, settled);
+  }
+  return settled;
 }
 
 function describeError(value: unknown): string {

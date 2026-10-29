@@ -259,6 +259,13 @@ const Tile = memo(function Tile({
           {item.badge}
         </span>
       )}
+      {/* A run made by a saved token is invisible to the browser that saved the
+          rest of the grid, so it says so rather than looking like a stray. */}
+      {item.via === "api" && (
+        <span className="ohf-tile-api" title="Made with an API token">
+          API
+        </span>
+      )}
       {/* The run signs itself only while the card is under the cursor, the same
           bargain the action rail makes — an un-hovered grid is nothing but the
           work. What distinguishes two cards of the same model is the words that

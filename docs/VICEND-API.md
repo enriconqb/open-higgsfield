@@ -56,11 +56,14 @@ Other consequences, by design:
 
 ## Create a token
 
-1. Sign in to Vicend and open `/account`.
-2. Under **API tokens**, give it a label, choose an expiry (or never), and tick the
-   scopes: `read` (see jobs and the catalog) and/or `generate` (start work).
+1. Sign in to Vicend and open **API tokens** — the user menu at the top right, or
+   `/tokens` directly. This is its own module; the *Change password* page is
+   deliberately separate.
+2. Give it a label, choose an expiry (or never), and tick the scopes: `read` (see
+   jobs and the catalog) and/or `generate` (start work).
 3. Press **Create token** and copy the value immediately — it is shown once. The
-   panel also offers the two `.env` lines ready to paste.
+   panel also shows the **API address** to paste into your tool and offers the two
+   `.env` lines ready to use.
 4. Revoke it from the same list at any time. `Last used` shows whether something is
    still using it.
 
@@ -68,6 +71,18 @@ Other consequences, by design:
 
 Every request needs `Authorization: Bearer vic_…`. Success responses are JSON;
 failures are JSON too, always shaped `{"detail": "..."}`.
+
+### `GET /api/v1/health`
+
+No token. Answers whether the address is right before you debug the token.
+
+```json
+{ "ok": true, "app": "vicend", "api": "v1", "time": "2026-10-29T06:31:20.000Z" }
+```
+
+A client that gets a connection error here has an **address** problem; one that
+gets `401` from `/me` has a **token** problem. Keeping the two checks separate is
+what makes a bad paste diagnosable.
 
 ### `GET /api/v1/me`
 
@@ -184,6 +199,59 @@ Video bytes. Usually answers `302` to the provider's own URL; when only unsigned
 URLs exist it streams through this app with the token's key. `?index=` picks a
 clip when a job produced several.
 
+### `GET /api/v1/usage`
+
+What this token — and its owner — actually spent. Scope `read`.
+
+`?days=` is clamped to 1–365 and defaults to 30.
+
+```json
+{
+  "userId": 1,
+  "username": "root",
+  "token": { "id": 17, "label": "openmontage", "lastUsedAt": "2026-10-29T06:31:21.000Z" },
+  "window": { "days": 30, "from": "2026-09-29T00:00:00.000Z", "to": "2026-10-29T00:00:00.000Z" },
+  "totals": { "credits": 76, "costUsd": 0.760577, "generations": 3, "success": 3, "failed": 0, "pending": 0 },
+  "byModel": [{ "modelId": "seedance-2.5", "generations": 1, "credits": 54, "costUsd": 0.541827 }],
+  "byToken": [{ "tokenId": 17, "label": "openmontage", "generations": 2, "credits": 54, "costUsd": 0.545627 }],
+  "jobs": [{ "requestId": "gen-vid-…", "status": "completed", "costUsd": 0.541827, "jobUrl": "…" }]
+}
+```
+
+Identity comes from the **bearer token**, never from a query parameter — so a
+token can only ever read its own owner's spend. `byToken` is what answers "which
+of my tools is costing me money"; `token.id` matching the token you are holding
+tells you the row is yours.
+
+## Where a generated asset appears
+
+Two different stores, on purpose:
+
+| Store | Written by | What it answers |
+| --- | --- | --- |
+| `usage_events`, `api_jobs` | the server, on submit and on poll | Billing: `/usage`, `/api/v1/usage`, `/api/v1/me` |
+| `generation_results` | the studio **and** this API | The gallery a signed-in user sees at `/` |
+
+A token generation has no browser, so it cannot go through the studio's own save
+path. Finished API jobs are therefore **mirrored into the owner's gallery** —
+server-side, keyed on `(user_id, "<requestId>#api")` so it is idempotent — and
+their media is **copied into `uploads/`** so the tile still plays after the
+provider's signed URL expires (~24 h). Those rows carry `via: "api"` and are
+labelled **API** in the gallery.
+
+One consequence worth knowing: `POST /generate` with a **video** model returns
+`202` immediately, so the gallery row appears only once something polls
+`GET /jobs/{id}` to a terminal state. `/api/v1/content` and `/jobs/{id}` both do
+that; a client that submits and never polls leaves the gallery row for the next
+reader.
+
+To backfill jobs created before this mirroring existed:
+
+```bash
+pnpm exec tsx scripts/api-v1-backfill-gallery.ts --dry-run
+pnpm exec tsx scripts/api-v1-backfill-gallery.ts
+```
+
 ## Errors
 
 | Status | When | Retry? |
@@ -242,14 +310,22 @@ Both scripts refuse to run against a database that is not on localhost unless
 
 ## Deployment checklist
 
-1. `pnpm db:migrate` — applies `004_api_tokens.sql` and `005_api_jobs.sql`.
+1. `pnpm db:migrate` — applies `004_api_tokens.sql` through
+   `008_api_job_prompt_settings.sql`. Migrations are plain statements and safe to
+   re-run; already-applied ones report `skipped (already applied)`.
 2. No new required environment variables: `SESSION_SECRET` already exists. The two
    rate-limit variables are optional.
 3. Harden the web server first, then rotate `SESSION_SECRET` and
    `SUPERADMIN_PASSWORD` if there is any chance they were exposed —
    `docs/NGINX-HARDENING.md`.
 4. `pnpm build` and restart. `/api/v1/*` is dynamic and needs no extra config.
-5. Verify: `curl -s -H "Authorization: Bearer vic_…" https://host/video-gen/api/v1/me`.
+5. Verify in this order, so a failure names the broken layer:
+   `curl -s https://host/video-gen/api/v1/health` then
+   `curl -s -H "Authorization: Bearer vic_…" https://host/video-gen/api/v1/me`
+   then `… /api/v1/usage`.
+6. Make sure `uploads/` is writable and **not** served directly by the web server:
+   archived job media is intentionally reachable only through the
+   token-authenticated route.
 
 ## Deliberately not in v1
 

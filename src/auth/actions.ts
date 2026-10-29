@@ -1,5 +1,10 @@
 "use server";
 
+import { headers } from "next/headers";
+
+import { withBasePath } from "@/base-path";
+import { modelsFor } from "@/generation/catalog";
+
 import {
   createApiToken,
   listApiTokens,
@@ -270,6 +275,50 @@ export type CreatedApiToken = {
   record: PublicApiToken;
   tokens: PublicApiToken[];
 };
+
+export type PublicApiInfo = {
+  /** Absolute API root, e.g. http://192.168.1.100/video-gen/api/v1 */
+  apiBase: string;
+  appBase: string;
+  playbackBase: string;
+  models: { image: string; video: string } | null;
+};
+
+/** Safe without a session: the door and the menu, never a key. The base URL is
+    derived from the host that is already in the visitor's address bar. */
+export async function getPublicApiInfo(): Promise<PublicApiInfo> {
+  const appBase = await requestBase();
+  return {
+    apiBase: `${appBase}${withBasePath("/api/v1")}`,
+    appBase: appBase || withBasePath("/"),
+    playbackBase: appBase || "",
+    models: publicModelHints(),
+  };
+}
+
+async function requestBase(): Promise<string> {
+  const incoming = await headers();
+  const host = incoming.get("x-forwarded-host") ?? incoming.get("host");
+  if (!host) return "";
+  const proto = incoming.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
+/** First model of each surface, so the page can show a real example without a token. */
+function publicModelHints(): { image: string; video: string } | null {
+  try {
+    const entries = modelsFor("openrouter");
+    const pick = (surface: "image" | "video") => {
+      const studio = entries.find((entry) => entry.surface === surface && !entry.id.startsWith("or-"));
+      return (studio ?? entries.find((entry) => entry.surface === surface))?.id ?? "";
+    };
+    const image = pick("image");
+    const video = pick("video");
+    return image && video ? { image, video } : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function listApiTokensAction(): Promise<PublicApiToken[]> {
   const session = await requireActiveUser();

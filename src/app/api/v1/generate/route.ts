@@ -10,6 +10,7 @@ import {
 import { getModel } from "@/generation/catalog";
 import type { GenerationPlane, MediaItem, MediaRole, ModelEntry } from "@/generation/catalog/types";
 import { submitPlane } from "@/generation/engine";
+import { mirrorJobToGallery } from "@/generation/gallery";
 
 import { apiError, jsonOk, readJsonObject } from "../_lib/http";
 import { jobResponse } from "../_lib/jobs";
@@ -22,6 +23,13 @@ const ROLES: readonly MediaRole[] = ["start", "end", "reference", "video", "audi
 const IDEMPOTENCY = /^[A-Za-z0-9._:-]{1,128}$/;
 const DATA_URL = /^data:(?:image|video|audio)\/[a-z0-9.+-]+;base64,/i;
 const MAX_SETTINGS = 40;
+const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled", "cancelled"]);
+
+/** The prompt the caller asked for, so the gallery row can show it later. */
+function promptOf(plane: GenerationPlane): string | null {
+  const prompt = (plane as { prompt?: unknown }).prompt;
+  return typeof prompt === "string" && prompt.trim() ? prompt.trim() : null;
+}
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -52,6 +60,8 @@ export async function POST(request: Request): Promise<Response> {
       user_id: context.identity.userId,
       token_id: context.identity.tokenId,
       model_id: plane.model,
+      prompt: promptOf(plane),
+      settings: plane.settings as Record<string, unknown>,
       kind,
       status,
       cost_usd: costUsd,
@@ -62,6 +72,12 @@ export async function POST(request: Request): Promise<Response> {
       updated_at: new Date(),
     };
     await recordJob(row, context.identity.userId, idempotencyKey, request);
+
+    // A token generation has no browser to save it, so the finished asset is
+    // mirrored into the owner's studio gallery here.
+    if (TERMINAL_STATUSES.has(status)) {
+      await mirrorJobToGallery(context.identity.userId, row);
+    }
 
     return jsonOk({ ...jobResponse(request, row), reused: false }, 202);
   } catch (caught) {

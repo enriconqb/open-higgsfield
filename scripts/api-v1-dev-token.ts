@@ -49,7 +49,7 @@ async function main(): Promise<void> {
       ? path.resolve(process.argv[outIndex + 1])
       : path.join(process.env.TEMP ?? ".", "vicend-dev-env.txt");
 
-  const password = `dev-${randomBytes(12).toString("hex")}`;
+  const password = process.env.VICEND_DEV_PASSWORD?.trim() || `dev-${randomBytes(12).toString("hex")}`;
   const passwordSalt = createPasswordSalt();
   const passwordHash = await hashPassword(password);
   const wrappingKey = (await deriveWrappingKey(password, passwordSalt)).toString("base64");
@@ -111,7 +111,15 @@ async function main(): Promise<void> {
     { encoding: "utf8" },
   );
 
+  const credsPath = path.join(path.dirname(outPath), "vicend-dev-login.txt");
+  await writeFile(
+    credsPath,
+    `# Login lokal (database di komputer ini saja)\nusername=${USERNAME}\npassword=${password}\n`,
+    { encoding: "utf8" },
+  );
+
   console.log(`Account : ${USERNAME} (id ${userId})`);
+  console.log(`Password: written to ${credsPath}`);
   console.log(`Token   : ${created.record.hint} … written to ${outPath}`);
   console.log(`Platform key: ${platformKey ? "real key from VICEND_DEV_PLATFORM_KEY" : "placeholder (submits will be rejected)"}`);
   console.log("Export those two lines before running any Vicend tool.");

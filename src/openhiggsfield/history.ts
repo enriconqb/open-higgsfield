@@ -30,6 +30,11 @@ export interface RunRecord {
   settings?: Record<string, unknown>;
   /** USD charged or estimated for this result. Absent on older records. */
   costUsd?: number;
+  /** Present only on rows produced through /api/v1 with a bearer token, so the
+      studio can label them apart from browser runs. */
+  via?: "api";
+  /** Which API token produced the row, when one did. */
+  tokenId?: number | null;
 }
 
 export const HISTORY_KEY = "history.v1";
@@ -161,7 +166,9 @@ export function isRunRecord(value: unknown): value is RunRecord {
     (record.favorite === undefined || typeof record.favorite === "boolean") &&
     (record.settings === undefined ||
       (typeof record.settings === "object" && record.settings !== null)) &&
-    (record.costUsd === undefined || typeof record.costUsd === "number")
+    (record.costUsd === undefined || typeof record.costUsd === "number") &&
+    (record.via === undefined || record.via === "api") &&
+    (record.tokenId === undefined || record.tokenId === null || typeof record.tokenId === "number")
   );
 }
 

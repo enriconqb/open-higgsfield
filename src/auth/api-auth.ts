@@ -125,5 +125,11 @@ export async function requireApiContext(
 ): Promise<ApiContext> {
   const identity = await requireApiIdentity(request, scope);
   const credentials = await requireApiCredentials(identity);
-  return { userId: identity.userId, credentials, origin: originOf(request), identity };
+  return {
+    userId: identity.userId,
+    credentials,
+    origin: originOf(request),
+    tokenId: identity.tokenId,
+    identity,
+  };
 }
