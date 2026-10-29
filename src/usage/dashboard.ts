@@ -4,6 +4,7 @@ import type { RowDataPacket } from "mysql2/promise";
 
 import { requireActiveUser } from "@/auth/guard";
 import { queryRows } from "@/db/client";
+import { run, type ActionResult } from "@/lib/action-result";
 
 export type UsageFilters = {
   from: string;
@@ -78,7 +79,11 @@ function cleanFilters(data: unknown, isSuperadmin: boolean): UsageFilters {
   };
 }
 
-export async function loadUsageDashboard(data?: unknown): Promise<UsageDashboard> {
+export async function loadUsageDashboard(data?: unknown): Promise<ActionResult<UsageDashboard>> {
+  return run(() => loadUsageDashboardHandler(data));
+}
+
+async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard> {
   const user = await requireActiveUser();
   const isSuperadmin = user.role === "superadmin";
   const filters = cleanFilters(data, isSuperadmin);

@@ -10,6 +10,7 @@ import { parseSettings } from "@/generation/catalog";
 import { estimateUsd, formatUsd } from "@/generation/estimate";
 import type { OpenRouterQuote } from "@/generation/estimate";
 import type { ModelEntry, Surface } from "@/generation/catalog";
+import { unwrap } from "@/lib/action-result";
 import type { KeyProvider } from "@/generation/credentials";
 import { MAX_BATCH, useActive } from "@/generation/stores/active";
 import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
@@ -118,6 +119,7 @@ export function Composer({
     }
     let live = true;
     void openRouterCapabilities(model.id)
+      .then(unwrap)
       .then((next) => {
         if (live) setCaps(next);
       })
@@ -170,6 +172,7 @@ export function Composer({
     }
     let live = true;
     void openRouterQuote(model.id)
+      .then(unwrap)
       .then((next) => {
         if (live) setQuote(next);
       })

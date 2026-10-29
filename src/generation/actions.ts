@@ -14,6 +14,7 @@ import type { OpenRouterCaps } from "./capabilities";
 import type { GenerationPlane } from "./catalog/types";
 import { MissingCredentialsError } from "./credentials";
 import type { KeyProvider } from "./credentials";
+import { ActionError, run, type ActionResult } from "@/lib/action-result";
 import {
   capabilitiesFor,
   quoteFor,
@@ -23,50 +24,55 @@ import {
   type GenerationCredentials,
 } from "./engine";
 import type { OpenRouterQuote } from "./estimate";
-import { PlatformError, openRouterBaseUrl } from "./platform";
+import { openRouterBaseUrl } from "./platform";
 import type { QueuedGeneration, StatusResult } from "./platform";
 
-export async function savePlatformCredentials(data: unknown) {
-  await saveEncryptedPlatformKey(data);
+export async function savePlatformCredentials(data: unknown): Promise<ActionResult<void>> {
+  return run(async () => {
+    const saved = await saveEncryptedPlatformKey(data);
+    if (!saved.ok) throw new ActionError(saved.error);
+  });
 }
 
-export async function clearPlatformCredentials() {
-  await clearEncryptedPlatformKey();
+export async function clearPlatformCredentials(): Promise<ActionResult<void>> {
+  return run(async () => {
+    const cleared = await clearEncryptedPlatformKey();
+    if (!cleared.ok) throw new ActionError(cleared.error);
+  });
 }
 
-export async function hasPlatformCredentials() {
-  return hasEncryptedPlatformKey();
+export async function hasPlatformCredentials(): Promise<ActionResult<boolean>> {
+  return run(hasEncryptedPlatformKey);
 }
 
-export async function openRouterCapabilities(modelId: string): Promise<OpenRouterCaps | null> {
-  return capabilitiesFor(await sessionContext(), modelId);
+export async function openRouterCapabilities(
+  modelId: string,
+): Promise<ActionResult<OpenRouterCaps | null>> {
+  return run(async () => capabilitiesFor(await sessionContext(), modelId));
 }
 
-export async function openRouterQuote(modelId: string): Promise<OpenRouterQuote | null> {
-  return quoteFor(await sessionContext(), modelId);
+export async function openRouterQuote(modelId: string): Promise<ActionResult<OpenRouterQuote | null>> {
+  return run(async () => quoteFor(await sessionContext(), modelId));
 }
 
-export async function platformKeyKind(): Promise<KeyProvider | null> {
-  return encryptedPlatformKeyKind();
+export async function platformKeyKind(): Promise<ActionResult<KeyProvider | null>> {
+  return run(encryptedPlatformKeyKind);
 }
 
 export type GenerationSubmit = QueuedGeneration | { error: string };
 
-export async function submitGeneration(plane: GenerationPlane): Promise<GenerationSubmit> {
-  try {
-    return await submitPlane(await sessionContext(), plane);
-  } catch (caught) {
-    return { error: submitError(caught) };
-  }
+export async function submitGeneration(
+  plane: GenerationPlane,
+): Promise<ActionResult<QueuedGeneration>> {
+  return run(async () => submitPlane(await sessionContext(), plane));
 }
 
 /** Every request in flight, answered in one round trip. Next dispatches server
     actions one at a time per client, so a poll per run would queue ahead of the
     next submit — the fan-out belongs on this side of the call, where it is
     genuinely parallel. */
-export async function getGenerationStatuses(data: unknown): Promise<StatusResult[]> {
-  const requestIds = parseRequestIds(data);
-  return statusesFor(await sessionContext(), requestIds);
+export async function getGenerationStatuses(data: unknown): Promise<ActionResult<StatusResult[]>> {
+  return run(async () => statusesFor(await sessionContext(), parseRequestIds(data)));
 }
 
 /** The studio identity: session cookie for the user, stored key for the spend. */
@@ -104,29 +110,6 @@ async function sessionOrigin(): Promise<string> {
   if (!host) return "";
   const proto = incoming.get("x-forwarded-proto") ?? "http";
   return `${proto}://${host}`;
-}
-
-function submitError(caught: unknown): string {
-  if (caught instanceof AuthRequiredError || (caught instanceof Error && caught.message.includes("Login required"))) {
-    return "Sign in to generate.";
-  }
-  if (
-    caught instanceof MissingCredentialsError ||
-    (caught instanceof Error && caught.message.includes("Missing platform key"))
-  ) {
-    return "Add your platform key to generate.";
-  }
-  if (caught instanceof PlatformError) return clip(caught.message);
-  if (caught instanceof Error && caught.message.startsWith("Reference image")) return clip(caught.message);
-  if (caught instanceof Error && caught.message.startsWith("Invalid ")) return clip(caught.message);
-  if (caught instanceof Error && caught.message.startsWith("Unknown model")) return clip(caught.message);
-  if (caught instanceof Error && caught.message.startsWith("No ")) return clip(caught.message);
-  return "Generation failed. Try again.";
-}
-
-function clip(message: string): string {
-  const clean = message.replace(/\s+/g, " ").trim();
-  return clean.length > 240 ? `${clean.slice(0, 240)}…` : clean;
 }
 
 function parseRequestIds(data: unknown): string[] {

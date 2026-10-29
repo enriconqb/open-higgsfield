@@ -1,3 +1,5 @@
+import { unwrap } from "@/lib/action-result";
+
 import { getGenerationStatuses } from "./actions";
 import type { GenerationStatus, StatusResult } from "./platform";
 
@@ -71,7 +73,7 @@ async function round(): Promise<void> {
   timer = null;
   polling = true;
   try {
-    const results = await getGenerationStatuses({ requestIds: [...waiting.keys()] });
+    const results = unwrap(await getGenerationStatuses({ requestIds: [...waiting.keys()] }));
     misses = 0;
     for (const result of results) deliver(result);
     sweep();

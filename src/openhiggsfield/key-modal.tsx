@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { clearPlatformCredentials, savePlatformCredentials } from "@/generation/actions";
 import type { KeyProvider } from "@/generation/credentials";
+import { unwrap } from "@/lib/action-result";
 
 import { CloseIcon } from "./icons";
 
@@ -35,7 +36,7 @@ export function KeyModal({
     setBusy(true);
     setError(null);
     try {
-      await savePlatformCredentials({ api_key: apiKey, provider });
+      unwrap(await savePlatformCredentials({ api_key: apiKey, provider }));
       onSaved();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save the key");
@@ -48,7 +49,7 @@ export function KeyModal({
     setBusy(true);
     setError(null);
     try {
-      await clearPlatformCredentials();
+      unwrap(await clearPlatformCredentials());
       setApiKey("");
       onCleared();
     } catch (caught) {

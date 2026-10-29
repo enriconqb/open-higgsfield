@@ -6,6 +6,7 @@ import { getAuthState, logoutAccount } from "@/auth/actions";
 import { apiUrl, withBasePath } from "@/base-path";
 import { AuthRequiredError } from "@/auth/errors";
 import type { PublicUser } from "@/auth/types";
+import { unwrap } from "@/lib/action-result";
 import { platformKeyKind, submitGeneration } from "@/generation/actions";
 import { rehostDataMedia } from "@/generation/upload";
 import { MissingCredentialsError } from "@/generation/credentials";
@@ -264,7 +265,7 @@ function persistLocal(records: RunRecord[]) {
       let remote: RunRecord[] = [];
       let remoteOk = false;
       try {
-        remote = await loadGenerationResults();
+        remote = unwrap(await loadGenerationResults());
         remoteOk = true;
       } catch {
         remoteOk = false;
@@ -283,6 +284,7 @@ function persistLocal(records: RunRecord[]) {
     void saveHistory(history, undefined, undefined, historyKeyFor(user.id));
     if (!syncServer) return;
     void saveGenerationResults(history)
+      .then(unwrap)
       .then((saved) => {
         if (!alive.current) return;
         setHistory((current) => {
@@ -298,11 +300,12 @@ function persistLocal(records: RunRecord[]) {
 
   useEffect(() => {
     void getAuthState()
+      .then(unwrap)
       .then((state) => {
         setUser(state.user);
         setKeyConfigured(state.hasApiKey);
         if (state.user) {
-          return platformKeyKind().then((kind) => {
+          return platformKeyKind().then(unwrap).then((kind) => {
             setKeyKind(kind);
             setKindReady(true);
             if (!state.hasApiKey) setKeysOpen(true);
@@ -497,8 +500,7 @@ function persistLocal(records: RunRecord[]) {
     const runOne = async (slot: { skeletons: string[] }) => {
       try {
         const hosted = await rehostDataMedia(plane);
-        const queued = await submitGeneration(hosted);
-        if ("error" in queued) throw new Error(queued.error);
+        const queued = unwrap(await submitGeneration(hosted));
         if (queued.immediate) {
           const rows = terminalRows(queued.requestId, draft, queued.immediate);
           setHistory((prev) => {
@@ -771,7 +773,7 @@ function persistLocal(records: RunRecord[]) {
             onKeys={openKeys}
             user={user}
             onLogout={() => {
-              void logoutAccount().then(() => {
+              void logoutAccount().then(unwrap).then(() => {
                 setUser(null);
                 setKeyConfigured(false);
                 setKeyKind(null);
@@ -860,7 +862,7 @@ function persistLocal(records: RunRecord[]) {
               setKeyConfigured(true);
               setKeysOpen(false);
               setError(null);
-              void platformKeyKind().then(setKeyKind);
+              void platformKeyKind().then(unwrap).then(setKeyKind);
             }}
             onCleared={() => {
               setKeyConfigured(false);

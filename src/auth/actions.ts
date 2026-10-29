@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 
 import { withBasePath } from "@/base-path";
 import { modelsFor } from "@/generation/catalog";
+import { run, type ActionResult } from "@/lib/action-result";
 
 import {
   createApiToken,
@@ -45,7 +46,11 @@ export type AuthState = {
   hasApiKey: boolean;
 };
 
-export async function getAuthState(): Promise<AuthState> {
+export async function getAuthState(): Promise<ActionResult<AuthState>> {
+  return run(getAuthStateHandler);
+}
+
+async function getAuthStateHandler(): Promise<AuthState> {
   const session = await readSession();
   if (!session) return { user: null, hasApiKey: false };
   const key = await getApiKeyRow(session.id);
@@ -60,7 +65,11 @@ export async function getAuthState(): Promise<AuthState> {
   };
 }
 
-export async function registerAccount(data: unknown): Promise<{ message: string }> {
+export async function registerAccount(data: unknown): Promise<ActionResult<{ message: string }>> {
+  return run(() => registerAccountHandler(data));
+}
+
+async function registerAccountHandler(data: unknown): Promise<{ message: string }> {
   const body = asObject(data);
   const username = requireUsername(body.username);
   const password = requirePassword(body.password);
@@ -83,7 +92,11 @@ export async function registerAccount(data: unknown): Promise<{ message: string 
   };
 }
 
-export async function loginAccount(data: unknown): Promise<AuthState> {
+export async function loginAccount(data: unknown): Promise<ActionResult<AuthState>> {
+  return run(() => loginAccountHandler(data));
+}
+
+async function loginAccountHandler(data: unknown): Promise<AuthState> {
   const body = asObject(data);
   const username = requireUsername(body.username);
   const password = requirePassword(body.password);
@@ -113,16 +126,24 @@ export async function loginAccount(data: unknown): Promise<AuthState> {
   return { user: toPublic(user), hasApiKey: key !== null };
 }
 
-export async function logoutAccount(): Promise<void> {
-  await clearSession();
+export async function logoutAccount(): Promise<ActionResult<void>> {
+  return run(clearSession);
 }
 
-export async function adminListUsers(): Promise<PublicUser[]> {
+export async function adminListUsers(): Promise<ActionResult<PublicUser[]>> {
+  return run(listUsersHandler);
+}
+
+async function listUsersHandler(): Promise<PublicUser[]> {
   await requireSuperadmin();
   return listUsers();
 }
 
-export async function adminSetUserStatus(data: unknown): Promise<PublicUser[]> {
+export async function adminSetUserStatus(data: unknown): Promise<ActionResult<PublicUser[]>> {
+  return run(() => adminSetUserStatusHandler(data));
+}
+
+async function adminSetUserStatusHandler(data: unknown): Promise<PublicUser[]> {
   const admin = await requireSuperadmin();
   const body = asObject(data);
   const id = Number(body.id);
@@ -142,7 +163,11 @@ export async function adminSetUserStatus(data: unknown): Promise<PublicUser[]> {
   return listUsers();
 }
 
-export async function adminCreateUser(data: unknown): Promise<PublicUser[]> {
+export async function adminCreateUser(data: unknown): Promise<ActionResult<PublicUser[]>> {
+  return run(() => adminCreateUserHandler(data));
+}
+
+async function adminCreateUserHandler(data: unknown): Promise<PublicUser[]> {
   await requireSuperadmin();
   const body = asObject(data);
   const username = requireUsername(body.username);
@@ -159,7 +184,11 @@ export async function adminCreateUser(data: unknown): Promise<PublicUser[]> {
   return listUsers();
 }
 
-export async function adminDeleteUser(data: unknown): Promise<PublicUser[]> {
+export async function adminDeleteUser(data: unknown): Promise<ActionResult<PublicUser[]>> {
+  return run(() => adminDeleteUserHandler(data));
+}
+
+async function adminDeleteUserHandler(data: unknown): Promise<PublicUser[]> {
   const admin = await requireSuperadmin();
   const body = asObject(data);
   const id = Number(body.id);
@@ -173,7 +202,11 @@ export async function adminDeleteUser(data: unknown): Promise<PublicUser[]> {
   return listUsers();
 }
 
-export async function saveEncryptedPlatformKey(data: unknown): Promise<AuthState> {
+export async function saveEncryptedPlatformKey(data: unknown): Promise<ActionResult<AuthState>> {
+  return run(() => saveEncryptedPlatformKeyHandler(data));
+}
+
+async function saveEncryptedPlatformKeyHandler(data: unknown): Promise<AuthState> {
   const session = await requireActiveUser();
   const body = asObject(data);
   const apiKey = body.apiKey ?? body.api_key;
@@ -201,7 +234,11 @@ export async function saveEncryptedPlatformKey(data: unknown): Promise<AuthState
   };
 }
 
-export async function changePassword(data: unknown): Promise<{ message: string }> {
+export async function changePassword(data: unknown): Promise<ActionResult<{ message: string }>> {
+  return run(() => changePasswordHandler(data));
+}
+
+async function changePasswordHandler(data: unknown): Promise<{ message: string }> {
   const session = await requireActiveUser();
   const body = asObject(data);
   const currentPassword = requirePassword(body.currentPassword);
@@ -286,7 +323,11 @@ export type PublicApiInfo = {
 
 /** Safe without a session: the door and the menu, never a key. The base URL is
     derived from the host that is already in the visitor's address bar. */
-export async function getPublicApiInfo(): Promise<PublicApiInfo> {
+export async function getPublicApiInfo(): Promise<ActionResult<PublicApiInfo>> {
+  return run(getPublicApiInfoHandler);
+}
+
+async function getPublicApiInfoHandler(): Promise<PublicApiInfo> {
   const appBase = await requestBase();
   return {
     apiBase: `${appBase}${withBasePath("/api/v1")}`,
@@ -320,13 +361,21 @@ function publicModelHints(): { image: string; video: string } | null {
   }
 }
 
-export async function listApiTokensAction(): Promise<PublicApiToken[]> {
+export async function listApiTokensAction(): Promise<ActionResult<PublicApiToken[]>> {
+  return run(listApiTokensHandler);
+}
+
+async function listApiTokensHandler(): Promise<PublicApiToken[]> {
   const session = await requireActiveUser();
   return listApiTokens(session.id);
 }
 
 /** Returns the plaintext once; only its SHA-256 hash is stored afterwards. */
-export async function createApiTokenAction(data: unknown): Promise<CreatedApiToken> {
+export async function createApiTokenAction(data: unknown): Promise<ActionResult<CreatedApiToken>> {
+  return run(() => createApiTokenActionHandler(data));
+}
+
+async function createApiTokenActionHandler(data: unknown): Promise<CreatedApiToken> {
   const session = await requireActiveUser();
   const body = asObject(data);
   const label = typeof body.label === "string" ? body.label.trim().slice(0, 64) : "";
@@ -347,7 +396,11 @@ export async function createApiTokenAction(data: unknown): Promise<CreatedApiTok
   return { token: created.token, record: created.record, tokens: await listApiTokens(session.id) };
 }
 
-export async function revokeApiTokenAction(data: unknown): Promise<PublicApiToken[]> {
+export async function revokeApiTokenAction(data: unknown): Promise<ActionResult<PublicApiToken[]>> {
+  return run(() => revokeApiTokenActionHandler(data));
+}
+
+async function revokeApiTokenActionHandler(data: unknown): Promise<PublicApiToken[]> {
   const session = await requireActiveUser();
   const body = asObject(data);
   const id = Number(body.id);
@@ -356,7 +409,11 @@ export async function revokeApiTokenAction(data: unknown): Promise<PublicApiToke
   return listApiTokens(session.id);
 }
 
-export async function clearEncryptedPlatformKey(): Promise<AuthState> {
+export async function clearEncryptedPlatformKey(): Promise<ActionResult<AuthState>> {
+  return run(clearEncryptedPlatformKeyHandler);
+}
+
+async function clearEncryptedPlatformKeyHandler(): Promise<AuthState> {
   const session = await requireActiveUser();
   await deleteApiKey(session.id);
   return {

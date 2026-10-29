@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { createApiTokenAction, getAuthState, getPublicApiInfo, listApiTokensAction, revokeApiTokenAction } from "@/auth/actions";
 import { configuredBasePath } from "@/base-path";
+import { unwrap } from "@/lib/action-result";
 
 type TokenView = {
   id: number;
@@ -51,7 +52,10 @@ export function ApiTokensPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      const [info, state] = await Promise.all([getPublicApiInfo(), getAuthState()]);
+      const [info, state] = await Promise.all([
+        getPublicApiInfo().then(unwrap),
+        getAuthState().then(unwrap),
+      ]);
       setApiBase(info.apiBase);
       setModels(info.models);
       setSignedIn(state.user !== null);
@@ -59,7 +63,7 @@ export function ApiTokensPanel() {
         setTokens([]);
         return;
       }
-      const list = await listApiTokensAction();
+      const list = unwrap(await listApiTokensAction());
       setHasApiKey(state.hasApiKey);
       setTokens(list as TokenView[]);
     } catch (caught) {
@@ -89,11 +93,13 @@ export function ApiTokensPanel() {
     }
     setBusy(true);
     try {
-      const created = await createApiTokenAction({
-        label: label.trim() || "OpenMontage",
-        expiresInDays: Number(expiry),
-        scopes,
-      });
+      const created = unwrap(
+        await createApiTokenAction({
+          label: label.trim() || "OpenMontage",
+          expiresInDays: Number(expiry),
+          scopes,
+        }),
+      );
       setFresh(created.token);
       setTokens(created.tokens as TokenView[]);
       setLabel("");
@@ -108,7 +114,7 @@ export function ApiTokensPanel() {
     setError(null);
     setBusy(true);
     try {
-      setTokens((await revokeApiTokenAction({ id })) as TokenView[]);
+      setTokens(unwrap(await revokeApiTokenAction({ id })) as TokenView[]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not revoke the token");
     } finally {

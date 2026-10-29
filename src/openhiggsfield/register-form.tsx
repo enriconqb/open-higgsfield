@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import { registerAccount } from "@/auth/actions";
+import { unwrap } from "@/lib/action-result";
 
 export function RegisterForm() {
   const [username, setUsername] = useState("");
@@ -17,7 +18,7 @@ export function RegisterForm() {
     setBusy(true);
     setError(null);
     try {
-      const result = await registerAccount({ username, password });
+      const result = unwrap(await registerAccount({ username, password }));
       setDone(result.message);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Registration failed");

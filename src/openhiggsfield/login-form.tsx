@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { loginAccount } from "@/auth/actions";
+import { unwrap } from "@/lib/action-result";
 
 export function LoginForm() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export function LoginForm() {
     setBusy(true);
     setError(null);
     try {
-      await loginAccount({ username, password });
+      unwrap(await loginAccount({ username, password }));
       router.push("/");
       router.refresh();
     } catch (caught) {

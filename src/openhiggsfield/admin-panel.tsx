@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { adminCreateUser, adminDeleteUser, adminListUsers, adminSetUserStatus, getAuthState } from "@/auth/actions";
 import type { PublicUser, UserStatus } from "@/auth/types";
+import { unwrap } from "@/lib/action-result";
 
 export function AdminPanel() {
   const router = useRouter();
@@ -20,13 +21,13 @@ export function AdminPanel() {
     let live = true;
     void (async () => {
       try {
-        const state = await getAuthState();
+        const state = unwrap(await getAuthState());
         if (!live) return;
         if (!state.user || state.user.role !== "superadmin") {
           router.replace("/login");
           return;
         }
-        const list = await adminListUsers();
+        const list = unwrap(await adminListUsers());
         if (live) setUsers(list);
       } catch (caught) {
         if (live) {
@@ -44,7 +45,7 @@ export function AdminPanel() {
     setBusyId(id);
     setError(null);
     try {
-      const list = await adminSetUserStatus({ id, status });
+      const list = unwrap(await adminSetUserStatus({ id, status }));
       setUsers(list);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Update failed");
@@ -58,7 +59,7 @@ export function AdminPanel() {
     setBusyId(id);
     setError(null);
     try {
-      const list = await adminDeleteUser({ id });
+      const list = unwrap(await adminDeleteUser({ id }));
       setUsers(list);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Delete failed");
@@ -72,7 +73,7 @@ export function AdminPanel() {
     setCreating(true);
     setError(null);
     try {
-      const list = await adminCreateUser({ username, password });
+      const list = unwrap(await adminCreateUser({ username, password }));
       setUsers(list);
       setUsername("");
       setPassword("");

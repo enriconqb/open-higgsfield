@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { changePassword, getAuthState } from "@/auth/actions";
+import { unwrap } from "@/lib/action-result";
 
 export function ChangePasswordForm() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export function ChangePasswordForm() {
 
   useEffect(() => {
     let live = true;
-    void getAuthState().then((state) => {
+    void getAuthState().then(unwrap).then((state) => {
       if (!live) return;
       if (!state.user) {
         router.replace("/login");
@@ -41,7 +42,7 @@ export function ChangePasswordForm() {
     }
     setBusy(true);
     try {
-      const result = await changePassword({ currentPassword, nextPassword });
+      const result = unwrap(await changePassword({ currentPassword, nextPassword }));
       setDone(result.message);
       setCurrentPassword("");
       setNextPassword("");

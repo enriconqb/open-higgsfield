@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { loadUsageDashboard, type UsageDashboard, type UsageFilters, type UsageRow } from "@/usage/dashboard";
+import { unwrap } from "@/lib/action-result";
 
 const EMPTY: UsageFilters = {
   from: "",
@@ -27,7 +28,7 @@ export function UsagePanel() {
     setLoading(true);
     setError("");
     try {
-      const next = await loadUsageDashboard(filters);
+      const next = unwrap(await loadUsageDashboard(filters));
       setData(next);
       setDraft(next.filters);
     } catch (caught) {

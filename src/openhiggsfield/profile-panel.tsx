@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { getAuthState } from "@/auth/actions";
 import type { PublicUser } from "@/auth/types";
+import { unwrap } from "@/lib/action-result";
 
 export function ProfilePanel() {
   const router = useRouter();
@@ -13,7 +14,7 @@ export function ProfilePanel() {
 
   useEffect(() => {
     let live = true;
-    void getAuthState().then((state) => {
+    void getAuthState().then(unwrap).then((state) => {
       if (!live) return;
       if (!state.user) {
         router.replace("/login");
