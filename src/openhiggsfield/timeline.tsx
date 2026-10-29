@@ -236,7 +236,7 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
         )}
       </div>
 
-      <div>
+      <div className="ohf-tl-videos">
         <h2 className="ohf-tl-label">Videos</h2>
         {library.length === 0 ? (
           <p className="ohf-tl-hint">Finished generations and uploaded videos show up here.</p>

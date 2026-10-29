@@ -4491,21 +4491,41 @@ a.ohf-key-link {
   position: relative;
 }
 
+/* The stage takes the height the panel has left after the sequence strip and the
+   video grid, and reports that height to the canvas inside it. Zooming the window
+   changes that leftover space, so the video follows the zoom instead of being
+   cropped by this box. */
 .ohf-tl-stage-wrap {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 220px;
+  container-type: size;
   background: var(--rail);
   border: 1px solid var(--line);
   border-radius: 16px;
   overflow: hidden;
 }
 
+/* A 16:9 frame fitted inside the height the wrapper actually got: the width
+   follows that height, so the picture is never taller than its space and never
+   cropped. */
 .ohf-tl-stage {
   position: relative;
-  width: min(100%, calc(56vh * 16 / 9));
+  width: min(100%, calc(100cqh * 16 / 9));
   margin-inline: auto;
   aspect-ratio: 16 / 9;
-  max-height: 56vh;
+  max-height: 100cqh;
   background: #000;
+}
+
+/* Engines without container query units: size the frame from the wrapper's
+   height instead, which object-fit then letterboxes. */
+@supports not (width: 1cqh) {
+  .ohf-tl-stage {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+  }
 }
 
 .ohf-tl-video {
@@ -4525,11 +4545,28 @@ a.ohf-key-link {
 .ohf-tl-empty {
   display: grid;
   place-items: center;
-  min-height: min(56vh, 280px);
+  width: min(100%, calc(100cqh * 16 / 9));
+  margin-inline: auto;
   aspect-ratio: 16 / 9;
+  max-height: 100cqh;
   color: var(--tx3);
   padding: 24px;
   text-align: center;
+}
+
+@supports not (width: 1cqh) {
+  .ohf-tl-empty {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+  }
+}
+
+/* The sections under the stage keep their own height, so a short window scrolls
+   the panel rather than squeezing the picture. */
+.ohf-tl-strip-wrap,
+.ohf-tl-videos {
+  flex: none;
 }
 
 .ohf-tl-play {
