@@ -8,6 +8,6 @@ export async function loadGenerationResults(): Promise<RunRecord[]> {
   return listGenerationResults();
 }
 
-export async function saveGenerationResults(records: RunRecord[]): Promise<void> {
-  await replaceGenerationResults(records);
+export async function saveGenerationResults(records: RunRecord[]): Promise<RunRecord[]> {
+  return replaceGenerationResults(records);
 }

@@ -15,6 +15,9 @@ export interface RunRecord {
   badge?: string;
   kind: "image" | "video";
   urls: string[];
+  /** Provider https URLs kept beside a local archive, so a video reference can
+      still be fetched while this site is served over plain HTTP. */
+  remoteUrls?: string[];
   status: RunStatus;
   /** Platform request this row is waiting on. Set while status is running so a
       refresh can resume the poll; completed rows keep it for the same id. */
@@ -142,10 +145,17 @@ export function replaceRequest(
   );
 }
 
+function hasLocalMedia(record: RunRecord): boolean {
+  return record.urls.some((url) => /\/(?:api\/)?uploads\/[0-9a-f-]{36}/i.test(url));
+}
+
 function newerRecord(row: RunRecord, prev: RunRecord): boolean {
   const rowDone = row.status !== "running";
   const prevDone = prev.status !== "running";
   if (rowDone !== prevDone) return rowDone;
+  const rowLocal = hasLocalMedia(row);
+  const prevLocal = hasLocalMedia(prev);
+  if (rowLocal !== prevLocal) return rowLocal;
   return row.createdAt >= prev.createdAt;
 }
 
@@ -158,6 +168,8 @@ export function isRunRecord(value: unknown): value is RunRecord {
     typeof record.prompt === "string" &&
     typeof record.ratio === "string" &&
     Array.isArray(record.urls) &&
+    (record.remoteUrls === undefined ||
+      (Array.isArray(record.remoteUrls) && record.remoteUrls.every((url) => typeof url === "string"))) &&
     (record.status === "completed" ||
       record.status === "failed" ||
       (record.status === "running" && typeof record.requestId === "string")) &&

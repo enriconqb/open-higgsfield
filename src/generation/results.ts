@@ -4,6 +4,8 @@ import { requireActiveUser } from "@/auth/guard";
 import { getPool, queryRows } from "@/db/client";
 import { capHistory, isRunRecord, type RunRecord } from "@/openhiggsfield/history";
 
+import { archiveRunRecord } from "./archive-media";
+
 type ResultRow = RowDataPacket & {
   payload: unknown;
 };
@@ -26,14 +28,15 @@ export async function listGenerationResultsFor(userId: number): Promise<RunRecor
     including removals. Rows that came from /api/v1 are *not* touched: they have
     no browser copy, so a client that has not seen one yet would otherwise delete
     the only record of a paid generation. */
-export async function replaceGenerationResults(records: RunRecord[]): Promise<void> {
+export async function replaceGenerationResults(records: RunRecord[]): Promise<RunRecord[]> {
   const user = await requireActiveUser();
-  await replaceGenerationResultsFor(user.id, records);
+  return replaceGenerationResultsFor(user.id, records);
 }
 
 /** Unauthenticated twin, for scripts and tests that already know the owner. */
-export async function replaceGenerationResultsFor(userId: number, records: RunRecord[]): Promise<void> {
-  const next = capHistory(records.filter(isRunRecord));
+export async function replaceGenerationResultsFor(userId: number, records: RunRecord[]): Promise<RunRecord[]> {
+  const incoming = capHistory(records.filter(isRunRecord));
+  const next = await Promise.all(incoming.map((record) => archiveRunRecord(userId, record)));
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
@@ -55,6 +58,7 @@ export async function replaceGenerationResultsFor(userId: number, records: RunRe
   } finally {
     connection.release();
   }
+  return next;
 }
 
 function parsePayload(payload: unknown): unknown {

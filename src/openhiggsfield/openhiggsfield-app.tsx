@@ -122,8 +122,11 @@ function terminalRows(requestId: string, draft: RunDraft, status: GenerationStat
   const base = status.requestId || requestId;
   const failure = completed ? undefined : failureText(status);
   const delivered: Array<string | null> = completed ? urls : [null];
+  const source = status.video?.sourceUrl;
   return delivered.map((url, offset) => {
     const id = rowId(base, offset, delivered.length);
+    const remote =
+      !status.images && source && url && source !== url && /^https:\/\//i.test(source) ? [source] : undefined;
     return {
       id,
       requestId: base,
@@ -136,6 +139,7 @@ function terminalRows(requestId: string, draft: RunDraft, status: GenerationStat
       badge: draft.badge,
       kind: draft.surface,
       urls: url ? [url] : [],
+      ...(remote ? { remoteUrls: remote } : {}),
       status: completed ? "completed" : "failed",
       error: failure,
       art: artFor(draft.surface, hueOf(id), id),
@@ -216,7 +220,13 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const userIdRef = useRef<number | null>(null);
   userIdRef.current = user?.id ?? null;
 
-  function persistLocal(records: RunRecord[]) {
+  function sameMediaUrls(left: RunRecord[], right: RunRecord[]): boolean {
+    if (left.length !== right.length) return false;
+    const urls = new Map(right.map((record) => [record.id, record.urls.join("\n")]));
+    return left.every((record) => urls.get(record.id) === record.urls.join("\n"));
+  }
+
+function persistLocal(records: RunRecord[]) {
     const id = userIdRef.current;
     if (!id) return;
     void saveHistory(records, undefined, undefined, historyKeyFor(id));
@@ -272,9 +282,18 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
     if (!historyLoaded || !user) return;
     void saveHistory(history, undefined, undefined, historyKeyFor(user.id));
     if (!syncServer) return;
-    void saveGenerationResults(history).catch(() => {
-      /* The local log still saved; the next successful load can retry. */
-    });
+    void saveGenerationResults(history)
+      .then((saved) => {
+        if (!alive.current) return;
+        setHistory((current) => {
+          const merged = mergeHistory(saved, current);
+          if (sameMediaUrls(merged, current)) return current;
+          return merged;
+        });
+      })
+      .catch(() => {
+        /* The local log still saved; the next successful load can retry. */
+      });
   }, [historyLoaded, history, user, syncServer]);
 
   useEffect(() => {

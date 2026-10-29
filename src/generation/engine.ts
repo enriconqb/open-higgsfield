@@ -9,6 +9,7 @@ import { toAuthorizationHeader } from "./credentials";
 import type { KeyProvider } from "./credentials";
 import type { ImagePriceLine, OpenRouterQuote } from "./estimate";
 import { skuUsd } from "./estimate";
+import { ensureArchivedUrl } from "./archive-media";
 import { inlineLocalMedia } from "./local-upload";
 import {
   createHiggsfieldClient,
@@ -16,7 +17,7 @@ import {
   firstPublicVideoUrl,
   openRouterBaseUrl,
 } from "./platform";
-import type { QueuedGeneration, StatusResult } from "./platform";
+import type { GenerationStatus, QueuedGeneration, StatusResult } from "./platform";
 import { toHiggsfield } from "./to-higgsfield";
 import { toPlatform } from "./to-platform";
 
@@ -273,6 +274,9 @@ export async function submitPlane(
   const queued: QueuedGeneration =
     surface === "image" ? await client.submitImage(body) : await client.submitVideo(body);
   await rememberUsage(context, parsed, queued);
+  if (queued.immediate) {
+    queued.immediate = await archiveGenerationStatus(context, queued.requestId, queued.immediate);
+  }
   return queued;
 }
 
@@ -315,7 +319,8 @@ export async function statusesFor(
   return Promise.all(
     requestIds.map(async (requestId): Promise<StatusResult> => {
       try {
-        const status = await client.status(requestId);
+        const raw = await client.status(requestId);
+        const status = await archiveGenerationStatus(context, requestId, raw);
         const settled = usageStatusFromPlatform(status.status);
         if (settled) {
           await settleUsage({
@@ -333,6 +338,78 @@ export async function statusesFor(
       }
     }),
   );
+}
+
+async function archiveGenerationStatus(
+  context: GenerationContext,
+  requestId: string,
+  status: GenerationStatus,
+): Promise<GenerationStatus> {
+  if (status.status !== "completed") return status;
+  const images = status.images
+    ? await Promise.all(
+        status.images.map(async (image, index) => ({
+          url: await ensureArchivedUrl({
+            url: image.url,
+            userId: context.userId,
+            requestId,
+            index,
+            mime: "image/png",
+          }),
+        })),
+      )
+    : undefined;
+  let video = status.video;
+  if (video) {
+    const index = images?.length ?? 0;
+    const original = video.url;
+    const proxy = /\/api\/media\?/.test(original);
+    const local = await ensureArchivedUrl({
+      url: original,
+      userId: context.userId,
+      requestId,
+      index,
+      mime: "video/mp4",
+      ...(proxy
+        ? {
+            fetchBytes: () => fetchProxiedVideo(context.credentials.apiKey, original),
+          }
+        : {}),
+    });
+    const sourceUrl = await videoSourceUrl(context, original);
+    video = {
+      url: local,
+      ...(sourceUrl && sourceUrl !== local ? { sourceUrl } : {}),
+    };
+  }
+  return {
+    ...status,
+    ...(images ? { images } : {}),
+    ...(video ? { video } : {}),
+  };
+}
+
+async function videoSourceUrl(context: GenerationContext, url: string): Promise<string | undefined> {
+  if (/^https:\/\//i.test(url)) return url;
+  if (!/\/api\/media\?/.test(url) || context.credentials.provider !== "openrouter") return undefined;
+  const job = mediaJobId(url);
+  if (!job) return undefined;
+  const signed = await signedVideoUrl(context.credentials.apiKey, job);
+  return signed && /^https:\/\//i.test(signed) ? signed : undefined;
+}
+
+async function fetchProxiedVideo(apiKey: string, url: string): Promise<{ bytes: Buffer; mime: string } | null> {
+  const job = mediaJobId(url);
+  if (!job) return null;
+  const index = Number(new URL(url, "http://local").searchParams.get("index") ?? "0");
+  const upstream = await fetch(
+    `${openRouterBaseUrl()}/videos/${encodeURIComponent(job)}/content?index=${Number.isInteger(index) ? index : 0}`,
+    { headers: { Authorization: toAuthorizationHeader(apiKey, "openrouter") }, signal: AbortSignal.timeout(120_000) },
+  );
+  if (!upstream.ok) return null;
+  const bytes = Buffer.from(await upstream.arrayBuffer());
+  if (!bytes.byteLength) return null;
+  return { bytes, mime: upstream.headers.get("Content-Type") || "video/mp4" };
 }
 
 const MEDIA_JOB = /\/api\/media\?job=([^&#]+)/;

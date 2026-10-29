@@ -29,7 +29,7 @@ export type GenerationStatus = {
   status: string;
   requestId: string;
   images?: Array<{ url: string }>;
-  video?: { url: string };
+  video?: { url: string; sourceUrl?: string };
   error?: unknown;
   /** USD reported by OpenRouter on a finished job. */
   costUsd?: number;

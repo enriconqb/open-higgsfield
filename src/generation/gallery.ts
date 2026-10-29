@@ -1,21 +1,18 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "fs/promises";
-
 import type { RowDataPacket } from "mysql2/promise";
 
 import { execute, queryOne } from "@/db/client";
 import { getModel } from "@/generation/catalog";
 import type { Surface } from "@/generation/catalog";
 import { isRunRecord, type RunRecord } from "@/openhiggsfield/history";
+import { ensureArchivedUrl, isArchivedMediaUrl } from "./archive-media";
 import { parseJobResult, type ApiJobResult, type ApiJobRow, type StoredImage } from "./api-jobs";
-import { uploadFilePath, uploadRoot, uploadTypePath } from "./local-upload";
+import { uploadIdFrom } from "./local-upload";
 
 /** Rows produced outside a browser (a bearer token on /api/v1) never reach the
     studio's own save path, which mirrors client state. They are written straight
     into `generation_results` here instead, so a token generation shows up in the
     owner's gallery exactly like one made in the studio. */
 
-const ARCHIVE_TIMEOUT_MS = 120_000;
 const VIDEO_EXT = "mp4";
 
 /** Deterministic gradient, so the same request always paints the same tile
@@ -109,6 +106,8 @@ function recordOf(row: ApiJobRow, urls: string[], surface: Surface): RunRecord {
  */
 export async function archiveJobMedia(
   result: ApiJobResult,
+  userId: number,
+  requestId: string,
 ): Promise<{ images: StoredImage[]; videoUrl: string | null }> {
   const images: StoredImage[] = [];
   for (const image of result.images ?? []) {
@@ -120,45 +119,28 @@ export async function archiveJobMedia(
       images.push(image);
       continue;
     }
-    const stored = await archiveRemote(image.url, image.mime || "image/png", image.index);
-    images.push(stored ?? image);
+    images.push(await archiveRemote(image.url, image.mime || "image/png", image.index, userId, requestId));
   }
 
   const original = result.video?.url ?? null;
   if (!original) return { images, videoUrl: null };
-  const stored = await archiveRemote(original, "video/mp4", null, VIDEO_EXT);
-  const videoUrl = stored?.id ? stored.id : original;
+  const stored = await archiveRemote(original, "video/mp4", images.length, userId, requestId, VIDEO_EXT);
+  const videoUrl = stored.id ?? original;
   return { images, videoUrl };
 }
 
 async function archiveRemote(
   url: string,
   mime: string,
-  index: number | null,
+  index: number,
+  userId: number,
+  requestId: string,
   ext?: string,
-): Promise<StoredImage | null> {
-  if (!/^https?:\/\//i.test(url)) return null;
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(ARCHIVE_TIMEOUT_MS) });
-    if (!response.ok) return null;
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (!bytes.byteLength) return null;
-    const type = response.headers.get("Content-Type") || mime;
-    const id = randomUUID();
-    await mkdir(uploadRoot(), { recursive: true });
-    await writeFile(uploadFilePath(id), bytes);
-    await writeFile(uploadTypePath(id), type);
-    return {
-      index: index ?? 0,
-      mime: type,
-      bytes: bytes.byteLength,
-      id,
-      ...(ext ? { ext } : {}),
-    };
-  } catch (caught) {
-    console.error("[gallery] archive failed", caught instanceof Error ? caught.message : caught);
-    return null;
-  }
+): Promise<StoredImage> {
+  const local = await ensureArchivedUrl({ url, userId, requestId, index, mime });
+  const id = isArchivedMediaUrl(local) ? uploadIdFrom(local) : null;
+  if (!id) return { index, mime, bytes: 0, url };
+  return { index, mime, bytes: 0, id, ...(ext ? { ext } : {}) };
 }
 
 /** Idempotent: one gallery row per (user, request id), refreshed in place. */
@@ -180,7 +162,7 @@ export async function upsertGenerationResult(userId: number, record: RunRecord):
 export async function mirrorJobToGallery(userId: number, job: ApiJobRow): Promise<void> {
   try {
     const result = parseJobResult(job.result);
-    const { images, videoUrl } = await archiveJobMedia(result);
+    const { images, videoUrl } = await archiveJobMedia(result, userId, job.request_id);
     const surface: Surface = job.kind === "image" ? "image" : "video";
 
     const stored: ApiJobResult = {

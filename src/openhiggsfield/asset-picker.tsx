@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
+import { withBasePath } from "@/base-path";
 import type { MediaItem, MediaRole, ModelEntry } from "@/generation/catalog";
 
 import { ROLE_KINDS, ROLE_LABELS, defaultRole, roleNoun, rolesOf, type AssetKind } from "./data";
@@ -28,7 +29,10 @@ const SOURCE_LABELS: Record<Source, string> = {
 };
 
 interface Asset {
+  /** URL attached to the plane. A video reference on plain HTTP uses the CDN. */
   url: string;
+  /** What the tile plays. Local archive when one exists, otherwise the same as url. */
+  previewUrl?: string;
   kind: AssetKind;
   /** The tile's name — a file name, or the prompt the run was made from. It is
       the alt text and the pointer title: a grey plate has no other handle. */
@@ -72,6 +76,10 @@ export function AssetPicker({
 }) {
   const roles = rolesOf(model);
   const [role, setRole] = useState<MediaRole>(() => defaultRole(model));
+  const [httpSite, setHttpSite] = useState(false);
+  useEffect(() => {
+    setHttpSite(window.location.protocol !== "https:");
+  }, []);
   /* null until the visitor picks a shelf: the panel opens on whichever one
      actually holds something, so someone who has generated all day and
      uploaded nothing does not land on an empty tab. */
@@ -109,10 +117,21 @@ export function AssetPicker({
     const out: Asset[] = [];
     for (const record of history) {
       if (record.status !== "completed" || record.kind !== kind) continue;
-      for (const url of record.urls) out.push({ url, kind, title: record.prompt, art: record.art });
+      record.urls.forEach((url, index) => {
+        const remote = record.remoteUrls?.[index];
+        const cdn =
+          kind === "video" && httpSite && remote && /^https:\/\//i.test(remote) ? remote : null;
+        out.push({
+          url: cdn ?? url,
+          ...(cdn ? { previewUrl: url } : {}),
+          kind,
+          title: record.prompt,
+          art: record.art,
+        });
+      });
     }
     return out;
-  }, [history, kind]);
+  }, [history, kind, httpSite]);
 
   const shelf: Source =
     source ?? (uploadAssets.length === 0 && runAssets.length > 0 ? "generations" : "uploads");
@@ -454,7 +473,7 @@ const AssetTile = memo(function AssetTile({
         <video
           ref={videoRef}
           className="ohf-asset-media"
-          src={asset.url}
+          src={withBasePath(asset.previewUrl ?? asset.url)}
           muted
           loop
           playsInline
@@ -469,7 +488,7 @@ const AssetTile = memo(function AssetTile({
         /* Blob and platform CDN hosts both; next/image would need every
            provider domain allow-listed up front for a 112px thumb. */
         /* eslint-disable-next-line @next/next/no-img-element */
-        <img className="ohf-asset-media" src={asset.url} alt="" loading="eager" />
+        <img className="ohf-asset-media" src={withBasePath(asset.previewUrl ?? asset.url)} alt="" loading="eager" />
       )}
 
       {asset.kind === "video" && (
@@ -549,12 +568,12 @@ function PreviewDialog({ asset, onClose }: { asset: Asset; onClose: () => void }
         </div>
         <div className="ohf-asset-preview-stage">
           {asset.kind === "video" ? (
-            <video src={asset.url} controls playsInline />
+            <video src={withBasePath(asset.previewUrl ?? asset.url)} controls playsInline />
           ) : asset.kind === "audio" ? (
-            <audio src={asset.url} controls />
+            <audio src={withBasePath(asset.previewUrl ?? asset.url)} controls />
           ) : (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={asset.url} alt={asset.title} />
+            <img src={withBasePath(asset.previewUrl ?? asset.url)} alt={asset.title} />
           )}
         </div>
       </div>
