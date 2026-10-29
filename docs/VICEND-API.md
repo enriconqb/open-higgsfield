@@ -327,6 +327,36 @@ Both scripts refuse to run against a database that is not on localhost unless
    archived job media is intentionally reachable only through the
    token-authenticated route.
 
+### Writing a migration file
+
+`scripts/db-migrate.mjs` splits each file into statements on `;`. The splitter is
+comment-aware, but keeping a semicolon **out of comments** is still the rule to
+follow — a file that carries one is only safe as long as every reader is as
+careful as this runner:
+
+```sql
+-- WRONG: the ";" ends a statement mid-sentence
+-- status is the source of truth for video jobs; this table keeps ownership
+
+-- RIGHT: rephrase, or move the semicolon onto its own clause
+-- status is the source of truth for video jobs, while this table keeps ownership
+```
+
+A bare semicolon inside a comment makes the runner cut the file there and send the
+remaining prose to the server, which fails with
+`You have an error in your SQL syntax ... near '<words after the semicolon>'`.
+This broke `005_api_jobs.sql` on the production MariaDB host; the splitter now
+walks comments and string literals, so it no longer happens — but the same file
+run through any other SQL client would still break.
+
+Two more things to keep in mind: the statements below the comment must stay
+**idempotent and order-safe**, because MySQL has no `DROP INDEX IF EXISTS` and the
+runner tolerates duplicate-index errors on a re-run (`TOLERATED` in the script,
+which covers `ER_DUP_KEYNAME`, `ER_DUP_FIELDNAME`, `ER_CANT_DROP_FIELD_OR_KEY`,
+`ER_FK_DUP_NAME`). And a migration that drops something — an index, a column —
+must be reviewed by a human before it runs; this project's convention is that the
+agent reports such statements and the owner executes them.
+
 ## Deliberately not in v1
 
 - No way to read, change, or delete the stored platform key over the API. It stays

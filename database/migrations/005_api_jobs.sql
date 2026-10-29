@@ -1,6 +1,6 @@
 -- Job ledger for generations started through /api/v1, so a token client can
 -- poll by request id and download the bytes after the fact. The platform's own
--- status is still the source of truth for video jobs; this table keeps
+-- status is still the source of truth for video jobs, while this table keeps
 -- ownership (404 for other users), idempotency, and finished image results.
 -- Review and run via: pnpm db:migrate
 
