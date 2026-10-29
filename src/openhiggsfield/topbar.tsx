@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PublicUser } from "@/auth/types";
 
 import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
-import { AssetsIcon, HeartIcon, ImageIcon, KeyIcon, TimelineIcon, UserIcon, VideoIcon } from "./icons";
+import { AssetsIcon, CompareIcon, HeartIcon, ImageIcon, KeyIcon, TimelineIcon, UserIcon, VideoIcon } from "./icons";
 
 const VIEW_ICONS: Record<GalleryView, () => React.ReactNode> = {
   image: () => <ImageIcon />,
@@ -14,6 +14,7 @@ const VIEW_ICONS: Record<GalleryView, () => React.ReactNode> = {
   assets: () => <AssetsIcon />,
   favorites: () => <HeartIcon size={15} />,
   timeline: () => <TimelineIcon />,
+  compare: () => <CompareIcon />,
 };
 
 export function Topbar({

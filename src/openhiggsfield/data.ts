@@ -8,19 +8,31 @@ export const SURFACE_LABELS: Record<Surface, string> = {
 };
 
 /** What the gallery is scoped to. "assets" is every run, both surfaces;
-    "favorites" is every run the visitor kept, both surfaces. */
-export type GalleryView = Surface | "assets" | "favorites" | "timeline";
+    "favorites" is every run the visitor kept, both surfaces; "timeline" and
+    "compare" are tools rather than galleries. */
+export type GalleryView = Surface | "assets" | "favorites" | "timeline" | "compare";
 
 /** Scopes that span both surfaces, so switching to them leaves the model alone. */
-export const CROSS_VIEWS = new Set<GalleryView>(["assets", "favorites", "timeline"]);
+export const CROSS_VIEWS = new Set<GalleryView>(["assets", "favorites", "timeline", "compare"]);
 
-export const VIEWS: readonly GalleryView[] = ["image", "video", "assets", "favorites", "timeline"];
+/** Views that replace the gallery *and* the composer with a full panel. */
+export const PANEL_VIEWS = new Set<GalleryView>(["timeline", "compare"]);
+
+export const VIEWS: readonly GalleryView[] = [
+  "image",
+  "video",
+  "assets",
+  "favorites",
+  "timeline",
+  "compare",
+];
 
 export const VIEW_LABELS: Record<GalleryView, string> = {
   ...SURFACE_LABELS,
   assets: "Assets",
   favorites: "Favorites",
   timeline: "Timeline",
+  compare: "Compare",
 };
 
 export const PROMPT_PLACEHOLDERS: Record<Surface, string> = {

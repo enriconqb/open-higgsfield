@@ -334,3 +334,45 @@ export function WaveBadgeIcon({ size = 12 }: IconProps) {
     </svg>
   );
 }
+
+/* The compare set: a split frame, the two ends of a zoom, and pause — the
+   controls the comparison stage needs and nothing here already drew. */
+
+export function CompareIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <rect x="1.75" y="2.6" width="12.5" height="10.8" rx="2.4" />
+      <path d="M8 2.6v10.8" />
+      <path d="M5.6 6.1 4.2 7.5l1.4 1.4M10.4 6.1l1.4 1.4-1.4 1.4" />
+    </svg>
+  );
+}
+
+export function ZoomInIcon({ size = 14 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="7" cy="7" r="4.5" />
+      <path d="M10.4 10.4 14 14" />
+      <path d="M7 5.1v3.8M5.1 7h3.8" />
+    </svg>
+  );
+}
+
+export function ZoomOutIcon({ size = 14 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="7" cy="7" r="4.5" />
+      <path d="M10.4 10.4 14 14" />
+      <path d="M5.1 7h3.8" />
+    </svg>
+  );
+}
+
+export function PauseIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="4.3" y="3.2" width="2.6" height="9.6" rx="0.9" fill="currentColor" />
+      <rect x="9.1" y="3.2" width="2.6" height="9.6" rx="0.9" fill="currentColor" />
+    </svg>
+  );
+}

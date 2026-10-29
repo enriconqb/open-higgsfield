@@ -43,6 +43,10 @@ const EMPTY: Record<GalleryView, { title: string; hint: string }> = {
     title: "Timeline",
     hint: "Finished videos are arranged on the Timeline tab.",
   },
+  compare: {
+    title: "Compare",
+    hint: "Two items are shown side by side on the Compare tab.",
+  },
 };
 
 /* Action labels name the run they act on — tabbing a long grid otherwise

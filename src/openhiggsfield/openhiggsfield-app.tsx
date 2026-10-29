@@ -21,11 +21,13 @@ import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
 import { useSettings } from "@/generation/stores/settings";
 
 import { GRAIN_URI, artFor } from "./artwork";
+import { Compare } from "./compare";
 import { Composer } from "./composer";
 import { fileNameFor, saveFile } from "./download";
 import { KeyModal } from "./key-modal";
 import {
   CROSS_VIEWS,
+  PANEL_VIEWS,
   countSetting,
   durationBadge,
   metaOf,
@@ -794,6 +796,8 @@ function persistLocal(records: RunRecord[]) {
 
           {view === "timeline" ? (
             <Timeline history={history} ready={historyLoaded} />
+          ) : view === "compare" ? (
+            <Compare history={history} ready={historyLoaded} />
           ) : (
             <Gallery
               view={view}
@@ -813,7 +817,7 @@ function persistLocal(records: RunRecord[]) {
             />
           )}
 
-          {view !== "timeline" && (
+          {!PANEL_VIEWS.has(view) && (
           <Composer
             surface={surface}
             model={model}

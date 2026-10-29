@@ -18,11 +18,22 @@ export type MediaSources = {
 };
 
 /** CDN first while it lasts, the archived copy otherwise. */
-export function sourcesFor(record: RunRecord, index: number): MediaSources {
-  const stored = record.urls[index] ?? "";
-  const local = stored ? withBasePath(stored) : "";
-  const remote = record.remoteUrls?.[index] ?? "";
-  const cdn = CDN_FIRST.includes(record.kind) && /^https:\/\//i.test(remote) ? remote : null;
+export function sourcesForUrls(input: {
+  kind: RunRecord["kind"];
+  url: string;
+  remoteUrl?: string;
+}): MediaSources {
+  const local = input.url ? withBasePath(input.url) : "";
+  const remote = input.remoteUrl ?? "";
+  const cdn = CDN_FIRST.includes(input.kind) && /^https:\/\//i.test(remote) ? remote : null;
   if (!cdn) return { primary: local, fallback: null };
   return { primary: cdn, fallback: local || null };
+}
+
+export function sourcesFor(record: RunRecord, index: number): MediaSources {
+  return sourcesForUrls({
+    kind: record.kind,
+    url: record.urls[index] ?? "",
+    remoteUrl: record.remoteUrls?.[index] ?? "",
+  });
 }
