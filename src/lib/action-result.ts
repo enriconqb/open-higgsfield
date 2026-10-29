@@ -20,25 +20,24 @@ export class ActionError extends Error {
   }
 }
 
-/** Run an action body and hand its outcome back as data. The body keeps using
-    `throw` internally; only this boundary converts it. */
+/** Framework control-flow (redirect, notFound) is rethrown. Everything else
+    becomes `{ ok: false }` with the same public sentence `run` uses. */
+export function actionFailure(caught: unknown): ActionResult<never> {
+  unstable_rethrow(caught);
+  const digest = (caught as { digest?: unknown } | null)?.digest;
+  console.error("[action] failed", {
+    message: caught instanceof Error ? caught.message : String(caught),
+    ...(typeof digest === "string" || typeof digest === "number" ? { digest } : {}),
+    caught,
+  });
+  return { ok: false, error: publicMessage(caught) };
+}
+
 export async function run<T>(body: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { ok: true, data: await body() };
   } catch (caught) {
-    /* redirect, notFound, and the cookie-mutation signal must reach Next.
-       Turning them into `{ ok: false }` leaves the Flight response half-written
-       and the browser shows React #441. */
-    unstable_rethrow(caught);
-    const digest = (caught as { digest?: unknown } | null)?.digest;
-    /* Full detail stays on the server: the digest is what a Next error page
-       shows, so a user report can be matched to this line. */
-    console.error("[action] failed", {
-      message: caught instanceof Error ? caught.message : String(caught),
-      ...(typeof digest === "string" || typeof digest === "number" ? { digest } : {}),
-      caught,
-    });
-    return { ok: false, error: publicMessage(caught) };
+    return actionFailure(caught);
   }
 }
 

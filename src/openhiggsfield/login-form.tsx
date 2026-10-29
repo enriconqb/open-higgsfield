@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { unstable_rethrow } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { loginAccount } from "@/auth/actions";
 import { unwrap } from "@/lib/action-result";
 
 export function LoginForm() {
-  const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -20,9 +19,8 @@ export function LoginForm() {
     setError(null);
     try {
       unwrap(await loginAccount({ username, password }));
-      router.push("/");
-      router.refresh();
     } catch (caught) {
+      unstable_rethrow(caught);
       setError(caught instanceof Error ? caught.message : "Login failed");
     } finally {
       setBusy(false);

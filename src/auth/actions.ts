@@ -1,10 +1,11 @@
 "use server";
 
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { withBasePath } from "@/base-path";
 import { modelsFor } from "@/generation/catalog";
-import { run, type ActionResult } from "@/lib/action-result";
+import { actionFailure, run, type ActionResult } from "@/lib/action-result";
 
 import {
   createApiToken,
@@ -95,10 +96,15 @@ async function registerAccountHandler(data: unknown): Promise<{ message: string 
 export async function loginAccount(data: unknown): Promise<ActionResult<AuthState>> {
   const result = await run(() => loginAccountHandler(data));
   if (!result.ok) return result;
-  /* Cookie writes must stay outside `run`. Next signals Set-Cookie with an
-     internal error; catching it breaks the Flight response (React #441). */
-  await writeSession(result.data.session);
-  return { ok: true, data: { user: result.data.user, hasApiKey: result.data.hasApiKey } };
+  try {
+    await writeSession(result.data.session);
+  } catch (caught) {
+    return actionFailure(caught);
+  }
+  /* Cookie writes mark this static route for a re-render. Redirect instead of
+     returning, so Next navigates to the studio and does not re-render /login
+     inside the action response (that re-render is React #441 in production). */
+  redirect("/");
 }
 
 async function loginAccountHandler(data: unknown): Promise<AuthState & { session: SessionUser }> {
