@@ -48,9 +48,13 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [stageWidth, setStageWidth] = useState(0);
-  const [ratio, setRatio] = useState(16 / 9);
-  const [beforeSeconds, setBeforeSeconds] = useState<number | null>(null);
-  const [afterSeconds, setAfterSeconds] = useState<number | null>(null);
+  /* Shape and length belong to the item that reported them: a pair swap must not
+     leave a stale figure behind, and each side is keyed by its item, so the
+     metadata of a new one arrives on its own. */
+  const [beforeMeta, setBeforeMeta] = useState<{ id: string; seconds: number; ratio: number } | null>(
+    null,
+  );
+  const [afterMeta, setAfterMeta] = useState<{ id: string; seconds: number } | null>(null);
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(true);
   const [drive, setDrive] = useState<"before" | "after">("before");
@@ -70,6 +74,9 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
   const both = after !== null;
   const bothVideo = before.kind === "video" && after?.kind === "video";
   const hasVideo = before.kind === "video" || after?.kind === "video";
+  const beforeSeconds = beforeMeta && beforeMeta.id === before.id ? beforeMeta.seconds : null;
+  const afterSeconds = afterMeta && after?.id === afterMeta.id ? afterMeta.seconds : null;
+  const ratio = beforeMeta && beforeMeta.id === before.id ? beforeMeta.ratio : 16 / 9;
 
   const clampPan = useCallback((next: { x: number; y: number }, z: number) => {
     const stage = stageRef.current;
@@ -122,11 +129,8 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
     return () => observer.disconnect();
   }, []);
 
-  /* A new pair starts from scratch: its own shape, its own clock. */
+  /* A new pair starts from scratch: its own clock position and framing. */
   useEffect(() => {
-    setRatio(16 / 9);
-    setBeforeSeconds(null);
-    setAfterSeconds(null);
     setNow(0);
     setPlaying(false);
     setDrive("before");
@@ -211,10 +215,14 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
   /* ---------- the clock: both videos on the same second ---------- */
   const masterRef = drive === "before" ? beforeVideo : afterVideo;
   const followerRef = drive === "before" ? afterVideo : beforeVideo;
-  const masterSeconds = drive === "before" ? beforeSeconds : afterSeconds;
-  const shorter = bothVideo && beforeSeconds && afterSeconds ? Math.min(beforeSeconds, afterSeconds) : 0;
+  const masterSeconds = drive === "before" ? beforeSeconds : afterSeconds;  const shorter = bothVideo && beforeSeconds && afterSeconds ? Math.min(beforeSeconds, afterSeconds) : 0;
   const durationsDiffer =
     bothVideo && beforeSeconds && afterSeconds && Math.abs(beforeSeconds - afterSeconds) > 0.3;
+
+  /* Only a clip can lead the clock: an image has no time to keep. */
+  useEffect(() => {
+    if (drive === "before" && before.kind !== "video" && after?.kind === "video") setDrive("after");
+  }, [after?.kind, before.kind, drive]);
 
   const seekBoth = useCallback((seconds: number) => {
     for (const ref of [beforeVideo, afterVideo]) {
@@ -299,10 +307,13 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
             const video = event.currentTarget;
             const seconds = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
             if (side === "before") {
-              setBeforeSeconds(seconds);
-              if (video.videoWidth) setRatio(video.videoWidth / video.videoHeight);
+              setBeforeMeta({
+                id: item.id,
+                seconds: seconds ?? 0,
+                ratio: video.videoWidth ? video.videoWidth / video.videoHeight : 16 / 9,
+              });
             } else {
-              setAfterSeconds(seconds);
+              setAfterMeta({ id: item.id, seconds: seconds ?? 0 });
             }
           }}
           onTimeUpdate={(event) => {
@@ -323,7 +334,11 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
         onLoad={(event) => {
           const image = event.currentTarget;
           if (side === "before" && image.naturalWidth) {
-            setRatio(image.naturalWidth / image.naturalHeight);
+            setBeforeMeta({
+              id: item.id,
+              seconds: 0,
+              ratio: image.naturalWidth / image.naturalHeight,
+            });
           }
         }}
       />
@@ -482,6 +497,7 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
               type="button"
               className="ohf-cmp-chip"
               data-on={drive === "before" || undefined}
+              disabled={before.kind !== "video"}
               onClick={() => {
                 setDrive("before");
                 seekBoth(0);
@@ -493,7 +509,7 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
               type="button"
               className="ohf-cmp-chip"
               data-on={drive === "after" || undefined}
-              disabled={!bothVideo}
+              disabled={after?.kind !== "video"}
               onClick={() => {
                 setDrive("after");
                 seekBoth(0);
