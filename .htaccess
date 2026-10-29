@@ -1,0 +1,26 @@
+# video-gen (Vicend) — penolakan akses berkas sensitif.
+#
+# Folder ini ada di dalam DocumentRoot Laragon (C:\laragon\www) dan Apache
+# menyalakannya dengan "Options Indexes" tanpa penolakan dotfile. Akibatnya
+# berkas kredensial dapat diunduh siapa pun di jaringan:
+#   http://localhost/video-gen/.env   -> HTTP 200 (TERBUKTI, 430 byte)
+#
+# Vhost Laragon memakai AllowOverride All, jadi berkas ini berlaku tanpa restart.
+# CATATAN: server produksi memakai nginx — .htaccess TIDAK berlaku di sana.
+#           Lihat docs/NGINX-HARDENING.md untuk padanannya.
+
+# 1. Tolak semua berkas/direktori yang diawali titik (.env, .git, .next, .gitignore)
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# 2. Tolak direktori internal & berkas kredensial secara eksplisit
+RedirectMatch 404 (?i)/(\.env|\.env\..*|\.git|\.next|node_modules|uploads|database)(/|$)
+
+# 3. Tolak berkas konfigurasi yang memuat rahasia
+<FilesMatch "(?i)^(\.env.*|next\.config\.(ts|js|mjs)|tsconfig\.json|pnpm-lock\.yaml|package\.json|\.gitignore)$">
+    Require all denied
+</FilesMatch>
+
+# 4. Matikan directory listing
+Options -Indexes
