@@ -22,6 +22,19 @@ export function uploadTypePath(id: string): string {
   return path.join(uploadRoot(), `${id}.type`);
 }
 
+/** Uploads are reference material, not deliverables: a photograph is a few MB,
+    so the cap only has to stop a mistaken video-sized file. `UPLOAD_MAX_BYTES`
+    raises it for a deployment that sends large clips through the studio. */
+export const DEFAULT_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+
+export function uploadMaxBytes(): number {
+  const raw = process.env.UPLOAD_MAX_BYTES?.trim();
+  const parsed = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.floor(parsed)
+    : DEFAULT_UPLOAD_MAX_BYTES;
+}
+
 /** UUID from `/api/uploads/<id>` or `/uploads/<id>.png`, with or without an
     origin and base path such as `http://192.168.1.100/video-gen`. */
 export function uploadIdFrom(url: string): string | null {
@@ -52,7 +65,8 @@ async function readUploadBytes(id: string, ext: string | null): Promise<Buffer> 
   throw last instanceof Error ? last : new Error("Reference image is missing on the server");
 }
 
-function sniffImageMime(bytes: Buffer): "image/png" | "image/jpeg" | "image/webp" | "image/gif" | null {
+/** What the bytes are, not what the uploader claimed they are. */
+export function sniffImageMime(bytes: Buffer): "image/png" | "image/jpeg" | "image/webp" | "image/gif" | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
   if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
     return "image/png";
