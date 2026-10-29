@@ -24,7 +24,13 @@ export const seedance25Edit: ModelEntry = {
   surface: "video",
   label: "Seedance 2.5 Edit",
   roles: { video: 1, reference: 30, audio: 10 },
-  settings: seedance25Settings,
+  settings: {
+    /* Declared, and defaulted to the clip's own length by the composer: the
+       provider falls back to 5 s when no duration is asked for, which would
+       shorten the very clip the edit was handed. */
+    duration: { type: "range", min: 4, max: 30, default: 5 },
+    ...seedance25Settings,
+  },
 };
 
 export const seedance25Extend: ModelEntry = {

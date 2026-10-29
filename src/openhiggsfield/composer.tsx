@@ -18,6 +18,7 @@ import { useSettings } from "@/generation/stores/settings";
 
 import { swatchFor } from "./artwork";
 import { AssetPicker } from "./asset-picker";
+import { clipSeconds, editsClip } from "./clip-length";
 import { PROMPT_PLACEHOLDERS, countSetting } from "./data";
 import type { RunRecord } from "./history";
 import { ArrowUpIcon, CaretDownIcon, CloseIcon, MinusIcon, PlusIcon, WarningIcon } from "./icons";
@@ -145,6 +146,45 @@ export function Composer({
   }, [caps, keyKind, model, settings]);
   const values = parseSettings(tuned, snapped);
   const tray = useMediaTray(model, onError);
+
+  /* An edit keeps the clip it is handed, so that clip's own length is the only
+     sensible default for its output duration — the provider's own fallback is
+     5 s, which would shorten the very clip being edited. The dial only moves
+     while it still holds what this effect last put there, so a duration chosen
+     by hand stays chosen. Extend is left alone on purpose: there the number
+     means the added length, not the total. */
+  const autoDuration = useRef<Record<string, number>>({});
+  const clipUrl = tray.items.find((item) => item.role === "video")?.url ?? null;
+  const durationField = tuned.settings.duration;
+  const minDuration = durationField?.type === "range" ? durationField.min : null;
+  const maxDuration = durationField?.type === "range" ? durationField.max : null;
+  const defaultDuration = durationField?.type === "range" ? durationField.default : null;
+  const storedDuration =
+    typeof rawSettings.duration === "number"
+      ? rawSettings.duration
+      : Number.isFinite(Number(rawSettings.duration))
+        ? Number(rawSettings.duration)
+        : undefined;
+  useEffect(() => {
+    if (!editsClip(model.id) || !clipUrl) return;
+    if (minDuration === null || maxDuration === null || defaultDuration === null) return;
+    let live = true;
+    void clipSeconds(clipUrl).then((seconds) => {
+      if (!live || seconds === null) return;
+      const rounded = Math.min(maxDuration, Math.max(minDuration, Math.round(seconds)));
+      const auto = autoDuration.current[model.id];
+      if (storedDuration !== undefined) {
+        if (auto !== undefined && storedDuration !== auto) return;
+        if (auto === undefined && storedDuration !== defaultDuration) return;
+      }
+      if (rounded === storedDuration) return;
+      autoDuration.current[model.id] = rounded;
+      settings.set(model.id, { duration: rounded });
+    });
+    return () => {
+      live = false;
+    };
+  }, [clipUrl, defaultDuration, maxDuration, minDuration, model.id, settings, storedDuration]);
 
   const [overlay, setOverlay] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
