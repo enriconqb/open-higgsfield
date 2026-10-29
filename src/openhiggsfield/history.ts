@@ -15,8 +15,10 @@ export interface RunRecord {
   badge?: string;
   kind: "image" | "video";
   urls: string[];
-  /** Provider https URLs kept beside a local archive, so a video reference can
-      still be fetched while this site is served over plain HTTP. */
+  /** Provider https URLs kept beside the local archive, one entry per url: the
+      gallery shows them while they still answer and the disk copy after, and a
+      video reference can be sent from one while this site is served over plain
+      HTTP. Empty string marks a row that has no provider link. */
   remoteUrls?: string[];
   status: RunStatus;
   /** Platform request this row is waiting on. Set while status is running so a

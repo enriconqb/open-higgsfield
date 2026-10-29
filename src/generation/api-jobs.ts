@@ -18,13 +18,15 @@ export type StoredImage = {
   bytes: number;
   id?: string;
   url?: string;
+  /** Provider https link these bytes were copied from, kept for the gallery. */
+  sourceUrl?: string;
   /** File extension hint for archived video bytes. */
   ext?: string;
 };
 
 export type ApiJobResult = {
   images?: StoredImage[];
-  video?: { url: string };
+  video?: { url: string; sourceUrl?: string };
 };
 
 export type ApiJobRow = {
@@ -166,17 +168,22 @@ export function parseJobResult(value: unknown): ApiJobResult {
             bytes: typeof row.bytes === "number" ? row.bytes : 0,
             ...(typeof row.id === "string" ? { id: row.id } : {}),
             ...(typeof row.url === "string" ? { url: row.url } : {}),
+            ...(typeof row.sourceUrl === "string" ? { sourceUrl: row.sourceUrl } : {}),
           },
         ];
       })
     : undefined;
-  const videoUrl =
+  const videoRow =
     record.video !== null && typeof record.video === "object"
-      ? (record.video as { url?: unknown }).url
-      : undefined;
+      ? (record.video as { url?: unknown; sourceUrl?: unknown })
+      : null;
+  const videoUrl = videoRow?.url;
+  const videoSource = typeof videoRow?.sourceUrl === "string" ? videoRow.sourceUrl : undefined;
   return {
     ...(images?.length ? { images } : {}),
-    ...(typeof videoUrl === "string" ? { video: { url: videoUrl } } : {}),
+    ...(typeof videoUrl === "string"
+      ? { video: { url: videoUrl, ...(videoSource ? { sourceUrl: videoSource } : {}) } }
+      : {}),
   };
 }
 

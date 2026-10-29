@@ -71,7 +71,7 @@ function promptOf(row: ApiJobRow): string {
 
 /** `settings` and `prompt` are stored on the job row when it is created; rows
     made before migration 008 simply have none, which the record tolerates. */
-function recordOf(row: ApiJobRow, urls: string[], surface: Surface): RunRecord {
+function recordOf(row: ApiJobRow, urls: string[], surface: Surface, remoteUrls?: string[]): RunRecord {
   const status: RunRecord["status"] =
     row.status === "completed" ? "completed" : row.status === "failed" || row.status === "canceled" ? "failed" : "running";
   const createdAt = row.created_at instanceof Date ? row.created_at.getTime() : Date.parse(String(row.created_at));
@@ -85,6 +85,7 @@ function recordOf(row: ApiJobRow, urls: string[], surface: Surface): RunRecord {
     meta: metaOf(row),
     kind: row.kind,
     urls,
+    ...(remoteUrls ? { remoteUrls } : {}),
     status,
     requestId: row.request_id,
     art: tileArt(row.request_id),
@@ -108,7 +109,7 @@ export async function archiveJobMedia(
   result: ApiJobResult,
   userId: number,
   requestId: string,
-): Promise<{ images: StoredImage[]; videoUrl: string | null }> {
+): Promise<{ images: StoredImage[]; videoUrl: string | null; videoSourceUrl?: string }> {
   const images: StoredImage[] = [];
   for (const image of result.images ?? []) {
     if (image.id) {
@@ -126,7 +127,7 @@ export async function archiveJobMedia(
   if (!original) return { images, videoUrl: null };
   const stored = await archiveRemote(original, "video/mp4", images.length, userId, requestId, VIDEO_EXT);
   const videoUrl = stored.id ?? original;
-  return { images, videoUrl };
+  return { images, videoUrl, ...(stored.sourceUrl ? { videoSourceUrl: stored.sourceUrl } : {}) };
 }
 
 async function archiveRemote(
@@ -139,8 +140,11 @@ async function archiveRemote(
 ): Promise<StoredImage> {
   const local = await ensureArchivedUrl({ url, userId, requestId, index, mime });
   const id = isArchivedMediaUrl(local) ? uploadIdFrom(local) : null;
-  if (!id) return { index, mime, bytes: 0, url };
-  return { index, mime, bytes: 0, id, ...(ext ? { ext } : {}) };
+  /* The provider link outlives the copy it triggered: the gallery shows it
+     while it answers, and a reference can still be sent from it. */
+  const source = /^https:\/\//i.test(url) && url !== local ? { sourceUrl: url } : {};
+  if (!id) return { index, mime, bytes: 0, url, ...source };
+  return { index, mime, bytes: 0, id, ...(ext ? { ext } : {}), ...source };
 }
 
 /** Idempotent: one gallery row per (user, request id), refreshed in place. */
@@ -162,12 +166,14 @@ export async function upsertGenerationResult(userId: number, record: RunRecord):
 export async function mirrorJobToGallery(userId: number, job: ApiJobRow): Promise<void> {
   try {
     const result = parseJobResult(job.result);
-    const { images, videoUrl } = await archiveJobMedia(result, userId, job.request_id);
+    const { images, videoUrl, videoSourceUrl } = await archiveJobMedia(result, userId, job.request_id);
     const surface: Surface = job.kind === "image" ? "image" : "video";
 
     const stored: ApiJobResult = {
       ...(images.length ? { images } : {}),
-      ...(videoUrl ? { video: { url: videoUrl } } : {}),
+      ...(videoUrl
+        ? { video: { url: videoUrl, ...(videoSourceUrl ? { sourceUrl: videoSourceUrl } : {}) } }
+        : {}),
     };
     await execute(`UPDATE api_jobs SET result = ? WHERE request_id = ?`, [
       JSON.stringify(stored),
@@ -175,7 +181,12 @@ export async function mirrorJobToGallery(userId: number, job: ApiJobRow): Promis
     ]).catch(() => undefined);
 
     const urls = buildUrls(job, images, videoUrl);
-    const record = recordOf(job, urls, surface);
+    /* One entry per url, aligned the way the studio reads it: the gallery takes
+       the CDN link while it lasts and the archived copy once it stops. */
+    const remoteUrls = urls.map((_url, index) =>
+      surface === "image" ? (images[index]?.sourceUrl ?? "") : (videoSourceUrl ?? ""),
+    );
+    const record = recordOf(job, urls, surface, remoteUrls.some(Boolean) ? remoteUrls : undefined);
     await upsertGenerationResult(userId, record);
   } catch (caught) {
     console.error("[gallery] mirror failed", caught instanceof Error ? caught.message : caught);

@@ -28,7 +28,9 @@ export type QueuedGeneration = {
 export type GenerationStatus = {
   status: string;
   requestId: string;
-  images?: Array<{ url: string }>;
+  /** `sourceUrl` is the provider link the archived copy came from, kept for the
+      gallery and for a reference that has to be sent on. */
+  images?: Array<{ url: string; sourceUrl?: string }>;
   video?: { url: string; sourceUrl?: string };
   error?: unknown;
   /** USD reported by OpenRouter on a finished job. */

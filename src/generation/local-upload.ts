@@ -103,22 +103,28 @@ async function normalizeItemUrl(url: string, role: MediaRole): Promise<string> {
   if (!id) return url;
   try {
     const bytes = await readUploadBytes(id, uploadExtFrom(url));
+    /* This deployment answers on public HTTPS: every role, images included,
+       travels to the provider as the signed address of the stored file rather
+       than a base64 copy of it. */
+    const hosted = publicMediaUrl(id);
+    if (hosted) return hosted;
     if (sniffImageMime(bytes)) return imageDataUrl(bytes);
     if (role === "video" || role === "audio") {
       const type = (await readFile(uploadTypePath(id), "utf8")).trim();
       if (type.startsWith("video/") || type.startsWith("audio/")) {
-        /* Video and audio are fetched by the provider itself, and it refuses a
-           data URL for them: hand it the public https address of the stored
-           file when this deployment has one, and keep the inline copy only as
-           the fallback for LAN or plain-http installs. */
-        const hosted = publicMediaUrl(id);
-        if (hosted) return hosted;
-        return `data:${type};base64,${bytes.toString("base64")}`;
+        /* The provider fetches clips itself and refuses a data URL outright
+           ("Only HTTPS URLs are allowed"), so name what is missing here instead
+           of forwarding a request that cannot succeed. */
+        throw new Error(
+          "Local video references need a public HTTPS address: set NEXT_PUBLIC_MEDIA_HTTPS=true (see .env.example), or attach the clip from a CDN link",
+        );
       }
     }
     return imageDataUrl(bytes);
   } catch (caught) {
-    if (caught instanceof Error && caught.message.startsWith("Reference image")) throw caught;
+    if (caught instanceof Error && /^(Reference image|Local video references)/.test(caught.message)) {
+      throw caught;
+    }
     throw new Error("Reference image is missing on the server");
   }
 }

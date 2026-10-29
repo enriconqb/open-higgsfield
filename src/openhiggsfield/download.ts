@@ -1,11 +1,18 @@
 import type { RunRecord } from "./history";
 
-/* Result media is served from the platform's own CDN, so an <a download>
+/* Result media usually sits on the platform's own CDN, where an <a download>
    pointed at it is ignored — the attribute only names a file when the href is
-   same-origin. The bytes have to be read first, which means the CDN's CORS
-   policy decides whether a run can be saved at all. A refusal is reported
-   rather than papered over with a new tab the popup blocker would eat. */
-export async function saveFile(url: string, name: string): Promise<boolean> {
+   same-origin. The bytes have to be read first, which means the host's CORS
+   policy decides whether that copy can be saved at all, so a read falls back to
+   the copy archived on this server. A refusal of both is reported rather than
+   papered over with a new tab the popup blocker would eat. */
+export async function saveFile(url: string, name: string, fallbackUrl?: string): Promise<boolean> {
+  if (await readToFile(url, name)) return true;
+  if (fallbackUrl && fallbackUrl !== url) return readToFile(fallbackUrl, name);
+  return false;
+}
+
+async function readToFile(url: string, name: string): Promise<boolean> {
   try {
     const response = await fetch(url, { mode: "cors" });
     if (!response.ok) return false;

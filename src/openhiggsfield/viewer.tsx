@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { withBasePath } from "@/base-path";
-
 import { settingLabel, settingValueLabel } from "./data";
 import { fileNameFor, saveFile } from "./download";
 import { timeAgo, type RunRecord } from "./history";
+import { sourcesFor } from "./media-source";
 import { formatUsd } from "@/generation/estimate";
 
 import { ModelIcon } from "./model-icon";
@@ -130,13 +129,18 @@ export function Viewer({
      rendered at the previous run's shape would letterbox the new picture, and a
      "Copied" receipt would sit over a prompt nobody copied. */
   const [shown, setShown] = useState(item.id);
+  const [onFallback, setOnFallback] = useState(false);
   if (shown !== item.id) {
     setShown(item.id);
     setDelivered(null);
     setCopied(false);
+    setOnFallback(false);
   }
   const aspect = delivered ?? w / h;
-  const url = item.urls[0] ? withBasePath(item.urls[0]) : undefined;
+  /* The provider's CDN link first, while it still answers; the archived copy
+     takes over once it stops, so the media and the anchor both keep working. */
+  const sources = sourcesFor(item, 0);
+  const url = (onFallback && sources.fallback ? sources.fallback : sources.primary) || undefined;
 
   /* Measured on attach as well as on load: the grid has already fetched this
      URL, so the element is usually complete before React can hear its event. */
@@ -219,6 +223,7 @@ export function Viewer({
                   loop
                   playsInline
                   onLoadedMetadata={(event) => measure(event.currentTarget)}
+                  onError={() => setOnFallback(true)}
                 />
               ) : (
                 /* Platform CDN host is not known at build time. */
@@ -229,6 +234,7 @@ export function Viewer({
                   src={url}
                   alt={item.prompt}
                   onLoad={(event) => measure(event.currentTarget)}
+                  onError={() => setOnFallback(true)}
                 />
               )
             ) : (
@@ -316,7 +322,8 @@ export function Viewer({
                 to a tab the browser can save from. */}
             {saveState === "failed" && (
               <p className="ohf-viewer-save-note" role="status">
-                The platform’s CDN refused the read. Open the file to save it from the browser.
+                Neither the CDN nor the archived copy could be read. Open the file to save it from
+                the browser.
               </p>
             )}
             <div className="ohf-viewer-foot-row">
@@ -330,7 +337,7 @@ export function Viewer({
                   rel="noreferrer"
                   title={
                     saveState === "failed"
-                      ? "The platform’s CDN refused the read — opens the file in a new tab"
+                      ? "Neither copy could be read — opens the file in a new tab"
                       : "Save the file to this device"
                   }
                   onClick={(event) => {
@@ -340,9 +347,11 @@ export function Viewer({
                     event.preventDefault();
                     if (saveState === "saving") return;
                     setSave({ id: item.id, state: "saving" });
-                    void saveFile(url, fileNameFor(item, 0)).then((ok) =>
-                      setSave(ok ? null : { id: item.id, state: "failed" }),
-                    );
+                    void saveFile(
+                      sources.primary || url,
+                      fileNameFor(item, 0),
+                      sources.fallback ?? undefined,
+                    ).then((ok) => setSave(ok ? null : { id: item.id, state: "failed" }));
                   }}
                 >
                   {saveState === "saving" ? (

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getAuthState, logoutAccount } from "@/auth/actions";
-import { apiUrl, withBasePath } from "@/base-path";
+import { apiUrl } from "@/base-path";
 import { AuthRequiredError } from "@/auth/errors";
 import type { PublicUser } from "@/auth/types";
 import { unwrap } from "@/lib/action-result";
@@ -34,6 +34,7 @@ import {
 } from "./data";
 import { Gallery } from "./gallery";
 import { loadHistory, mergeHistory, replaceRequest, saveHistory, historyKeyFor, stepRun, type RunRecord } from "./history";
+import { sourcesFor } from "./media-source";
 import { loadGenerationResults, saveGenerationResults } from "@/generation/result-actions";
 import { CloseIcon, UndoIcon } from "./icons";
 import { SelectionBar, type SaveProgress } from "./selection-bar";
@@ -123,11 +124,13 @@ function terminalRows(requestId: string, draft: RunDraft, status: GenerationStat
   const base = status.requestId || requestId;
   const failure = completed ? undefined : failureText(status);
   const delivered: Array<string | null> = completed ? urls : [null];
-  const source = status.video?.sourceUrl;
   return delivered.map((url, offset) => {
     const id = rowId(base, offset, delivered.length);
-    const remote =
-      !status.images && source && url && source !== url && /^https:\/\//i.test(source) ? [source] : undefined;
+    /* The provider link this row came from, kept beside the archived copy: the
+       gallery shows it while it still answers and falls back to the copy after.
+       Video carries it as sourceUrl, each image carries its own. */
+    const source = status.images?.[offset]?.sourceUrl ?? status.video?.sourceUrl;
+    const remote = url && source && source !== url && /^https:\/\//i.test(source) ? [source] : undefined;
     return {
       id,
       requestId: base,
@@ -682,16 +685,18 @@ function persistLocal(records: RunRecord[]) {
     clearPicked();
   }, [deleteRuns, pickedRecords, clearPicked]);
 
-  /* One run, saved from its card. The refusal is reported through the strip the
-     composer already reserves for it — a 32px button on a picture has no room
-     to explain itself, and the viewer's own Download states what to do next. */
+  /* One run, saved from its card. The provider's CDN link is tried first and
+     the archived copy second; only when both refuse is the run unsaved. The
+     refusal is reported through the strip the composer already reserves for it
+     — a 32px button on a picture has no room to explain itself, and the
+     viewer's own Download states what to do next. */
   const downloadRun = useCallback(async (record: RunRecord) => {
-    const url = record.urls[0] ? withBasePath(record.urls[0]) : undefined;
-    if (!url) return;
-    const ok = await saveFile(url, fileNameFor(record, 0));
+    const sources = sourcesFor(record, 0);
+    if (!sources.primary) return;
+    const ok = await saveFile(sources.primary, fileNameFor(record, 0), sources.fallback ?? undefined);
     if (!ok) {
       setError(
-        "The platform’s CDN refused the read, so this run could not be saved. Open it to save it from the browser instead.",
+        "Neither the CDN nor the archived copy could be read, so this run could not be saved. Open it to save it from the browser instead.",
       );
     }
   }, []);
@@ -705,7 +710,12 @@ function persistLocal(records: RunRecord[]) {
     setSaving({ done: 0, total: files.length });
     let refused = 0;
     for (const [index, record] of files.entries()) {
-      const ok = await saveFile(withBasePath(record.urls[0]!), fileNameFor(record, index));
+      const sources = sourcesFor(record, 0);
+      const ok = await saveFile(
+        sources.primary,
+        fileNameFor(record, index),
+        sources.fallback ?? undefined,
+      );
       if (!ok) refused++;
       setSaving({ done: index + 1, total: files.length });
     }
@@ -713,8 +723,8 @@ function persistLocal(records: RunRecord[]) {
     if (refused > 0) {
       setError(
         refused === files.length
-          ? "The platform’s CDN refused the read, so nothing could be saved. Open a run to save it from the browser instead."
-          : `${refused} of ${files.length} files could not be saved — the platform’s CDN refused the read. Open those runs to save them from the browser.`,
+          ? "Neither the CDN nor the archived copy could be read, so nothing could be saved. Open a run to save it from the browser instead."
+          : `${refused} of ${files.length} files could not be saved — neither their CDN link nor the archived copy could be read. Open those runs to save them from the browser.`,
       );
     }
   }, [pickedRecords]);

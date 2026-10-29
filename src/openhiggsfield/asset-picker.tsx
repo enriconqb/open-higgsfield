@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { withBasePath } from "@/base-path";
 import type { MediaItem, MediaRole, ModelEntry } from "@/generation/catalog";
+import { preferCdnForVideo } from "@/generation/media-https";
 
 import { ROLE_KINDS, ROLE_LABELS, defaultRole, roleNoun, rolesOf, type AssetKind } from "./data";
 import type { RunRecord } from "./history";
@@ -76,10 +77,6 @@ export function AssetPicker({
 }) {
   const roles = rolesOf(model);
   const [role, setRole] = useState<MediaRole>(() => defaultRole(model));
-  const [httpSite, setHttpSite] = useState(false);
-  useEffect(() => {
-    setHttpSite(window.location.protocol !== "https:");
-  }, []);
   /* null until the visitor picks a shelf: the panel opens on whichever one
      actually holds something, so someone who has generated all day and
      uploaded nothing does not land on an empty tab. */
@@ -118,9 +115,11 @@ export function AssetPicker({
     for (const record of history) {
       if (record.status !== "completed" || record.kind !== kind) continue;
       record.urls.forEach((url, index) => {
+        /* With the https flag on, the server signs this site's own address for
+           the clip and the archived copy never expires, so that one wins. With
+           the flag off, the provider's CDN link is the only form it accepts. */
         const remote = record.remoteUrls?.[index];
-        const cdn =
-          kind === "video" && httpSite && remote && /^https:\/\//i.test(remote) ? remote : null;
+        const cdn = kind === "video" ? preferCdnForVideo({ remoteUrl: remote }) : null;
         out.push({
           url: cdn ?? url,
           ...(cdn ? { previewUrl: url } : {}),
@@ -131,7 +130,7 @@ export function AssetPicker({
       });
     }
     return out;
-  }, [history, kind, httpSite]);
+  }, [history, kind]);
 
   const shelf: Source =
     source ?? (uploadAssets.length === 0 && runAssets.length > 0 ? "generations" : "uploads");

@@ -3,18 +3,18 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { withBasePath } from "@/base-path";
 import { SITE_URL } from "@/site";
 
+import { mediaHttpsEnabled } from "./media-https";
+
 /* A generation provider downloads reference media itself, so a file on this
-   server only works as a video or audio reference when it is reachable over
-   public HTTPS — a `data:` URL is refused with "Only HTTPS URLs are allowed".
-   `PUBLIC_MEDIA_HTTPS=true` is this deployment saying it has such an origin
-   (the one NEXT_PUBLIC_SITE_URL names); without it, local media keeps the
-   inline data-URL behaviour.
+   server only works as a reference when it is reachable over public HTTPS — a
+   `data:` URL is refused with "Only HTTPS URLs are allowed". The flag
+   `NEXT_PUBLIC_MEDIA_HTTPS=true` is this deployment saying it has such an
+   origin (the one NEXT_PUBLIC_SITE_URL names); without it, local media keeps
+   the inline data-URL behaviour for images and refuses video outright.
 
    The address carries a signature because the studio's own /api/uploads route
    demands a session cookie, and the provider has none. The token is derived
    from SESSION_SECRET, so rotating that secret retires every old link. */
-
-const OFF = new Set(["", "0", "false", "no", "off"]);
 
 /** Public https origin a provider can reach, or null when there is none. */
 export function publicMediaOrigin(): string | null {
@@ -23,8 +23,7 @@ export function publicMediaOrigin(): string | null {
     const trimmed = explicit.replace(/\/+$/, "");
     return trimmed.startsWith("https://") ? trimmed : null;
   }
-  const flag = (process.env.PUBLIC_MEDIA_HTTPS ?? "").trim().toLowerCase();
-  if (OFF.has(flag) || !SITE_URL.startsWith("https://")) return null;
+  if (!mediaHttpsEnabled() || !SITE_URL.startsWith("https://")) return null;
   return SITE_URL;
 }
 

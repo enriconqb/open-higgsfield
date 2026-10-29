@@ -3,7 +3,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import { withBasePath } from "@/base-path";
 import type { Surface } from "@/generation/catalog";
 
 import { swatchFor } from "./artwork";
@@ -20,6 +19,7 @@ import {
   WarningIcon,
 } from "./icons";
 import { timeAgo, type RunRecord } from "./history";
+import { sourcesFor } from "./media-source";
 import { ModelIcon } from "./model-icon";
 
 const EMPTY: Record<GalleryView, { title: string; hint: string }> = {
@@ -128,7 +128,13 @@ const Tile = memo(function Tile({
   onDelete: (item: RunRecord) => void;
 }) {
   const delay = `${Math.min(index * 0.035, 0.28).toFixed(3)}s`;
-  const poster = item.urls[0] ? withBasePath(item.urls[0]) : undefined;
+  /* The provider's CDN link first, because it still answers while it lasts and
+     leaves this server out of the path; the archived copy takes over the once
+     that link stops, which it eventually does. One step only: a tile that has
+     fallen back stays there rather than flapping between the two. */
+  const sources = sourcesFor(item, 0);
+  const [onFallback, setOnFallback] = useState(false);
+  const poster = (onFallback && sources.fallback ? sources.fallback : sources.primary) || undefined;
   const videoRef = useRef<HTMLVideoElement>(null);
   /* The keep beat is driven from the click, never from mount: a CSS animation
      bound to the saved state alone would re-fire on every scope switch. */
@@ -227,12 +233,19 @@ const Tile = memo(function Tile({
             loop
             playsInline
             preload="metadata"
+            onError={() => setOnFallback(true)}
           />
         ) : (
           /* Platform-hosted result on an arbitrary CDN host; next/image would
              need every provider domain allow-listed up front. */
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img className="ohf-tile-media" src={poster} alt={item.prompt} loading="lazy" />
+          <img
+            className="ohf-tile-media"
+            src={poster}
+            alt={item.prompt}
+            loading="lazy"
+            onError={() => setOnFallback(true)}
+          />
         ))}
 
       {/* While runs are picked the card is part of a selection, so its body

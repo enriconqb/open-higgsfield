@@ -70,8 +70,10 @@ export async function ensureArchivedUrl(input: {
   }
 }
 
-/** Rewrites completed run URLs to the local copy. A video also keeps the https
-    URL it replaced, so a reference can still be sent to the provider. */
+/** Rewrites completed run URLs to the local copy. The https URL each one
+    replaced is kept beside it — for images as well as video — so a reference can
+    still be sent to a provider, and the gallery can prefer the CDN while it
+    lasts and fall back to the disk copy after. */
 export async function archiveRunRecord(userId: number, record: RunRecord): Promise<RunRecord> {
   if (record.status !== "completed" || record.urls.length === 0) return record;
   const requestId = record.requestId ?? record.id.split("#")[0] ?? record.id;
@@ -80,7 +82,7 @@ export async function archiveRunRecord(userId: number, record: RunRecord): Promi
   const urls = await Promise.all(
     record.urls.map((url, index) => ensureArchivedUrl({ url, userId, requestId, index, mime })),
   );
-  const remoteUrls = video ? keptRemoteUrls(record, urls) : undefined;
+  const remoteUrls = keptRemoteUrls(record, urls);
   const urlsSame = urls.every((url, index) => url === record.urls[index]);
   const remoteSame = sameList(record.remoteUrls, remoteUrls);
   if (urlsSame && remoteSame) return record;

@@ -348,15 +348,26 @@ async function archiveGenerationStatus(
   if (status.status !== "completed") return status;
   const images = status.images
     ? await Promise.all(
-        status.images.map(async (image, index) => ({
-          url: await ensureArchivedUrl({
-            url: image.url,
+        status.images.map(async (image, index) => {
+          const original = image.url;
+          const local = await ensureArchivedUrl({
+            url: original,
             userId: context.userId,
             requestId,
             index,
             mime: "image/png",
-          }),
-        })),
+          });
+          /* The provider link is kept beside the archived copy, the way video
+             already does it: the gallery shows it while it still answers, and
+             the file on disk takes over when it stops. */
+          const source =
+            image.sourceUrl ??
+            (/^https:\/\//i.test(original) && original !== local ? original : undefined);
+          return {
+            url: local,
+            ...(source && source !== local ? { sourceUrl: source } : {}),
+          };
+        }),
       )
     : undefined;
   let video = status.video;
