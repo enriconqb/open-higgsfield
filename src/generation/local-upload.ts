@@ -2,6 +2,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 
 import type { GenerationPlane, MediaRole } from "./catalog/types";
+import { publicMediaUrl } from "./public-media";
 
 const UPLOAD_FILE = /\/uploads\/([0-9a-f-]{36})(?:\.([a-z0-9]+))?/i;
 const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "gif"];
@@ -106,6 +107,12 @@ async function normalizeItemUrl(url: string, role: MediaRole): Promise<string> {
     if (role === "video" || role === "audio") {
       const type = (await readFile(uploadTypePath(id), "utf8")).trim();
       if (type.startsWith("video/") || type.startsWith("audio/")) {
+        /* Video and audio are fetched by the provider itself, and it refuses a
+           data URL for them: hand it the public https address of the stored
+           file when this deployment has one, and keep the inline copy only as
+           the fallback for LAN or plain-http installs. */
+        const hosted = publicMediaUrl(id);
+        if (hosted) return hosted;
         return `data:${type};base64,${bytes.toString("base64")}`;
       }
     }
