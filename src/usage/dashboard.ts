@@ -28,8 +28,8 @@ export type UsageRow = {
   requestId: string;
 };
 
-export type UsageDay = { day: string; credits: number };
-export type UsageTopUser = { username: string; generations: number; credits: number };
+export type UsageDay = { day: string; usd: number };
+export type UsageTopUser = { username: string; generations: number; usd: number };
 
 export type UsageDashboard = {
   isSuperadmin: boolean;
@@ -37,7 +37,7 @@ export type UsageDashboard = {
   usernames: string[];
   models: string[];
   kpis: {
-    credits: number;
+    usd: number;
     generations: number;
     success: number;
     failed: number;
@@ -120,7 +120,7 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
   const [summary, days, rows, models, usernames, topUsers] = await Promise.all([
     queryRows<RowDataPacket>(
       `SELECT
-         COALESCE(SUM(CASE WHEN e.status = 'success' THEN e.credits ELSE 0 END), 0) AS credits,
+         COALESCE(SUM(CASE WHEN e.status = 'success' THEN COALESCE(e.cost_usd, e.credits / 100) ELSE 0 END), 0) AS usd,
          COUNT(*) AS generations,
          COALESCE(SUM(e.status = 'success'), 0) AS success_count,
          COALESCE(SUM(e.status = 'failed'), 0) AS failed_count,
@@ -132,7 +132,7 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
     ),
     queryRows<RowDataPacket>(
       `SELECT DATE_FORMAT(e.created_at, '%Y-%m-%d') AS day,
-              COALESCE(SUM(CASE WHEN e.status = 'success' THEN e.credits ELSE 0 END), 0) AS credits
+              COALESCE(SUM(CASE WHEN e.status = 'success' THEN COALESCE(e.cost_usd, e.credits / 100) ELSE 0 END), 0) AS usd
        FROM usage_events e
        INNER JOIN users u ON u.id = e.user_id
        WHERE ${clause}
@@ -167,12 +167,12 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
     isSuperadmin
       ? queryRows<RowDataPacket>(
           `SELECT u.username, COUNT(*) AS generations,
-                  COALESCE(SUM(CASE WHEN e.status = 'success' THEN e.credits ELSE 0 END), 0) AS credits
+                  COALESCE(SUM(CASE WHEN e.status = 'success' THEN COALESCE(e.cost_usd, e.credits / 100) ELSE 0 END), 0) AS usd
            FROM usage_events e
            INNER JOIN users u ON u.id = e.user_id
            WHERE ${clause}
            GROUP BY u.id, u.username
-           ORDER BY credits DESC, generations DESC
+           ORDER BY usd DESC, generations DESC
            LIMIT 5`,
           params,
         )
@@ -186,17 +186,17 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
     usernames: usernames.map((row) => String(row.username)),
     models: models.map((row) => String(row.model_id)),
     kpis: {
-      credits: Number(head.credits ?? 0),
+      usd: Number(head.usd ?? 0),
       generations: Number(head.generations ?? 0),
       success: Number(head.success_count ?? 0),
       failed: Number(head.failed_count ?? 0),
       activeUsers: Number(head.active_users ?? 0),
     },
-    days: days.map((row) => ({ day: String(row.day), credits: Number(row.credits ?? 0) })),
+    days: days.map((row) => ({ day: String(row.day), usd: Number(row.usd ?? 0) })),
     topUsers: topUsers.map((row) => ({
       username: String(row.username),
       generations: Number(row.generations ?? 0),
-      credits: Number(row.credits ?? 0),
+      usd: Number(row.usd ?? 0),
     })),
     rows: rows.map((row) => ({
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),

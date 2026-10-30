@@ -55,7 +55,6 @@ export function UsagePanel() {
       "Model",
       "Type",
       "Spec",
-      "Credits",
       "USD",
       "Status",
       "Request ID",
@@ -66,8 +65,7 @@ export function UsagePanel() {
       row.modelId,
       row.kind,
       row.spec,
-      String(row.credits),
-      row.costUsd == null ? "" : row.costUsd.toFixed(4),
+      formatUsageUsd(rowUsd(row)),
       row.status,
       row.requestId,
     ]);
@@ -81,11 +79,11 @@ export function UsagePanel() {
     URL.revokeObjectURL(url);
   }
 
-  const maxCredits = Math.max(1, ...(data?.days.map((day) => day.credits) ?? [1]));
+  const maxUsd = Math.max(0, ...(data?.days.map((day) => day.usd) ?? [0])) || 1;
   const generations = data?.kpis.generations ?? 0;
   const successRate = generations === 0 ? 0 : (data!.kpis.success / generations) * 100;
   const failRate = generations === 0 ? 0 : (data!.kpis.failed / generations) * 100;
-  const dayCredits = data?.days.reduce((sum, day) => sum + day.credits, 0) ?? 0;
+  const dayUsd = data?.days.reduce((sum, day) => sum + day.usd, 0) ?? 0;
   const columns = data?.isSuperadmin ? 8 : 7;
 
   return (
@@ -99,8 +97,8 @@ export function UsagePanel() {
           <h1>Usage</h1>
           <p className="ohf-usage-lead">
             {data?.isSuperadmin
-              ? "Credits and generation logs for every account. 1 credit = $0.01."
-              : "Credits and generation logs for your account. 1 credit = $0.01."}
+              ? "Spend and generation logs for every account, shown in USD."
+              : "Spend and generation logs for your account, shown in USD."}
           </p>
         </div>
         <div className="ohf-usage-actions">
@@ -195,7 +193,7 @@ export function UsagePanel() {
       {data && (
         <>
           <section className="ohf-usage-kpis" aria-label="Usage summary">
-            <Kpi label="Credits used" value={formatCount(data.kpis.credits)} note={formatUsd(data.kpis.credits)} tone="gold" />
+            <Kpi label="Spent" value={formatUsageUsd(data.kpis.usd)} note="In this range" tone="gold" />
             <Kpi label="Generations" value={formatCount(data.kpis.generations)} note="In this range" />
             <Kpi
               label="Success"
@@ -218,30 +216,30 @@ export function UsagePanel() {
             <article className="ohf-usage-card">
               <div className="ohf-usage-card-head">
                 <div>
-                  <h2>Credits per day</h2>
-                  <p>Successful credits across the selected dates.</p>
+                  <h2>Spend per day</h2>
+                  <p>Successful spend across the selected dates.</p>
                 </div>
               </div>
               {data.days.length === 0 ? (
                 <p className="ohf-usage-empty">No usage in this range.</p>
               ) : (
-                <div className="ohf-usage-bars" aria-label="Credits per day">
+                <div className="ohf-usage-bars" aria-label="Spend per day">
                   {data.days.map((day) => (
-                    <div key={day.day} className="ohf-usage-bar" title={`${day.day}: ${formatCount(day.credits)} credits`}>
-                      <span style={{ height: `${Math.max(4, (day.credits / maxCredits) * 100)}%` }} />
+                    <div key={day.day} className="ohf-usage-bar" title={`${day.day}: ${formatUsageUsd(day.usd)}`}>
+                      <span style={{ height: `${Math.max(4, (day.usd / maxUsd) * 100)}%` }} />
                       <em>{day.day.slice(8)}</em>
                     </div>
                   ))}
                 </div>
               )}
-              <p className="ohf-usage-footnote">Daily total {formatCount(dayCredits)} credits</p>
+              <p className="ohf-usage-footnote">Daily total {formatUsageUsd(dayUsd)}</p>
             </article>
             {data.isSuperadmin && (
               <article className="ohf-usage-card">
                 <div className="ohf-usage-card-head">
                   <div>
                     <h2>Top users</h2>
-                    <p>Ranked by credits in this range.</p>
+                    <p>Ranked by spend in this range.</p>
                   </div>
                 </div>
                 {data.topUsers.length === 0 ? (
@@ -253,7 +251,7 @@ export function UsagePanel() {
                         <span className="ohf-usage-rank">{index + 1}</span>
                         <strong>{user.username}</strong>
                         <span>
-                          {formatCount(user.credits)} cr · {formatCount(user.generations)}
+                          {formatUsageUsd(user.usd)} · {formatCount(user.generations)}
                         </span>
                       </li>
                     ))}
@@ -282,7 +280,7 @@ export function UsagePanel() {
                     <th>Model</th>
                     <th>Type</th>
                     <th>Spec</th>
-                    <th>Credits</th>
+                    <th>USD</th>
                     <th>Status</th>
                     <th>Request</th>
                   </tr>
@@ -333,7 +331,7 @@ function LogRow({ row, showUser }: { row: UsageRow; showUser: boolean }) {
       <td>{row.modelId}</td>
       <td className="ohf-usage-kind">{row.kind}</td>
       <td>{row.spec || "—"}</td>
-      <td className="ohf-usage-mono">{formatCount(row.credits)}</td>
+      <td className="ohf-usage-mono">{formatUsageUsd(rowUsd(row))}</td>
       <td>
         <span className="ohf-usage-status" data-status={row.status}>
           {row.status}
@@ -350,8 +348,30 @@ function formatCount(value: number): string {
   return new Intl.NumberFormat("id-ID").format(value);
 }
 
-function formatUsd(credits: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(credits * 0.01);
+function rowUsd(row: UsageRow): number {
+  return row.costUsd != null ? row.costUsd : row.credits * 0.01;
+}
+
+function formatUsageUsd(amount: number): string {
+  if (!Number.isFinite(amount) || amount === 0) return "$0.00";
+  const sign = amount < 0 ? "-" : "";
+  const abs = Math.abs(amount);
+  if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`;
+  return `${sign}$${plainUsd(abs)}`;
+}
+
+function plainUsd(amount: number): string {
+  const precise = amount.toPrecision(12);
+  const trimmed = (value: string) => value.replace(/0+$/, "").replace(/\.$/, "");
+  if (!/[eE]/.test(precise)) return trimmed(precise);
+  const [coeff, expRaw] = precise.toLowerCase().split("e");
+  const exp = Number(expRaw);
+  const digits = coeff.replace(".", "");
+  const dot = coeff.indexOf(".");
+  const point = (dot < 0 ? digits.length : dot) + exp;
+  if (point <= 0) return trimmed(`0.${"0".repeat(-point)}${digits}`);
+  if (point >= digits.length) return trimmed(digits + "0".repeat(point - digits.length));
+  return trimmed(`${digits.slice(0, point)}.${digits.slice(point)}`);
 }
 
 function formatTime(value: string): string {
