@@ -3671,6 +3671,12 @@ a.ohf-btn-solid {
   }
 }
 @media (max-width: 640px) {
+  .ohf-tile-caption {
+    display: none;
+  }
+  .ohf-tile-act:not(.ohf-tile-act--save) {
+    display: none;
+  }
   .ohf-topbar {
     width: 100%;
     box-sizing: border-box;

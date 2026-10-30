@@ -343,7 +343,7 @@ const Tile = memo(function Tile({
         )}
         <button
           type="button"
-          className="ohf-tile-act"
+          className="ohf-tile-act ohf-tile-act--save"
           data-on={saved}
           data-beat={beat || undefined}
           aria-pressed={saved}
