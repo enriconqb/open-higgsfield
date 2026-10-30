@@ -113,7 +113,7 @@ export function ChangePasswordForm() {
         {busy ? "Updating…" : "Change password"}
       </button>
       <p className="ohf-auth-foot">
-        <Link href="/tokens">API tokens</Link> · <Link href="/">Back to studio</Link>
+        <Link href="/">Back to studio</Link>
       </p>
     </form>
   );

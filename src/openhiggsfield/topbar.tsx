@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PublicUser } from "@/auth/types";
 
 import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
+import { ApiTokensPanel } from "./api-tokens-panel";
 import { ModelAdminPanel } from "./model-admin-panel";
 import { TemplatesPanel } from "./templates-panel";
 import { AssetsIcon, CompareIcon, HeartIcon, ImageIcon, KeyIcon, TimelineIcon, UserIcon, VideoIcon } from "./icons";
@@ -40,7 +41,7 @@ export function Topbar({
   const menuRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [studioDialog, setStudioDialog] = useState<"models" | "templates" | null>(null);
+  const [studioDialog, setStudioDialog] = useState<"models" | "templates" | "tokens" | null>(null);
   const closeStudioDialog = useCallback(() => setStudioDialog(null), []);
 
   /* The indicator is measured rather than derived from equal columns, so it
@@ -183,9 +184,17 @@ export function Topbar({
                   <Link href="/profile" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                     Profile
                   </Link>
-                  <Link href="/tokens" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="ohf-user-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setStudioDialog("tokens");
+                    }}
+                  >
                     API tokens
-                  </Link>
+                  </button>
                   <Link href="/account" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                     Change password
                   </Link>
@@ -245,6 +254,7 @@ export function Topbar({
       </div>
       {studioDialog === "models" && <ModelAdminPanel onClose={closeStudioDialog} />}
       {studioDialog === "templates" && <TemplatesPanel onClose={closeStudioDialog} />}
+      {studioDialog === "tokens" && <ApiTokensPanel onClose={closeStudioDialog} />}
     </div>
   );
 }

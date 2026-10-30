@@ -46,8 +46,6 @@ export function ProfilePanel() {
         </div>
       </dl>
       <p className="ohf-auth-foot">
-        <Link href="/tokens">API tokens</Link>
-        {" · "}
         <Link href="/account">Change password</Link>
         {" · "}
         <Link href="/">Back to studio</Link>

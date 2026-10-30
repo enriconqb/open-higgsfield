@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { createApiTokenAction, getAuthState, getPublicApiInfo, listApiTokensAction, revokeApiTokenAction } from "@/auth/actions";
 import { configuredBasePath } from "@/base-path";
 import { unwrap } from "@/lib/action-result";
+
+import { CloseIcon } from "./icons";
 
 type TokenView = {
   id: number;
@@ -34,7 +36,8 @@ function when(value: string | null): string {
   return date.toLocaleString();
 }
 
-export function ApiTokensPanel() {
+export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
   const [tokens, setTokens] = useState<TokenView[]>([]);
   const [loading, setLoading] = useState(true);
   const [signedIn, setSignedIn] = useState(true);
@@ -71,6 +74,10 @@ export function ApiTokensPanel() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    ref.current?.showModal();
   }, []);
 
   useEffect(() => {
@@ -133,16 +140,28 @@ export function ApiTokensPanel() {
   }
 
   return (
-    <section className="ohf-tokens">
+    <dialog
+      ref={ref}
+      aria-labelledby="ohf-tokens-title"
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target === ref.current) onClose();
+      }}
+    >
+    <div className="ohf-dialog-panel ohf-manage-panel">
+    <section className="ohf-tokens ohf-manage-body ohf-scroll">
       <div className="ohf-keys-head">
         <div>
-          <div className="ohf-keys-title">API tokens</div>
+          <div id="ohf-tokens-title" className="ohf-keys-title">API tokens</div>
           <p className="ohf-keys-copy">
             A token lets an outside tool — OpenMontage, a script, curl — start generations on your
             account. It spends the platform key saved here, and everything it runs lands in your usage
             page. The token is shown once.
           </p>
         </div>
+        <button type="button" className="ohf-icon-btn" aria-label="Close" onClick={onClose}>
+          <CloseIcon size={13} />
+        </button>
       </div>
 
       {apiBase && (
@@ -309,5 +328,7 @@ export function ApiTokensPanel() {
         )}
       </div>
     </section>
+    </div>
+    </dialog>
   );
 }
