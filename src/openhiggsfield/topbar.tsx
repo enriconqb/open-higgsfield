@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PublicUser } from "@/auth/types";
 
 import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
+import { ModelAdminPanel } from "./model-admin-panel";
+import { TemplatesPanel } from "./templates-panel";
 import { AssetsIcon, CompareIcon, HeartIcon, ImageIcon, KeyIcon, TimelineIcon, UserIcon, VideoIcon } from "./icons";
 
 const VIEW_ICONS: Record<GalleryView, () => React.ReactNode> = {
@@ -38,6 +40,8 @@ export function Topbar({
   const menuRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [studioDialog, setStudioDialog] = useState<"models" | "templates" | null>(null);
+  const closeStudioDialog = useCallback(() => setStudioDialog(null), []);
 
   /* The indicator is measured rather than derived from equal columns, so it
      morphs to each label's real width instead of padding the short ones. */
@@ -188,18 +192,34 @@ export function Topbar({
                   <Link href="/usage" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                     Usage
                   </Link>
-                  <Link href="/templates" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="ohf-user-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setStudioDialog("templates");
+                    }}
+                  >
                     Prompt templates
-                  </Link>
+                  </button>
                   {user.role === "superadmin" && (
                     <Link href="/admin" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                       Users management
                     </Link>
                   )}
                   {user.role === "superadmin" && (
-                    <Link href="/admin/models" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="ohf-user-item"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setStudioDialog("models");
+                      }}
+                    >
                       Model management
-                    </Link>
+                    </button>
                   )}
                   <button
                     type="button"
@@ -223,6 +243,8 @@ export function Topbar({
           </Link>
         )}
       </div>
+      {studioDialog === "models" && <ModelAdminPanel onClose={closeStudioDialog} />}
+      {studioDialog === "templates" && <TemplatesPanel onClose={closeStudioDialog} />}
     </div>
   );
 }

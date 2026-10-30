@@ -501,7 +501,7 @@ export function Composer({
                   }
                 }}
               />
-              <PromptTemplatesButton onApply={(body) => prompt.setText(body)} />
+              <PromptTemplatesButton promptText={prompt.text} onApply={(body) => prompt.setText(body)} />
             </div>
 
             <div className="ohf-composer-row">

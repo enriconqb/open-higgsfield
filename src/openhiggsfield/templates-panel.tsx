@@ -1,17 +1,17 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { getAuthState } from "@/auth/actions";
 import { unwrap } from "@/lib/action-result";
 import { deletePromptTemplate, listPromptTemplates, savePromptTemplate, type PromptTemplate } from "@/prompts/actions";
 
+import { CloseIcon } from "./icons";
+
 type Scope = "mine" | "global";
 
-export function TemplatesPanel() {
-  const router = useRouter();
+export function TemplatesPanel({ onClose }: { onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
   const [templates, setTemplates] = useState<PromptTemplate[] | null>(null);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,13 +22,17 @@ export function TemplatesPanel() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+
+  useEffect(() => {
     let live = true;
     void (async () => {
       try {
         const state = unwrap(await getAuthState());
         if (!live) return;
         if (!state.user) {
-          router.replace("/login");
+          onClose();
           return;
         }
         setIsSuperadmin(state.user.role === "superadmin");
@@ -41,7 +45,7 @@ export function TemplatesPanel() {
     return () => {
       live = false;
     };
-  }, [router]);
+  }, [onClose]);
 
   function resetForm() {
     setTitle("");
@@ -95,21 +99,37 @@ export function TemplatesPanel() {
     }
   }
 
-  if (!templates && !error) {
-    return <p className="ohf-keys-copy">Loading templates…</p>;
-  }
-
   const presets = (templates ?? []).filter((template) => template.scope === "global");
   const mine = (templates ?? []).filter((template) => template.scope === "mine");
 
   return (
-    <div className="ohf-admin">
-      <p className="ohf-keys-copy">
+    <dialog
+      ref={ref}
+      aria-labelledby="ohf-templates-title"
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target === ref.current) onClose();
+      }}
+    >
+      <div className="ohf-dialog-panel ohf-manage-panel">
+        <div className="ohf-keys-head">
+          <div>
+            <div id="ohf-templates-title" className="ohf-keys-title">
+              Prompt templates
+            </div>
+            <p className="ohf-keys-copy">
         {isSuperadmin
           ? "Mine is only for your account. Presets are shared with every user and stay read-only for them."
           : "Templates you save here are only for your account. Shared presets are read-only."}
-      </p>
-      <form className="ohf-admin-create ohf-template-form" onSubmit={(event) => void save(event)}>
+            </p>
+          </div>
+          <button type="button" className="ohf-icon-btn" aria-label="Close" onClick={onClose}>
+            <CloseIcon size={13} />
+          </button>
+        </div>
+        <div className="ohf-manage-body ohf-scroll">
+          {!templates && !error && <p className="ohf-keys-copy">Loading templates…</p>}
+      {templates && <form className="ohf-admin-create ohf-template-form" onSubmit={(event) => void save(event)}>
         <label className="ohf-field">
           <div className="ohf-field-label">Title</div>
           <input className="ohf-input" value={title} required maxLength={120} onChange={(event) => setTitle(event.target.value)} />
@@ -142,18 +162,17 @@ export function TemplatesPanel() {
             </button>
           )}
         </div>
-      </form>
+      </form>}
       {error && (
         <div className="ohf-alert" role="alert">
           <span className="ohf-alert-text">{error}</span>
         </div>
       )}
-      <TemplateList title="Presets" templates={presets} busy={busy} onEdit={edit} onDelete={remove} />
-      <TemplateList title="Mine" templates={mine} busy={busy} onEdit={edit} onDelete={remove} />
-      <p className="ohf-auth-foot">
-        <Link href="/">Back to studio</Link>
-      </p>
-    </div>
+      {templates && <TemplateList title="Presets" templates={presets} busy={busy} onEdit={edit} onDelete={remove} />}
+      {templates && <TemplateList title="Mine" templates={mine} busy={busy} onEdit={edit} onDelete={remove} />}
+        </div>
+      </div>
+    </dialog>
   );
 }
 

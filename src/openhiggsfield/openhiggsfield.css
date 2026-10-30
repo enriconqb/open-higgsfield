@@ -362,6 +362,11 @@
   padding: 12px 20px 0;
   pointer-events: none;
 }
+/* Dialogs mount here, under a bar that ignores clicks outside its own controls.
+   The top layer still inherits that skip unless the dialog opts back in. */
+.ohf-topbar dialog {
+  pointer-events: auto;
+}
 .ohf-bar {
   pointer-events: auto;
   height: 46px;
@@ -3030,6 +3035,14 @@
   width: 420px;
   max-width: calc(100vw - 32px);
 }
+.ohf-manage-panel {
+  width: min(880px, calc(100vw - 32px));
+  max-height: min(82vh, 780px);
+}
+.ohf-manage-body {
+  overflow: auto;
+  padding: 0 16px 16px;
+}
 .ohf-keys-head {
   display: flex;
   align-items: flex-start;
@@ -4056,7 +4069,7 @@ a.ohf-key-link {
 .ohf-template-menu {
   position: absolute;
   right: 0;
-  top: calc(100% + 6px);
+  bottom: calc(100% + 6px);
   z-index: 30;
   width: min(320px, 70vw);
   max-height: 280px;
@@ -4066,6 +4079,44 @@ a.ohf-key-link {
   background: #16181d;
   border: 1px solid #2a2e39;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.ohf-template-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px 6px;
+  color: #8e929e;
+  font-size: 12px;
+}
+
+.ohf-template-add {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: #22252d;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ohf-template-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ohf-template-save {
+  display: flex;
+  gap: 6px;
+  padding: 0 4px 8px;
+}
+
+.ohf-template-save .ohf-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .ohf-template-empty,
