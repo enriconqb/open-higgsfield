@@ -57,6 +57,11 @@ function shortPrompt(prompt: string): string {
 
 const GRID_GAP = 14;
 const COLUMNS = 4;
+
+function columnsFor(width: number): number {
+  if (width > 0 && width < 680) return 2;
+  return COLUMNS;
+}
 /** Every tile is the same 4:3 slot; media is contained so it keeps its own ratio. */
 const CARD_RATIO = 4 / 3;
 
@@ -453,15 +458,16 @@ function VirtualizedGrid({
   onDelete: (item: RunRecord) => void;
 }) {
   const width = useInnerWidth(scrollRef);
+  const columns = columnsFor(width);
   const slots = useMemo(() => slotsOf(runs, items), [runs, items]);
-  const rows = Math.max(1, Math.ceil(slots.length / COLUMNS));
+  const rows = Math.max(1, Math.ceil(slots.length / columns));
 
   const virtualizer = useVirtualizer({
     count: rows,
     getScrollElement: () => scrollRef.current,
     estimateSize: (row) => {
       if (width <= 0) return 240;
-      const col = (width - GRID_GAP * (COLUMNS - 1)) / COLUMNS;
+      const col = (width - GRID_GAP * (columns - 1)) / columns;
       return col / CARD_RATIO + (row === rows - 1 ? 0 : GRID_GAP);
     },
     overscan: 4,
@@ -469,13 +475,13 @@ function VirtualizedGrid({
 
   useEffect(() => {
     virtualizer.measure();
-  }, [width, slots, virtualizer]);
+  }, [width, columns, slots, virtualizer]);
 
   return (
     <div className="ohf-grid-window" style={{ height: virtualizer.getTotalSize() }}>
       {virtualizer.getVirtualItems().map((row) => {
-        const from = row.index * COLUMNS;
-        const slice = slots.slice(from, from + COLUMNS);
+        const from = row.index * columns;
+        const slice = slots.slice(from, from + columns);
         return (
           <div
             key={row.key}
@@ -483,7 +489,7 @@ function VirtualizedGrid({
             data-selecting={selecting}
             style={
               {
-                "--ohf-cols": COLUMNS,
+                "--ohf-cols": columns,
                 transform: `translateY(${row.start}px)`,
               } as CSSProperties
             }

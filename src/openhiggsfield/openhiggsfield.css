@@ -3671,6 +3671,47 @@ a.ohf-btn-solid {
   }
 }
 @media (max-width: 640px) {
+  .ohf-topbar {
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: stretch;
+    gap: 8px;
+    padding: 8px 10px 0;
+  }
+  .ohf-topbar > .ohf-bar:not(.ohf-topbar-actions) {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .ohf-topbar-actions {
+    flex: none;
+  }
+  .ohf-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .ohf-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .ohf-user-panel {
+    max-height: min(70dvh, 420px);
+    overflow: auto;
+  }
+  .ohf dialog:not(.ohf-viewer) {
+    width: 100%;
+    max-width: 100%;
+    margin-top: auto;
+    margin-bottom: 0;
+  }
+  .ohf dialog:not(.ohf-viewer) .ohf-dialog-panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(92dvh, 100%);
+    border-radius: 20px 20px 0 0;
+  }
+  .ohf-dock {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
   /* Narrow enough that a panel spans the column — the anchor stops mattering. */
   .ohf-popover {
     left: 0;
@@ -3709,7 +3750,7 @@ a.ohf-btn-solid {
   }
   .ohf-gallery {
     --ohf-fade: 56px;
-    padding: 64px 14px 8px;
+    padding: 72px 14px 8px;
   }
   .ohf-dock {
     padding-left: 14px;
@@ -3747,10 +3788,19 @@ a.ohf-btn-solid {
     padding: 12px 10px 0;
   }
   .ohf-composer-head {
+    align-items: center;
+    gap: 8px;
     padding: 10px 10px 2px;
   }
+  .ohf-template-open {
+    margin-top: 0;
+  }
   .ohf-composer-row {
+    gap: 8px;
     padding: 2px 10px 10px;
+  }
+  .ohf-controls {
+    gap: 8px;
   }
   .ohf-composer {
     border-radius: 20px;
@@ -3758,7 +3808,7 @@ a.ohf-btn-solid {
   /* Thumb targets, not cursor targets. */
   .ohf-ctl,
   .ohf-batch {
-    height: 42px;
+    height: 44px;
   }
   .ohf-attach {
     width: 38px;
@@ -5513,11 +5563,15 @@ a.ohf-key-link {
 .ohf-cmp-shelf {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 16px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--s1);
+}
+
+.ohf-cmp-shelf-head {
+  flex-shrink: 0;
 }
 
 .ohf-cmp-search {
@@ -5545,8 +5599,9 @@ a.ohf-key-link {
 .ohf-cmp-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 8px;
-  max-height: 232px;
+  gap: 12px;
+  max-height: min(42vh, 360px);
+  padding-bottom: 4px;
   overflow-y: auto;
 }
 
@@ -5579,7 +5634,7 @@ a.ohf-key-link {
 
 @media (max-width: 800px) {
   .ohf-cmp {
-    padding: 68px 16px 20px;
+    padding: 68px 16px calc(28px + env(safe-area-inset-bottom));
   }
 
   .ohf-cmp-thumb {

@@ -25,7 +25,7 @@ export function Compare({ history, ready }: { history: RunRecord[]; ready: boole
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
   const [uploadsReady, setUploadsReady] = useState(false);
   const [pair, setPair] = useState<{ before: string; after: string | null } | null>(null);
-  const [shelf, setShelf] = useState<Shelf | null>(null);
+  const [shelf, setShelf] = useState<Shelf | null>("generations");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
