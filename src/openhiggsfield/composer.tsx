@@ -25,6 +25,7 @@ import { ArrowUpIcon, CaretDownIcon, CloseIcon, MinusIcon, PlusIcon, WarningIcon
 import { MediaStrip, useMediaTray } from "./media-tray";
 import { ModelIcon, modelIconSrc } from "./model-icon";
 import { ModelPicker } from "./model-picker";
+import { PromptTemplatesButton } from "./prompt-templates-button";
 import { SettingPill, SettingPopover } from "./settings";
 
 /* Overlay ids: the two fixed panels, or one setting addressed by its catalog
@@ -500,6 +501,7 @@ export function Composer({
                   }
                 }}
               />
+              <PromptTemplatesButton onApply={(body) => prompt.setText(body)} />
             </div>
 
             <div className="ohf-composer-row">

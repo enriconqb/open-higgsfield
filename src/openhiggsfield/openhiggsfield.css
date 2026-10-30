@@ -2560,13 +2560,19 @@
   min-width: 0;
 }
 .ohf-model-row-name {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.005em;
-  white-space: nowrap;
+}
+.ohf-model-row-name > span:first-child {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* What the model makes, takes and tops out at — derived from its own entry. */
 .ohf-model-row-desc {
@@ -3997,6 +4003,105 @@ a.ohf-key-link {
 
 .ohf-auth-card[data-wide="true"] {
   width: min(1080px, 100%);
+}
+
+.ohf-admin-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.ohf-admin-block-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ohf-template-form {
+  align-items: stretch;
+}
+
+.ohf-template-body {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.ohf-template-preview {
+  max-width: 420px;
+  white-space: pre-wrap;
+}
+
+.ohf-model-mark {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #e5c378;
+  background: rgba(212, 175, 55, 0.16);
+}
+
+.ohf-template-anchor {
+  position: relative;
+  flex: none;
+}
+
+.ohf-template-open {
+  height: 32px;
+  margin-top: 4px;
+}
+
+.ohf-template-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  width: min(320px, 70vw);
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 12px;
+  background: #16181d;
+  border: 1px solid #2a2e39;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.ohf-template-empty,
+.ohf-template-group-title {
+  margin: 0;
+  padding: 6px 8px;
+  color: #8e929e;
+  font-size: 12px;
+}
+
+.ohf-template-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.ohf-template-item span {
+  color: #8e929e;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.ohf-template-item:hover {
+  background: #22252d;
 }
 
 .ohf-usage-page {

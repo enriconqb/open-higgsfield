@@ -1,6 +1,8 @@
 import { requireApiIdentity } from "@/auth/api-auth";
 import { getApiKeyRow } from "@/auth/users";
 import { modelsFor } from "@/generation/catalog";
+import { readModelMarks } from "@/models/actions";
+import { sortModelsByMark, type ModelMark } from "@/models/marks";
 
 import { apiError, jsonOk } from "../_lib/http";
 
@@ -14,7 +16,8 @@ export async function GET(request: Request): Promise<Response> {
     const identity = await requireApiIdentity(request, "read");
     const keyRow = await getApiKeyRow(identity.userId);
     const platform = keyRow?.provider ?? "openrouter";
-    const models = modelsFor(platform);
+    const marks: Partial<Record<string, ModelMark>> = await readModelMarks().catch(() => ({}));
+    const models = sortModelsByMark(modelsFor(platform), marks);
     return jsonOk({
       platform,
       hasPlatformKey: keyRow !== null,
@@ -22,6 +25,7 @@ export async function GET(request: Request): Promise<Response> {
         id: model.id,
         surface: model.surface,
         label: model.label,
+        status: marks[model.id] ?? null,
         media: Object.entries(model.roles).map(([role, max]) => ({ role, max })),
         settings: model.settings,
       })),

@@ -6,6 +6,9 @@ import type { CSSProperties } from "react";
 import { modelsFor } from "@/generation/catalog";
 import type { ModelEntry, Surface } from "@/generation/catalog";
 import type { KeyProvider } from "@/generation/credentials";
+import { unwrap } from "@/lib/action-result";
+import { listModelMarks } from "@/models/actions";
+import { MODEL_MARK_LABELS, sortModelsByMark, type ModelMark } from "@/models/marks";
 
 import { swatchFor } from "./artwork";
 import { SURFACE_LABELS, describeModel } from "./data";
@@ -26,16 +29,33 @@ export function ModelPicker({
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
+  const [marks, setMarks] = useState<Partial<Record<string, ModelMark>>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let live = true;
+    void listModelMarks()
+      .then(unwrap)
+      .then((next) => {
+        if (live) setMarks(next);
+      })
+      .catch(() => {
+        if (live) setMarks({});
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
   const query = search.trim().toLowerCase();
-  const catalog = modelsFor(keyKind === "higgsfield" ? "higgsfield" : "openrouter").filter(
-    (model) => model.surface === surface,
+  const catalog = sortModelsByMark(
+    modelsFor(keyKind === "higgsfield" ? "higgsfield" : "openrouter").filter((model) => model.surface === surface),
+    marks,
   );
   /* The description is searchable too: "references", "4K" and "audio" are how
      a visitor asks for a model whose name they do not remember. */
@@ -136,7 +156,14 @@ export function ModelPicker({
                 </span>
               )}
               <span className="ohf-model-row-text">
-                <span className="ohf-model-row-name">{model.label}</span>
+                <span className="ohf-model-row-name">
+                  <span>{model.label}</span>
+                  {marks[model.id] ? (
+                    <span className="ohf-model-mark" data-mark={marks[model.id]}>
+                      {MODEL_MARK_LABELS[marks[model.id] as ModelMark]}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="ohf-model-row-desc">{describeModel(model)}</span>
               </span>
               <span className="ohf-model-row-check" aria-hidden>

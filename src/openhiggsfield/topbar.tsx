@@ -188,9 +188,17 @@ export function Topbar({
                   <Link href="/usage" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                     Usage
                   </Link>
+                  <Link href="/templates" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                    Prompt templates
+                  </Link>
                   {user.role === "superadmin" && (
                     <Link href="/admin" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                       Users management
+                    </Link>
+                  )}
+                  {user.role === "superadmin" && (
+                    <Link href="/admin/models" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                      Model management
                     </Link>
                   )}
                   <button
