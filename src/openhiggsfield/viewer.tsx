@@ -6,7 +6,10 @@ import { settingLabel, settingValueLabel } from "./data";
 import { fileNameFor, saveFile } from "./download";
 import { timeAgo, type RunRecord } from "./history";
 import { sourcesFor } from "./media-source";
+import { shareableUrl, sharePageUrl } from "./share-link";
 import { formatUsd } from "@/generation/estimate";
+import { unwrap } from "@/lib/action-result";
+import { createShare } from "@/share/actions";
 
 import { ModelIcon } from "./model-icon";
 import {
@@ -14,6 +17,8 @@ import {
   CloseIcon,
   CopyIcon,
   DownloadIcon,
+  FolderIcon,
+  GlobeIcon,
   HeartIcon,
   OpenOutIcon,
   RetryIcon,
@@ -34,6 +39,28 @@ const CREATED = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeSt
 
 /** The shape the media turned out to be, or null while it has none to report —
     a decoded image always has one, a video only once its metadata lands. */
+function storedOnDisk(item: RunRecord): boolean {
+  return [...item.urls, ...(item.remoteUrls ?? [])].some((url) => /\/uploads\/[0-9a-f-]{36}/i.test(url));
+}
+
+function shareFact(item: RunRecord): { model: string; ratio: string; size: string } {
+  const settings = item.settings ?? {};
+  let size = "";
+  for (const key of ["resolution", "quality", "size"] as const) {
+    const value = settings[key];
+    if (typeof value === "string" || typeof value === "number") {
+      size = settingValueLabel(key, value);
+      if (size.trim()) break;
+    }
+  }
+  if (!size.trim()) size = item.meta;
+  return {
+    model: item.modelLabel,
+    ratio: item.ratio.replace(/\s*\/\s*/, ":"),
+    size,
+  };
+}
+
 function shapeOf(media: HTMLImageElement | HTMLVideoElement): number | null {
   const [width, height] =
     media instanceof HTMLVideoElement
@@ -50,6 +77,7 @@ export function Viewer({
   onDelete,
   onPrev,
   onNext,
+  showStorage = false,
 }: {
   item: RunRecord;
   onClose: () => void;
@@ -59,11 +87,13 @@ export function Viewer({
   /* Absent at the ends of the scope, which is how the walk stops. */
   onPrev?: () => void;
   onNext?: () => void;
+  showStorage?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [closing, setClosing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState<"idle" | "busy" | "done" | "error">("idle");
   /* What the exit was for. Captured at the click so a re-render mid-flight
      cannot swap the action out from under it. */
   const after = useRef(onClose);
@@ -107,6 +137,23 @@ export function Viewer({
     );
   }, [item.prompt]);
 
+  const shareResult = useCallback(() => {
+    const url = shareableUrl(item.urls, item.remoteUrls);
+    if (!url) {
+      setShared("error");
+      return;
+    }
+    setShared("busy");
+    void createShare({
+      kind: item.kind,
+      clips: [{ kind: item.kind, url, ...shareFact(item) }],
+    })
+      .then(unwrap)
+      .then((created) => navigator.clipboard.writeText(sharePageUrl(created.token)))
+      .then(() => setShared("done"))
+      .catch(() => setShared("error"));
+  }, [item]);
+
   /* The result is served from the platform's own CDN, so `download` on an
      anchor is ignored and a plain click opens a tab instead of saving. The
      bytes are read first and handed over as a blob; the href stays the file
@@ -133,6 +180,7 @@ export function Viewer({
   if (shown !== item.id) {
     setShown(item.id);
     setDelivered(null);
+    setShared("idle");
     setCopied(false);
     setOnFallback(false);
   }
@@ -286,6 +334,15 @@ export function Viewer({
                   <dt>Model</dt>
                   <dd>{item.modelLabel}</dd>
                 </div>
+                {showStorage && (
+                  <div className="ohf-viewer-fact">
+                    <dt>Storage</dt>
+                    <dd className="ohf-viewer-storage">
+                      {storedOnDisk(item) ? <FolderIcon size={14} /> : <GlobeIcon size={14} />}
+                      {storedOnDisk(item) ? "Disk" : "CDN"}
+                    </dd>
+                  </div>
+                )}
                 {facts.map(([label, value]) => (
                   <div className="ohf-viewer-fact" key={label}>
                     <dt>{label}</dt>
@@ -327,6 +384,14 @@ export function Viewer({
               </p>
             )}
             <div className="ohf-viewer-foot-row">
+              <button
+                type="button"
+                className="ohf-btn-solid"
+                disabled={shared === "busy"}
+                onClick={shareResult}
+              >
+                {shared === "done" ? "Link copied" : shared === "error" ? "Cannot share" : shared === "busy" ? "Sharing…" : "Share"}
+              </button>
               {url && (
                 <a
                   className="ohf-btn-solid ohf-viewer-download"

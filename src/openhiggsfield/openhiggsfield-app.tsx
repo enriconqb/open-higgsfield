@@ -866,6 +866,7 @@ function persistLocal(records: RunRecord[]) {
               setViewerId(null);
               deleteRun(viewerItem);
             }}
+            showStorage={user?.role === "superadmin"}
           />
         )}
         {keysOpen && (

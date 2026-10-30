@@ -212,6 +212,14 @@ export function PlayIcon({ size = 18 }: IconProps) {
   );
 }
 
+export function StopIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="4.2" y="4.2" width="7.6" height="7.6" rx="1.2" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function PlayBadgeIcon({ size = 9 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
@@ -368,11 +376,54 @@ export function ZoomOutIcon({ size = 14 }: IconProps) {
   );
 }
 
+export function FolderIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M2 4.2h4l1.2 1.4H14v6.8a1.2 1.2 0 0 1-1.2 1.2H3.2A1.2 1.2 0 0 1 2 12.4Z" />
+    </svg>
+  );
+}
+
+export function GlobeIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="8" cy="8" r="5.75" />
+      <path d="M2.4 8h11.2M8 2.3c1.6 1.7 2.4 3.6 2.4 5.7S9.6 12 8 13.7C6.4 12 5.6 10.1 5.6 8S6.4 4 8 2.3Z" />
+    </svg>
+  );
+}
+
 export function PauseIcon({ size = 18 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
       <rect x="4.3" y="3.2" width="2.6" height="9.6" rx="0.9" fill="currentColor" />
       <rect x="9.1" y="3.2" width="2.6" height="9.6" rx="0.9" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function VolumeIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M2.4 6.2h2.2L8 3.4v9.2L4.6 9.8H2.4z" />
+      <path d="M10.2 6.1a2.6 2.6 0 0 1 0 3.8M11.8 4.6a4.6 4.6 0 0 1 0 6.8" />
+    </svg>
+  );
+}
+
+export function VolumeOffIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M2.4 6.2h2.2L8 3.4v9.2L4.6 9.8H2.4z" />
+      <path d="M11 6.2 14 9.2M14 6.2 11 9.2" />
+    </svg>
+  );
+}
+
+export function AiIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <path d="M8 1.6 9.2 6 13.6 8 9.2 10 8 14.4 6.8 10 2.4 8 6.8 6Z" fill="currentColor" />
     </svg>
   );
 }

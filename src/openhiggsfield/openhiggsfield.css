@@ -3881,6 +3881,273 @@ a.ohf-btn-solid {
 
 /* ---------- auth / admin ---------- */
 
+.ohf-share {
+  --bg: #0a0a0b;
+  --tx: #edefef;
+  --tx2: #a8aeaf;
+  --accent: #7b88ff;
+  --line: rgba(255, 255, 255, 0.08);
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--tx);
+  font-family: var(--font-ui, Inter, system-ui, sans-serif);
+}
+
+.ohf-share-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  min-width: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.ohf-share-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+
+.ohf-share-frame {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: center;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+
+.ohf-share-fit {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
+
+.ohf-share-stage {
+  position: relative;
+  box-sizing: border-box;
+  width: min(100cqw, calc(100cqh * 16 / 9), 1100px);
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ohf-share-stage .ohf-tl-stage {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
+  margin: 0;
+  pointer-events: none;
+}
+
+.ohf-share-still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.ohf-share-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ohf-share-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--tx);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.ohf-share-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 28px 10px 12px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.92));
+}
+
+.ohf-share-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tx);
+  cursor: pointer;
+}
+
+.ohf-share-time {
+  flex: none;
+  min-width: 36px;
+  color: var(--tx);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.ohf-share-time--end {
+  color: var(--tx2);
+  text-align: right;
+}
+
+.ohf-share-segs {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ohf-share-seg {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.ohf-share-seg span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.ohf-share-seg[aria-current="true"] {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.ohf-share-ai {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(10, 10, 11, 0.72);
+  color: var(--tx);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.ohf-share-ai span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ohf-share-volume {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ohf-share-volume-range {
+  width: 72px;
+  height: 4px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.ohf-share-facts {
+  display: flex;
+  flex: none;
+  gap: 8px 16px;
+  width: min(100%, 1100px);
+  min-width: 0;
+  margin: 10px 0 0;
+  overflow: hidden;
+  color: var(--tx2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.ohf-share-facts span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ohf-viewer-storage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .ohf-auth-page {
   min-height: 100dvh;
   display: grid;

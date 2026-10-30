@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { withBasePath } from "@/base-path";
+import { unwrap } from "@/lib/action-result";
+import { createShare } from "@/share/actions";
 
 import { defaultKv } from "./idb";
 import type { RunRecord } from "./history";
 import { CheckIcon, CloseIcon, PlayBadgeIcon } from "./icons";
+import { sharePageUrl } from "./share-link";
 import { TimelinePlayer } from "./timeline-player";
 import { loadUploads, type UploadRecord } from "./uploads";
 
@@ -31,6 +34,7 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
   const [durations, setDurations] = useState<Record<string, number>>({});
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
+  const [shared, setShared] = useState<"idle" | "busy" | "done" | "error">("idle");
 
   useEffect(() => {
     let live = true;
@@ -158,6 +162,24 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
             />
             <button type="button" className="ohf-tl-play" onClick={() => setPlaying((on) => !on)}>
               {playing ? "Pause" : "Play"}
+            </button>
+            <button
+              type="button"
+              className="ohf-tl-play"
+              disabled={clips.length === 0 || shared === "busy"}
+              onClick={() => {
+                setShared("busy");
+                void createShare({
+                  kind: "timeline",
+                  clips: clips.map((clip) => ({ kind: "video" as const, url: clip.url })),
+                })
+                  .then(unwrap)
+                  .then((created) => navigator.clipboard.writeText(sharePageUrl(created.token)))
+                  .then(() => setShared("done"))
+                  .catch(() => setShared("error"));
+              }}
+            >
+              {shared === "done" ? "Link copied" : shared === "error" ? "Cannot share" : shared === "busy" ? "Sharing…" : "Share"}
             </button>
             </div>
             <div className="ohf-tl-bar" role="group" aria-label="Sequence progress">
