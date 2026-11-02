@@ -24,13 +24,22 @@ function TempVideo({ primary, fallback }: { primary: string; fallback: string | 
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
+    const root = video.closest<HTMLElement>(".ohf-manage-body");
+    const box = video.getBoundingClientRect();
+    const limit = root?.getBoundingClientRect();
+    const top = (limit?.top ?? 0) - 200;
+    const bottom = (limit?.bottom ?? window.innerHeight) + 200;
+    if (box.bottom >= top && box.top <= bottom) {
+      setSource(primary);
+      return;
+    }
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries.some((entry) => entry.isIntersecting)) return;
         setSource(primary);
         observer.disconnect();
       },
-      { rootMargin: "200px" },
+      { root, rootMargin: "200px" },
     );
     observer.observe(video);
     return () => observer.disconnect();
