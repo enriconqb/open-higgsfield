@@ -25,6 +25,7 @@ import { Compare } from "./compare";
 import { Composer } from "./composer";
 import { fileNameFor, saveFile } from "./download";
 import { KeyModal } from "./key-modal";
+import { TempPanel } from "./temp-panel";
 import {
   CROSS_VIEWS,
   PANEL_VIEWS,
@@ -201,6 +202,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   /* Deleting drops the only copy of a run — the platform's result URLs are not
      re-derivable — so the records are held aside until the bar times out. */
   const [deleted, setDeleted] = useState<RunRecord[] | null>(null);
+  const [tempOpen, setTempOpen] = useState(false);
   /* Picked runs, in the order they were picked: the count stack shows the most
      recent sheets on top, and a range extends from the last one touched. */
   const [selected, setSelected] = useState<string[]>([]);
@@ -578,16 +580,21 @@ function persistLocal(records: RunRecord[]) {
 
   /* History is newest-first by construction, so the restored runs drop back
      into their own places rather than onto the top of the grid. */
-  const restoreDeleted = useCallback(() => {
-    if (!deleted) return;
+  const restoreRecords = useCallback((records: RunRecord[]) => {
+    if (records.length === 0) return;
     setHistory((prev) => {
       const here = new Set(prev.map((entry) => entry.id));
-      const back = deleted.filter((entry) => !here.has(entry.id));
+      const back = records.filter((entry) => !here.has(entry.id));
       if (back.length === 0) return prev;
       return [...prev, ...back].sort((a, b) => b.createdAt - a.createdAt);
     });
+  }, []);
+
+  const restoreDeleted = useCallback(() => {
+    if (!deleted) return;
+    restoreRecords(deleted);
     setDeleted(null);
-  }, [deleted]);
+  }, [deleted, restoreRecords]);
 
   useEffect(() => {
     if (!deleted) return;
@@ -792,6 +799,13 @@ function persistLocal(records: RunRecord[]) {
                 setKeysOpen(false);
               });
             }}
+            onTemp={() => {
+              if (!user) {
+                window.location.href = apiUrl("/login");
+                return;
+              }
+              setTempOpen(true);
+            }}
           />
 
           {view === "timeline" ? (
@@ -869,6 +883,12 @@ function persistLocal(records: RunRecord[]) {
             showStorage={user?.role === "superadmin"}
           />
         )}
+        {tempOpen && (
+          <TempPanel
+            onClose={() => setTempOpen(false)}
+            onRestore={restoreRecords}
+          />
+        )}
         {keysOpen && (
           <KeyModal
             configured={keyConfigured}
@@ -921,7 +941,7 @@ function UndoBar({
         style={{ animationDuration: `${UNDO_MS}ms` }}
         aria-hidden
       />
-      <span className="ohf-undo-text">{`Deleted ${subject}`}</span>
+      <span className="ohf-undo-text">{`Moved ${subject} to Temp`}</span>
       <button type="button" className="ohf-undo-act" onClick={onUndo}>
         <UndoIcon />
         Undo

@@ -5,8 +5,10 @@ import { getPool, queryRows } from "@/db/client";
 import { capHistory, isRunRecord, type RunRecord } from "@/openhiggsfield/history";
 
 import { archiveRunRecord } from "./archive-media";
+import { purgeGalleryTrashFor, TRASH_DAYS } from "./gallery-trash";
 
 type ResultRow = RowDataPacket & {
+  client_id?: string;
   payload: unknown;
 };
 
@@ -37,9 +39,32 @@ export async function replaceGenerationResults(records: RunRecord[]): Promise<Ru
 export async function replaceGenerationResultsFor(userId: number, records: RunRecord[]): Promise<RunRecord[]> {
   const incoming = capHistory(records.filter(isRunRecord));
   const next = await Promise.all(incoming.map((record) => archiveRunRecord(userId, record)));
+  const kept = new Set(
+    next.filter((record) => record.via !== "api").map((record) => record.id.slice(0, 191)),
+  );
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
+    const [existing] = await connection.query<ResultRow[]>(
+      `SELECT client_id, payload FROM generation_results WHERE user_id = ? AND client_id NOT LIKE '%#api'`,
+      [userId],
+    );
+    for (const row of existing) {
+      if (!row.client_id || kept.has(row.client_id)) continue;
+      await connection.query(
+        `INSERT INTO gallery_trash (user_id, client_id, payload, deleted_at, expires_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${TRASH_DAYS} DAY))
+         ON DUPLICATE KEY UPDATE payload = VALUES(payload)`,
+        [userId, row.client_id, JSON.stringify(parsePayload(row.payload) ?? row.payload)],
+      );
+    }
+    if (kept.size > 0) {
+      const marks = [...kept].map(() => "?").join(", ");
+      await connection.query(
+        `DELETE FROM gallery_trash WHERE user_id = ? AND client_id IN (${marks})`,
+        [userId, ...kept],
+      );
+    }
     await connection.query(`DELETE FROM generation_results WHERE user_id = ? AND client_id NOT LIKE '%#api'`, [
       userId,
     ]);
@@ -58,6 +83,7 @@ export async function replaceGenerationResultsFor(userId: number, records: RunRe
   } finally {
     connection.release();
   }
+  await purgeGalleryTrashFor(userId, { reason: "expired" });
   return next;
 }
 

@@ -9,7 +9,7 @@ import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
 import { ApiTokensPanel } from "./api-tokens-panel";
 import { ModelAdminPanel } from "./model-admin-panel";
 import { TemplatesPanel } from "./templates-panel";
-import { AssetsIcon, CompareIcon, HeartIcon, ImageIcon, KeyIcon, TimelineIcon, UserIcon, VideoIcon } from "./icons";
+import { AssetsIcon, CompareIcon, HeartIcon, ImageIcon, KeyIcon, TimelineIcon, TrashIcon, UserIcon, VideoIcon } from "./icons";
 
 const VIEW_ICONS: Record<GalleryView, () => React.ReactNode> = {
   image: () => <ImageIcon />,
@@ -28,6 +28,7 @@ export function Topbar({
   onKeys,
   user,
   onLogout,
+  onTemp,
 }: {
   view: GalleryView;
   onView: (next: GalleryView) => void;
@@ -36,6 +37,7 @@ export function Topbar({
   onKeys: () => void;
   user: PublicUser | null;
   onLogout: () => void;
+  onTemp: () => void;
 }) {
   const tabsRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -167,6 +169,10 @@ export function Topbar({
               <KeyIcon />
               <span className="ohf-key-text">{keyConfigured ? "Your key" : "Add key"}</span>
               <span className="ohf-lamp" />
+            </button>
+            <button type="button" className="ohf-key" onClick={onTemp} aria-label="Temp" title="Temp">
+              <TrashIcon />
+              <span className="ohf-key-text">Temp</span>
             </button>
             <div className="ohf-user-menu" ref={menuRef}>
               <button
