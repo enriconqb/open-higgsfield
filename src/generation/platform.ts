@@ -1,6 +1,7 @@
 import { withBasePath } from "@/base-path";
 
 import { toAuthorizationHeader } from "./credentials";
+import { openRouterFetch } from "./openrouter-fetch";
 
 const DEFAULT_BASE = "https://openrouter.ai/api/v1";
 
@@ -118,7 +119,7 @@ export function openRouterBaseUrl(): string {
 
 export function createPlatformClient(options: PlatformClientOptions) {
   const baseUrl = (options.baseUrl || openRouterBaseUrl()).replace(/\/$/, "");
-  const fetchImpl = options.fetch ?? fetch;
+  const fetchImpl = options.fetch ?? openRouterFetch;
   const auth = toAuthorizationHeader(options.apiKey, "openrouter");
 
   async function send(method: "GET" | "POST", path: string, body?: Record<string, unknown>) {

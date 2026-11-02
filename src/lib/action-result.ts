@@ -66,6 +66,9 @@ function publicMessage(caught: unknown): string {
   if (!(caught instanceof Error)) return GENERIC_ACTION_ERROR;
   const message = caught.message.replace(/\s+/g, " ").trim();
   if (!message) return GENERIC_ACTION_ERROR;
+  /* The code in parentheses is the network failure the studio has to show.
+     Infrastructure patterns would otherwise hide ETIMEDOUT and ENOTFOUND. */
+  if (message.startsWith("fetch failed")) return message;
   if (INFRASTRUCTURE.some((pattern) => pattern.test(message))) return GENERIC_ACTION_ERROR;
   /* Framework errors carry a digest and are not ours to phrase. */
   const digest = (caught as { digest?: unknown }).digest;

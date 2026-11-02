@@ -11,6 +11,7 @@ import type { ImagePriceLine, OpenRouterQuote } from "./estimate";
 import { skuUsd } from "./estimate";
 import { ensureArchivedUrl } from "./archive-media";
 import { inlineLocalMedia } from "./local-upload";
+import { openRouterFetch } from "./openrouter-fetch";
 import {
   createHiggsfieldClient,
   createPlatformClient,
@@ -234,7 +235,7 @@ async function openRouterJson(
   credentials: { apiKey: string; baseUrl: string },
   path: string,
 ): Promise<unknown> {
-  const response = await fetch(`${credentials.baseUrl}${path}`, {
+  const response = await openRouterFetch(`${credentials.baseUrl}${path}`, {
     headers: { Authorization: `Bearer ${credentials.apiKey}` },
   });
   if (!response.ok) return null;
