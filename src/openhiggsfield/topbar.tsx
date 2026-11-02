@@ -9,7 +9,22 @@ import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
 import { ApiTokensPanel } from "./api-tokens-panel";
 import { ModelAdminPanel } from "./model-admin-panel";
 import { TemplatesPanel } from "./templates-panel";
-import { AssetsIcon, CompareIcon, HeartIcon, ImageIcon, KeyIcon, TimelineIcon, TrashIcon, UserIcon, VideoIcon } from "./icons";
+import {
+  AssetsIcon,
+  ClockIcon,
+  CompareIcon,
+  FormatIcon,
+  HeartIcon,
+  ImageIcon,
+  KeyIcon,
+  LockIcon,
+  OpenOutIcon,
+  SlidersIcon,
+  TimelineIcon,
+  TrashIcon,
+  UserIcon,
+  VideoIcon,
+} from "./icons";
 
 const VIEW_ICONS: Record<GalleryView, () => React.ReactNode> = {
   image: () => <ImageIcon />,
@@ -170,10 +185,6 @@ export function Topbar({
               <span className="ohf-key-text">{keyConfigured ? "Your key" : "Add key"}</span>
               <span className="ohf-lamp" />
             </button>
-            <button type="button" className="ohf-key" onClick={onTemp} aria-label="Temp" title="Temp">
-              <TrashIcon />
-              <span className="ohf-key-text">Temp</span>
-            </button>
             <div className="ohf-user-menu" ref={menuRef}>
               <button
                 type="button"
@@ -188,8 +199,21 @@ export function Topbar({
               {menuOpen && (
                 <div className="ohf-user-panel" role="menu">
                   <Link href="/profile" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                    <UserIcon size={15} />
                     Profile
                   </Link>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="ohf-user-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onTemp();
+                    }}
+                  >
+                    <TrashIcon size={15} />
+                    Temp
+                  </button>
                   <button
                     type="button"
                     role="menuitem"
@@ -199,12 +223,15 @@ export function Topbar({
                       setStudioDialog("tokens");
                     }}
                   >
+                    <KeyIcon size={15} />
                     API tokens
                   </button>
                   <Link href="/account" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                    <LockIcon size={15} />
                     Change password
                   </Link>
                   <Link href="/usage" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                    <ClockIcon size={15} />
                     Usage
                   </Link>
                   <button
@@ -216,10 +243,12 @@ export function Topbar({
                       setStudioDialog("templates");
                     }}
                   >
+                    <FormatIcon size={15} />
                     Prompt templates
                   </button>
                   {user.role === "superadmin" && (
                     <Link href="/admin" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                      <AssetsIcon size={15} />
                       Users management
                     </Link>
                   )}
@@ -233,18 +262,20 @@ export function Topbar({
                         setStudioDialog("models");
                       }}
                     >
+                      <SlidersIcon size={15} />
                       Model management
                     </button>
                   )}
                   <button
                     type="button"
                     role="menuitem"
-                    className="ohf-user-item"
+                    className="ohf-user-item ohf-user-item--split"
                     onClick={() => {
                       setMenuOpen(false);
                       onLogout();
                     }}
                   >
+                    <OpenOutIcon size={15} />
                     Sign out
                   </button>
                 </div>

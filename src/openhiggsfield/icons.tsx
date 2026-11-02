@@ -80,6 +80,15 @@ export function KeyIcon({ size = 15 }: IconProps) {
   );
 }
 
+export function LockIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <rect x="3.25" y="7.1" width="9.5" height="6.7" rx="1.6" />
+      <path d="M5.4 7.1V5.1a2.6 2.6 0 0 1 5.2 0v2" />
+    </svg>
+  );
+}
+
 export function UserIcon({ size = 15 }: IconProps) {
   return (
     <svg {...base(size)}>

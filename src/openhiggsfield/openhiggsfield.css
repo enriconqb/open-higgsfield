@@ -4257,7 +4257,9 @@ a.ohf-btn-solid {
 }
 
 .ohf-user-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 8px 10px;
   border: 0;
@@ -4268,6 +4270,13 @@ a.ohf-btn-solid {
   text-decoration: none;
   font: inherit;
   cursor: pointer;
+}
+.ohf-user-item--split {
+  margin-top: 6px;
+  border-top: 1px solid var(--line-1, rgba(255, 255, 255, 0.08));
+  border-radius: 0 0 10px 10px;
+  padding-top: 12px;
+  color: #ff4d4f;
 }
 
 .ohf-user-item:hover {
