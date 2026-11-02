@@ -94,6 +94,7 @@ export function Viewer({
   const [closing, setClosing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [shareNote, setShareNote] = useState("");
   /* What the exit was for. Captured at the click so a re-render mid-flight
      cannot swap the action out from under it. */
   const after = useRef(onClose);
@@ -138,11 +139,16 @@ export function Viewer({
   }, [item.prompt]);
 
   const shareResult = useCallback(() => {
-    const url = shareableUrl(item.urls, item.remoteUrls);
+    const url =
+      shareableUrl(item.urls, item.remoteUrls) ||
+      item.urls.find((candidate) => candidate.trim().startsWith("data:image/")) ||
+      "";
     if (!url) {
+      setShareNote("");
       setShared("error");
       return;
     }
+    setShareNote("");
     setShared("busy");
     void createShare({
       kind: item.kind,
@@ -151,7 +157,11 @@ export function Viewer({
       .then(unwrap)
       .then((created) => navigator.clipboard.writeText(sharePageUrl(created.token)))
       .then(() => setShared("done"))
-      .catch(() => setShared("error"));
+      .catch((caught) => {
+        const message = caught instanceof Error ? caught.message.trim() : "";
+        setShareNote(message && message !== "Cannot share" ? message : "");
+        setShared("error");
+      });
   }, [item]);
 
   /* The result is served from the platform's own CDN, so `download` on an
@@ -181,6 +191,7 @@ export function Viewer({
     setShown(item.id);
     setDelivered(null);
     setShared("idle");
+    setShareNote("");
     setCopied(false);
     setOnFallback(false);
   }
@@ -390,7 +401,13 @@ export function Viewer({
                 disabled={shared === "busy"}
                 onClick={shareResult}
               >
-                {shared === "done" ? "Link copied" : shared === "error" ? "Cannot share" : shared === "busy" ? "Sharing…" : "Share"}
+                {shared === "done"
+                  ? "Link copied"
+                  : shared === "error"
+                    ? shareNote || "Cannot share"
+                    : shared === "busy"
+                      ? "Sharing…"
+                      : "Share"}
               </button>
               {url && (
                 <a

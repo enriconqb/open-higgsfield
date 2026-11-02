@@ -420,6 +420,22 @@ export function VolumeIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function FullscreenIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M6 2.5H3.2A.7.7 0 0 0 2.5 3.2V6M10 2.5h2.8a.7.7 0 0 1 .7.7V6M6 13.5H3.2a.7.7 0 0 1-.7-.7V10M10 13.5h2.8a.7.7 0 0 0 .7-.7V10" />
+    </svg>
+  );
+}
+
+export function FullscreenExitIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M6.2 2.6v2.9a.7.7 0 0 1-.7.7H2.6M9.8 2.6v2.9c0 .4.3.7.7.7h2.9M6.2 13.4v-2.9a.7.7 0 0 0-.7-.7H2.6M9.8 13.4v-2.9c0-.4.3-.7.7-.7h2.9" />
+    </svg>
+  );
+}
+
 export function VolumeOffIcon({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>

@@ -3981,6 +3981,16 @@ a.ohf-btn-solid {
   place-items: center;
 }
 
+.ohf-share-stage:fullscreen,
+.ohf-share-stage:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+}
+
 .ohf-share-stage {
   position: relative;
   box-sizing: border-box;

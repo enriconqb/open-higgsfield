@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { withBasePath } from "@/base-path";
 import type { ShareFact, ShareKind } from "@/share/types";
 
-import { AiIcon, PlayIcon, StopIcon, VolumeIcon, VolumeOffIcon } from "./icons";
+import { AiIcon, FullscreenExitIcon, FullscreenIcon, PlayIcon, StopIcon, VolumeIcon, VolumeOffIcon } from "./icons";
 import { TimelinePlayer } from "./timeline-player";
 
 function clock(seconds: number): string {
@@ -38,6 +38,9 @@ export function SharePreview({
   const [volume, setVolume] = useState(1);
   const [heldVolume, setHeldVolume] = useState(1);
   const [measured, setMeasured] = useState("");
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [activeVideo, setActiveVideo] = useState<HTMLVideoElement | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const fact = facts[kind === "timeline" ? activeIndex : 0];
   const model = kind === "timeline" ? "" : fact?.model ?? "";
   const frame = fact?.ratio ?? "";
@@ -57,6 +60,53 @@ export function SharePreview({
     setPlaying(true);
   }
 
+  useEffect(() => {
+    function onChange() {
+      setFullscreen(document.fullscreenElement === stageRef.current);
+    }
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  useEffect(() => {
+    if (!activeVideo) return;
+    const begin = () => setFullscreen(true);
+    const end = () => setFullscreen(false);
+    activeVideo.addEventListener("webkitbeginfullscreen", begin);
+    activeVideo.addEventListener("webkitendfullscreen", end);
+    return () => {
+      activeVideo.removeEventListener("webkitbeginfullscreen", begin);
+      activeVideo.removeEventListener("webkitendfullscreen", end);
+    };
+  }, [activeVideo]);
+
+  function toggleFullscreen() {
+    const stage = stageRef.current;
+    const video = activeVideo as
+      | (HTMLVideoElement & {
+          webkitEnterFullscreen?: () => void;
+          webkitExitFullscreen?: () => void;
+          webkitDisplayingFullscreen?: boolean;
+        })
+      | null;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    if (video?.webkitDisplayingFullscreen) {
+      video.webkitExitFullscreen?.();
+      return;
+    }
+    const enterVideo = () => {
+      video?.webkitEnterFullscreen?.();
+    };
+    if (stage && typeof stage.requestFullscreen === "function") {
+      void stage.requestFullscreen().catch(enterVideo);
+      return;
+    }
+    enterVideo();
+  }
+
   function noteSize(event: React.SyntheticEvent<HTMLElement>) {
     const media = event.target;
     if (!(media instanceof HTMLImageElement || media instanceof HTMLVideoElement)) return;
@@ -74,7 +124,7 @@ export function SharePreview({
       </header>
       <div className="ohf-share-frame">
         <div className="ohf-share-fit">
-        <div className="ohf-share-stage" onLoadedMetadata={noteSize} onLoad={noteSize}>
+        <div ref={stageRef} className="ohf-share-stage" onLoadedMetadata={noteSize} onLoad={noteSize}>
           {kind === "image" ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img className="ohf-share-still" src={urls[0]} alt="" draggable={false} onLoad={noteSize} />
@@ -88,6 +138,7 @@ export function SharePreview({
                 startAt={startAt}
                 volume={volume}
                 lockDownload
+                onActiveVideo={setActiveVideo}
                 onProgress={(index, nextRatio, duration) => {
                   setActiveIndex(index);
                   setRatio(nextRatio);
@@ -177,6 +228,14 @@ export function SharePreview({
                     }}
                   />
                 </div>
+                <button
+                  type="button"
+                  className="ohf-share-toggle"
+                  aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+                  onClick={toggleFullscreen}
+                >
+                  {fullscreen ? <FullscreenExitIcon size={16} /> : <FullscreenIcon size={16} />}
+                </button>
               </div>
             </>
           )}

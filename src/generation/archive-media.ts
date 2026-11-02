@@ -3,7 +3,7 @@ import { access, mkdir, writeFile } from "fs/promises";
 
 import type { RunRecord } from "@/openhiggsfield/history";
 
-import { uploadFilePath, uploadRoot, uploadTypePath } from "./local-upload";
+import { sniffImageMime, uploadFilePath, uploadMaxBytes, uploadRoot, uploadTypePath } from "./local-upload";
 
 const ARCHIVE_TIMEOUT_MS = 120_000;
 
@@ -21,6 +21,47 @@ export function isArchivedMediaUrl(url: string): boolean {
   return /\/(?:api\/)?uploads\/[0-9a-f-]{36}/i.test(url);
 }
 
+const DATA_IMAGE = /^data:image\/(?:png|jpeg|webp|gif);base64,([A-Za-z0-9+/=\s]+)$/i;
+
+/** Bytes of a browser data-image URL, or null when it is not a still we store. */
+export function dataImageBytes(url: string): { bytes: Buffer; mime: string } | null {
+  const match = DATA_IMAGE.exec(url.trim());
+  if (!match?.[1]) return null;
+  const bytes = Buffer.from(match[1].replace(/\s/g, ""), "base64");
+  if (!bytes.byteLength) return null;
+  const mime = sniffImageMime(bytes);
+  if (!mime) return null;
+  return { bytes, mime };
+}
+
+function uploadIdFromHash(bytes: Buffer): string {
+  const hex = createHash("sha256").update(bytes).digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+async function writeArchive(id: string, bytes: Buffer, mime: string): Promise<string> {
+  const type = mime.split(";")[0]?.trim() || "application/octet-stream";
+  await mkdir(uploadRoot(), { recursive: true });
+  await writeFile(uploadFilePath(id), bytes);
+  await writeFile(uploadTypePath(id), type);
+  return uploadPublicPath(id);
+}
+
+/** Stores a data-image that never went through the status archive (an older
+    gallery row). Throws when the still is larger than the upload cap. */
+export async function archiveInlineImage(dataUrl: string): Promise<string> {
+  const parsed = dataImageBytes(dataUrl);
+  if (!parsed) throw new Error("This result cannot be shared yet");
+  if (parsed.bytes.byteLength > uploadMaxBytes()) throw new Error("This image is too large to share");
+  const id = uploadIdFromHash(parsed.bytes);
+  try {
+    await access(uploadFilePath(id));
+    return uploadPublicPath(id);
+  } catch {
+    return writeArchive(id, parsed.bytes, parsed.mime);
+  }
+}
+
 /** Downloads a remote result into UPLOAD_DIR (or cwd/uploads). Returns the local
     path when the file is on disk, or the original URL when the download fails. */
 export async function ensureArchivedUrl(input: {
@@ -33,10 +74,12 @@ export async function ensureArchivedUrl(input: {
 }): Promise<string> {
   const url = input.url;
   if (!url || isArchivedMediaUrl(url)) return url;
+  const inline = dataImageBytes(url);
   const remote = /^https?:\/\//i.test(url);
-  if (!remote && !input.fetchBytes) return url;
+  if (!remote && !inline && !input.fetchBytes) return url;
+  if (inline && inline.bytes.byteLength > uploadMaxBytes()) return url;
 
-  const id = durableUploadId(input.userId, input.requestId, input.index);
+  const id = inline ? uploadIdFromHash(inline.bytes) : durableUploadId(input.userId, input.requestId, input.index);
   try {
     await access(uploadFilePath(id));
     return uploadPublicPath(id);
@@ -47,7 +90,10 @@ export async function ensureArchivedUrl(input: {
   try {
     let bytes: Buffer;
     let mime = input.mime || "application/octet-stream";
-    if (!remote && input.fetchBytes) {
+    if (inline) {
+      bytes = inline.bytes;
+      mime = inline.mime;
+    } else if (!remote && input.fetchBytes) {
       const fetched = await input.fetchBytes();
       if (!fetched || !fetched.bytes.byteLength) return url;
       bytes = fetched.bytes;
@@ -59,11 +105,7 @@ export async function ensureArchivedUrl(input: {
       if (!bytes.byteLength) return url;
       mime = response.headers.get("Content-Type") || mime;
     }
-    const type = mime.split(";")[0]?.trim() || "application/octet-stream";
-    await mkdir(uploadRoot(), { recursive: true });
-    await writeFile(uploadFilePath(id), bytes);
-    await writeFile(uploadTypePath(id), type);
-    return uploadPublicPath(id);
+    return await writeArchive(id, bytes, mime);
   } catch (caught) {
     console.error("[archive] failed", caught instanceof Error ? caught.message : caught);
     return url;

@@ -8,6 +8,8 @@ import { requireActiveUser } from "@/auth/guard";
 import { execute, queryOne } from "@/db/client";
 import { run, type ActionResult } from "@/lib/action-result";
 
+import { archiveInlineImage } from "@/generation/archive-media";
+
 import { clipFromUrl, parseShareFacts, parseStoredClips, publicFact, type StoredClip } from "./clips";
 import type { ClipKind, ShareFact, ShareKind } from "./types";
 
@@ -50,7 +52,8 @@ export async function createShare(input: {
     for (const clip of input.clips) {
       if (input.kind === "image" && clip.kind !== "image") throw new Error("Share an image");
       if (input.kind !== "image" && clip.kind !== "video") throw new Error("Share a video");
-      const next = clipFromUrl(clip.url, clip.kind);
+      const url = clip.url.trim().startsWith("data:") ? await archiveInlineImage(clip.url) : clip.url;
+      const next = clipFromUrl(url, clip.kind);
       if (!next) throw new Error("This result cannot be shared yet");
       const fact = publicFact(clip);
       stored.push({ ...next, ...fact });

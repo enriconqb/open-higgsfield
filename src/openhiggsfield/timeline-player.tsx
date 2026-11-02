@@ -16,6 +16,7 @@ export function TimelinePlayer({
   volume = 1,
   lockDownload = false,
   onProgress,
+  onActiveVideo,
 }: {
   urls: string[];
   playing: boolean;
@@ -27,6 +28,8 @@ export function TimelinePlayer({
   volume?: number;
   lockDownload?: boolean;
   onProgress: (index: number, ratio: number, duration: number) => void;
+  /** The video element currently painted in front. */
+  onActiveVideo?: (video: HTMLVideoElement | null) => void;
 }) {
   const aRef = useRef<HTMLVideoElement>(null);
   const bRef = useRef<HTMLVideoElement>(null);
@@ -38,6 +41,8 @@ export function TimelinePlayer({
   const startAtRef = useRef(startAt);
   const volumeRef = useRef(volume);
   const playingRef = useRef(playing);
+  const onActiveVideoRef = useRef(onActiveVideo);
+  onActiveVideoRef.current = onActiveVideo;
   const seekPending = useRef(false);
   urlsRef.current = urls;
   onProgressRef.current = onProgress;
@@ -181,6 +186,10 @@ export function TimelinePlayer({
       video.muted = level === 0;
     }
   }, [volume]);
+
+  useEffect(() => {
+    onActiveVideoRef.current?.(slot(front));
+  }, [front]);
 
   function armNext(from: 0 | 1) {
     const nextIndex = indexRef.current + 1;
