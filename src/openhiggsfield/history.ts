@@ -50,6 +50,28 @@ export function historyKeyFor(userId: number): string {
   return `${HISTORY_KEY}.${userId}`;
 }
 
+export function tombstoneKeyFor(userId: number): string {
+  return `gallery.tombstone.v1.${userId}`;
+}
+
+export async function loadTombstones(userId: number, kv: Kv = defaultKv()): Promise<string[]> {
+  try {
+    const stored = await kv.get<unknown>(tombstoneKeyFor(userId));
+    if (!Array.isArray(stored)) return [];
+    return stored.filter((id): id is string => typeof id === "string" && id.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveTombstones(userId: number, ids: Iterable<string>, kv: Kv = defaultKv()): Promise<void> {
+  try {
+    await kv.set(tombstoneKeyFor(userId), [...ids]);
+  } catch {
+    /* private mode or a denied store */
+  }
+}
+
 export async function loadHistory(
   kv: Kv = defaultKv(),
   legacy: LegacyStore | undefined = browserLegacy(),

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { discardGalleryTrashItems, loadGalleryTrash } from "@/generation/result-actions";
 import { unwrap } from "@/lib/action-result";
 
-import { CloseIcon, TrashIcon } from "./icons";
+import { CloseIcon, TrashIcon, UndoIcon } from "./icons";
 import type { RunRecord } from "./history";
 import { sourcesFor } from "./media-source";
 
@@ -107,41 +107,38 @@ export function TempPanel({
           {error && <p className="ohf-keys-copy">{error}</p>}
           {items && items.length === 0 && <p className="ohf-keys-copy">Temp is empty.</p>}
           {items && items.length > 0 && (
-            <ul className="ohf-temp-list">
+            <ul className="ohf-temp-grid">
               {items.map((item) => {
                 const source = sourcesFor(item.record, 0).primary;
                 const label = item.record.prompt || `${item.record.modelLabel} run`;
                 return (
-                  <li key={item.record.id} className="ohf-temp-row">
-                    <div className="ohf-temp-thumb">
-                      {item.record.kind === "video" ? (
-                        <video src={source} muted playsInline preload="metadata" />
-                      ) : (
-                        <img src={source} alt="" />
-                      )}
-                    </div>
-                    <div className="ohf-temp-copy">
-                      <div className="ohf-temp-prompt">{label}</div>
-                      <div className="ohf-temp-count">{trashCountdown(item.expiresAt, now)}</div>
-                    </div>
-                    <div className="ohf-temp-acts">
+                  <li key={item.record.id} className="ohf-tile ohf-temp-card" title={label}>
+                    {item.record.kind === "video" ? (
+                      <video className="ohf-temp-media" src={source} muted playsInline preload="metadata" />
+                    ) : (
+                      <img className="ohf-temp-media" src={source} alt="" />
+                    )}
+                    <span className="ohf-temp-badge">{trashCountdown(item.expiresAt, now)}</span>
+                    <div className="ohf-tile-acts">
                       <button
                         type="button"
-                        className="ohf-btn-accent"
-                        data-quiet="true"
+                        className="ohf-tile-act"
+                        aria-label={`Restore ${label}`}
+                        title="Restore"
                         disabled={busyId === item.record.id}
                         onClick={() => void restore(item)}
                       >
-                        Restore
+                        <UndoIcon size={15} />
                       </button>
                       <button
                         type="button"
-                        className="ohf-icon-btn"
+                        className="ohf-tile-act ohf-tile-act--danger"
                         aria-label={`Delete ${label} permanently`}
+                        title="Delete permanently"
                         disabled={busyId === item.record.id}
                         onClick={() => void discard(item)}
                       >
-                        <TrashIcon />
+                        <TrashIcon size={15} />
                       </button>
                     </div>
                   </li>

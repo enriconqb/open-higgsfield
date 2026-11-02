@@ -395,13 +395,13 @@ async function runTests(alice: Account, bob: Account, files: string[]): Promise<
     `${foreignRows.length} rows for bob`,
   );
 
-  // The studio saves by replacing the browser-owned rows; it must not sweep away
-  // the token-made ones it has never seen.
+  // A studio save is the full list the user still has. Omitting a mirrored row
+  // moves it to Temp instead of leaving it in the gallery.
   await replaceGenerationResultsFor(alice.userId, []);
   report(
-    "a studio save does not delete token-made rows",
-    await galleryHas(alice.userId, imageJobId),
-    "after replace with an empty browser list",
+    "omitting a token-made row moves it out of the gallery",
+    !(await galleryHas(alice.userId, imageJobId)),
+    "after replace with an empty list",
   );
 
   // --- video redirect ----------------------------------------------------

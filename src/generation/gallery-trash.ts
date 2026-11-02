@@ -32,8 +32,7 @@ export async function listGalleryTrash(): Promise<GalleryTrashItem[]> {
   await purgeGalleryTrashFor(user.id, { reason: "expired" });
   const rows = await queryRows<TrashRow>(
     `SELECT client_id, payload, expires_at FROM gallery_trash
-     WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP
-     ORDER BY expires_at ASC`,
+     WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP`,
     [user.id],
   );
   const items: GalleryTrashItem[] = [];
@@ -42,6 +41,7 @@ export async function listGalleryTrash(): Promise<GalleryTrashItem[]> {
     if (!isRunRecord(record)) continue;
     items.push({ record, expiresAt: new Date(row.expires_at).getTime() });
   }
+  items.sort((a, b) => a.expiresAt - b.expiresAt);
   return items;
 }
 
@@ -151,12 +151,15 @@ async function deleteUnsharedMedia(
 }
 
 async function referencedUploadIds(userId: number): Promise<Set<string>> {
-  const rows = await queryRows<PayloadRow>(
-    `SELECT payload FROM generation_results WHERE user_id = ?
-     UNION ALL
-     SELECT payload FROM gallery_trash WHERE user_id = ?`,
-    [userId, userId],
+  const gallery = await queryRows<PayloadRow>(
+    `SELECT payload FROM generation_results WHERE user_id = ?`,
+    [userId],
   );
+  const trashed = await queryRows<PayloadRow>(
+    `SELECT payload FROM gallery_trash WHERE user_id = ?`,
+    [userId],
+  );
+  const rows = [...gallery, ...trashed];
   const ids = new Set<string>();
   for (const row of rows) {
     const record = parsePayload(row.payload);

@@ -36,7 +36,7 @@ import {
   type GalleryView,
 } from "./data";
 import { Gallery } from "./gallery";
-import { loadHistory, mergeHistory, replaceRequest, saveHistory, historyKeyFor, stepRun, type RunRecord } from "./history";
+import { loadHistory, loadTombstones, mergeHistory, replaceRequest, saveHistory, saveTombstones, historyKeyFor, stepRun, type RunRecord } from "./history";
 import { sourcesFor } from "./media-source";
 import { loadGenerationResults, saveGenerationResults } from "@/generation/result-actions";
 import { CloseIcon, UndoIcon } from "./icons";
@@ -225,6 +225,10 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const freshTimers = useRef<number[]>([]);
   const historyRef = useRef(history);
   historyRef.current = history;
+  /* One gallery write at a time. A save that started before a delete must not
+     be the one that lands last, or the removed run is written back. */
+  const gallerySave = useRef({ running: false, pending: false });
+  const tombstones = useRef(new Set<string>());
   const userIdRef = useRef<number | null>(null);
   userIdRef.current = user?.id ?? null;
 
@@ -269,6 +273,8 @@ function persistLocal(records: RunRecord[]) {
           await saveHistory([]);
         }
       }
+      tombstones.current = new Set(await loadTombstones(user.id));
+      const visible = (rows: RunRecord[]) => rows.filter((record) => !tombstones.current.has(record.id));
       let remote: RunRecord[] = [];
       let remoteOk = false;
       try {
@@ -278,7 +284,7 @@ function persistLocal(records: RunRecord[]) {
         remoteOk = false;
       }
       if (!live) return;
-      setHistory((current) => mergeHistory(mergeHistory(remote, local), current));
+      setHistory((current) => mergeHistory(mergeHistory(visible(remote), visible(local)), visible(current)));
       setSyncServer(remoteOk);
       setHistoryLoaded(true);
     })();
@@ -290,19 +296,51 @@ function persistLocal(records: RunRecord[]) {
     if (!historyLoaded || !user) return;
     void saveHistory(history, undefined, undefined, historyKeyFor(user.id));
     if (!syncServer) return;
-    void saveGenerationResults(history)
-      .then(unwrap)
-      .then((saved) => {
-        if (!alive.current) return;
-        setHistory((current) => {
-          const merged = mergeHistory(saved, current);
-          if (sameMediaUrls(merged, current)) return current;
-          return merged;
+    const userId = user.id;
+
+    const flush = () => {
+      if (gallerySave.current.running) {
+        gallerySave.current.pending = true;
+        return;
+      }
+      gallerySave.current.running = true;
+      gallerySave.current.pending = false;
+      const snapshot = historyRef.current.filter((record) => !tombstones.current.has(record.id));
+      void saveGenerationResults(snapshot)
+        .then(unwrap)
+        .then((saved) => {
+          if (!alive.current || userIdRef.current !== userId) return;
+          const sent = new Set(snapshot.map((record) => record.id));
+          let cleared = false;
+          for (const id of [...tombstones.current]) {
+            if (!sent.has(id)) {
+              tombstones.current.delete(id);
+              cleared = true;
+            }
+          }
+          if (cleared) void saveTombstones(userId, tombstones.current);
+          const archived = new Map(saved.map((record) => [record.id, record]));
+          setHistory((current) => {
+            let changed = false;
+            const next = current.map((record) => {
+              const copy = archived.get(record.id);
+              if (!copy || sameMediaUrls([copy], [record])) return record;
+              changed = true;
+              return { ...record, urls: copy.urls, remoteUrls: copy.remoteUrls };
+            });
+            return changed ? next : current;
+          });
+        })
+        .catch(() => {
+          /* The local log still saved; the next successful load can retry. */
+        })
+        .finally(() => {
+          gallerySave.current.running = false;
+          if (gallerySave.current.pending && alive.current && userIdRef.current === userId) flush();
         });
-      })
-      .catch(() => {
-        /* The local log still saved; the next successful load can retry. */
-      });
+    };
+
+    flush();
   }, [historyLoaded, history, user, syncServer]);
 
   useEffect(() => {
@@ -572,6 +610,9 @@ function persistLocal(records: RunRecord[]) {
   const deleteRuns = useCallback((records: RunRecord[]) => {
     if (records.length === 0) return;
     const ids = new Set(records.map((record) => record.id));
+    for (const id of ids) tombstones.current.add(id);
+    const userId = userIdRef.current;
+    if (userId) void saveTombstones(userId, tombstones.current);
     setHistory((prev) => prev.filter((entry) => !ids.has(entry.id)));
     setDeleted(records);
   }, []);
@@ -582,6 +623,9 @@ function persistLocal(records: RunRecord[]) {
      into their own places rather than onto the top of the grid. */
   const restoreRecords = useCallback((records: RunRecord[]) => {
     if (records.length === 0) return;
+    for (const record of records) tombstones.current.delete(record.id);
+    const userId = userIdRef.current;
+    if (userId) void saveTombstones(userId, tombstones.current);
     setHistory((prev) => {
       const here = new Set(prev.map((entry) => entry.id));
       const back = records.filter((entry) => !here.has(entry.id));

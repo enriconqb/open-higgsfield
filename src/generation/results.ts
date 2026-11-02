@@ -20,16 +20,18 @@ export async function listGenerationResults(): Promise<RunRecord[]> {
 /** Unauthenticated twin, for scripts and tests that already know the owner. */
 export async function listGenerationResultsFor(userId: number): Promise<RunRecord[]> {
   const rows = await queryRows<ResultRow>(
-    `SELECT payload FROM generation_results WHERE user_id = ? ORDER BY updated_at DESC`,
+    `SELECT payload FROM generation_results WHERE user_id = ?`,
     [userId],
   );
-  return capHistory(rows.map((row) => parsePayload(row.payload)).filter(isRunRecord));
+  const records = rows.map((row) => parsePayload(row.payload)).filter(isRunRecord);
+  records.sort((a, b) => b.createdAt - a.createdAt);
+  return capHistory(records);
 }
 
-/** Replaces this account's browser-owned gallery rows with the given list,
-    including removals. Rows that came from /api/v1 are *not* touched: they have
-    no browser copy, so a client that has not seen one yet would otherwise delete
-    the only record of a paid generation. */
+/** Replaces this account's gallery rows with the given list, including removals.
+    The studio only calls this after it has loaded the server list, so an API row
+    (`#api`) missing from that list was deleted by the user and moves to Temp.
+    API rows still in the list are upserted, not wiped and rewritten in bulk. */
 export async function replaceGenerationResults(records: RunRecord[]): Promise<RunRecord[]> {
   const user = await requireActiveUser();
   return replaceGenerationResultsFor(user.id, records);
@@ -39,23 +41,30 @@ export async function replaceGenerationResults(records: RunRecord[]): Promise<Ru
 export async function replaceGenerationResultsFor(userId: number, records: RunRecord[]): Promise<RunRecord[]> {
   const incoming = capHistory(records.filter(isRunRecord));
   const next = await Promise.all(incoming.map((record) => archiveRunRecord(userId, record)));
-  const kept = new Set(
-    next.filter((record) => record.via !== "api").map((record) => record.id.slice(0, 191)),
-  );
+  const kept = new Set(next.map((record) => record.id.slice(0, 191)));
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
     const [existing] = await connection.query<ResultRow[]>(
-      `SELECT client_id, payload FROM generation_results WHERE user_id = ? AND client_id NOT LIKE '%#api'`,
+      `SELECT client_id, payload FROM generation_results WHERE user_id = ?`,
       [userId],
     );
+    const dropped: string[] = [];
     for (const row of existing) {
       if (!row.client_id || kept.has(row.client_id)) continue;
+      dropped.push(row.client_id);
       await connection.query(
         `INSERT INTO gallery_trash (user_id, client_id, payload, deleted_at, expires_at)
          VALUES (?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${TRASH_DAYS} DAY))
          ON DUPLICATE KEY UPDATE payload = VALUES(payload)`,
         [userId, row.client_id, JSON.stringify(parsePayload(row.payload) ?? row.payload)],
+      );
+    }
+    if (dropped.length > 0) {
+      const marks = dropped.map(() => "?").join(", ");
+      await connection.query(
+        `DELETE FROM generation_results WHERE user_id = ? AND client_id IN (${marks})`,
+        [userId, ...dropped],
       );
     }
     if (kept.size > 0) {
@@ -69,7 +78,6 @@ export async function replaceGenerationResultsFor(userId: number, records: RunRe
       userId,
     ]);
     for (const record of next) {
-      if (record.via === "api") continue;
       await connection.query(
         `INSERT INTO generation_results (user_id, client_id, payload) VALUES (?, ?, ?)
          ON DUPLICATE KEY UPDATE payload = VALUES(payload), updated_at = CURRENT_TIMESTAMP`,
