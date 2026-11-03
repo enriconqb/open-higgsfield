@@ -23,17 +23,26 @@ export function knownClipSeconds(url: string): number | null {
     shortens a 10 s source. Resolves null when the metadata never arrives (dead
     link, unsupported container, slow fetch). */
 export function clipSeconds(url: string, timeoutMs = 20_000): Promise<number | null> {
-  return measure(url, timeoutMs, () => undefined);
+  return measure(url, timeoutMs, () => undefined).then((meta) => meta?.seconds ?? null);
 }
 
 /** The file the visitor just handed over: a blob URL needs no network at all,
     so this answers in milliseconds where clipSeconds() may wait on megabytes. */
 export function fileSeconds(file: File): Promise<number | null> {
+  return fileVideoMeta(file).then((meta) => meta?.seconds ?? null);
+}
+
+/** Duration and display size of a local video, from the browser demuxer. */
+export function fileVideoMeta(file: File): Promise<{ seconds: number; width: number; height: number } | null> {
   const url = URL.createObjectURL(file);
   return measure(url, 8_000, () => URL.revokeObjectURL(url));
 }
 
-function measure(url: string, timeoutMs: number, release: () => void): Promise<number | null> {
+function measure(
+  url: string,
+  timeoutMs: number,
+  release: () => void,
+): Promise<{ seconds: number; width: number; height: number } | null> {
   return new Promise((resolve) => {
     if (typeof document === "undefined" || !url) {
       resolve(null);
@@ -41,7 +50,7 @@ function measure(url: string, timeoutMs: number, release: () => void): Promise<n
     }
     const probe = document.createElement("video");
     let settled = false;
-    const finish = (value: number | null) => {
+    const finish = (value: { seconds: number; width: number; height: number } | null) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timer);
@@ -57,7 +66,11 @@ function measure(url: string, timeoutMs: number, release: () => void): Promise<n
       "loadedmetadata",
       () => {
         const seconds = probe.duration;
-        finish(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
+        const width = probe.videoWidth;
+        const height = probe.videoHeight;
+        finish(
+          Number.isFinite(seconds) && seconds > 0 && width > 0 && height > 0 ? { seconds, width, height } : null,
+        );
       },
       { once: true },
     );

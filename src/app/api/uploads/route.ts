@@ -9,6 +9,7 @@ import {
   uploadRoot,
   uploadTypePath,
 } from "@/generation/local-upload";
+import { readMp4Limits, videoLimitMessage } from "@/generation/video-limits";
 
 /* The studio's local shelf: a reference the visitor sends is written to
    UPLOAD_DIR and handed back as /api/uploads/<id>, which GET below serves.
@@ -55,6 +56,10 @@ export async function POST(request: Request): Promise<NextResponse> {
        image is confirmed against its own bytes before it reaches the disk. */
     if (IMAGE_TYPES.has(file.type) && !sniffImageMime(bytes)) {
       return jsonError(415, "File is not a png, jpeg, webp, or gif");
+    }
+    if (file.type === "video/mp4") {
+      const reason = videoLimitMessage(readMp4Limits(bytes));
+      if (reason) return jsonError(415, reason);
     }
 
     const id = crypto.randomUUID();

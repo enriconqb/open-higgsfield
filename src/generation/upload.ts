@@ -1,12 +1,22 @@
 import { Upload } from "tus-js-client";
 
 import { apiUrl } from "@/base-path";
+import { fileVideoMeta } from "@/openhiggsfield/clip-length";
+
 import type { GenerationPlane, MediaRole } from "./catalog/types";
+import { videoLimitMessage } from "./video-limits";
 
 /** One request stays under the 50MB gateway. The finished file may be larger. */
 const UPLOAD_CHUNK_BYTES = 40 * 1024 * 1024;
 
 export async function uploadMedia(file: File): Promise<{ url: string }> {
+  if (file.type === "video/mp4") {
+    const meta = await fileVideoMeta(file);
+    const reason = videoLimitMessage(
+      meta ? { duration: meta.seconds, width: meta.width, height: meta.height } : null,
+    );
+    if (reason) throw new Error(reason);
+  }
   if (file.size > UPLOAD_CHUNK_BYTES) return uploadInChunks(file);
   return uploadWhole(file);
 }

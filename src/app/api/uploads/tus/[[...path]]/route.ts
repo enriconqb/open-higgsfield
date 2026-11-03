@@ -13,6 +13,7 @@ import {
   uploadRoot,
   uploadTypePath,
 } from "@/generation/local-upload";
+import { readMp4Limits, videoLimitMessage } from "@/generation/video-limits";
 
 const ALLOWED = new Set([
   "image/jpeg",
@@ -74,6 +75,13 @@ function tusServer(): Server {
       if (IMAGE_TYPES.has(type) && !sniffImageMime(bytes)) {
         await unlink(source).catch(() => undefined);
         throw httpError(415, "File is not a png, jpeg, webp, or gif");
+      }
+      if (type === "video/mp4") {
+        const reason = videoLimitMessage(readMp4Limits(bytes));
+        if (reason) {
+          await unlink(source).catch(() => undefined);
+          throw httpError(415, reason);
+        }
       }
       const id = upload.id;
       await mkdir(uploadRoot(), { recursive: true });
