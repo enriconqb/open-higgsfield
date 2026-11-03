@@ -1,5 +1,10 @@
-export type UserRole = "superadmin" | "user";
+export type UserRole = "superadmin" | "admin" | "user";
 export type UserStatus = "pending" | "active" | "disabled";
+
+/** Admin accounts use the same studio tools as a superadmin. */
+export function hasStudioAdminAccess(role: UserRole): boolean {
+  return role === "superadmin" || role === "admin";
+}
 
 export type PublicUser = {
   id: number;

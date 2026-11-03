@@ -48,7 +48,7 @@ export function unsealSession(token: string | undefined): SessionUser | null {
       typeof parsed.id !== "number" ||
       typeof parsed.username !== "string" ||
       typeof parsed.wrappingKey !== "string" ||
-      (parsed.role !== "superadmin" && parsed.role !== "user") ||
+      (parsed.role !== "superadmin" && parsed.role !== "admin" && parsed.role !== "user") ||
       parsed.status !== "active"
     ) {
       return null;

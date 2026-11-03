@@ -6,6 +6,7 @@ import { getAuthState, logoutAccount } from "@/auth/actions";
 import { apiUrl } from "@/base-path";
 import { AuthRequiredError } from "@/auth/errors";
 import type { PublicUser } from "@/auth/types";
+import { hasStudioAdminAccess } from "@/auth/types";
 import { unwrap } from "@/lib/action-result";
 import { platformKeyKind, submitGeneration } from "@/generation/actions";
 import { rehostDataMedia } from "@/generation/upload";
@@ -924,7 +925,7 @@ function persistLocal(records: RunRecord[]) {
               setViewerId(null);
               deleteRun(viewerItem);
             }}
-            showStorage={user?.role === "superadmin"}
+            showStorage={hasStudioAdminAccess(user?.role ?? "user")}
           />
         )}
         {tempOpen && (

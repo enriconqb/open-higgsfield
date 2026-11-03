@@ -3045,6 +3045,143 @@
   width: min(880px, calc(100vw - 32px));
   max-height: min(82vh, 780px);
 }
+.ohf-users-panel {
+  width: min(1100px, calc(100vw - 32px));
+}
+.ohf-users-dt {
+  margin-top: 4px;
+  color: var(--tx);
+  font-size: 0.85rem;
+}
+.ohf-users-dt .dt-container {
+  color: var(--tx);
+}
+.ohf-users-dt .dt-layout-row {
+  margin-bottom: 10px;
+  gap: 12px;
+}
+.ohf-users-dt .dt-input,
+.ohf-users-dt .dt-search input,
+.ohf-users-dt .dt-length select {
+  background: var(--s1, rgba(255, 255, 255, 0.04));
+  color: var(--tx);
+  border: 1px solid var(--line-1, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.ohf-users-dt table.dataTable {
+  width: 100% !important;
+  color: var(--tx);
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.ohf-users-dt table.dataTable thead th {
+  color: var(--tx2);
+  font-weight: 560;
+  border-bottom: 1px solid var(--line-1, rgba(255, 255, 255, 0.08));
+  background: transparent;
+}
+.ohf-users-dt table.dataTable tbody td {
+  color: var(--tx);
+  border-bottom: 1px solid var(--line-1, rgba(255, 255, 255, 0.06));
+  background: transparent;
+  vertical-align: middle;
+}
+.ohf-users-dt table.dataTable tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.035);
+}
+.ohf-users-dt .dt-paging .dt-paging-button {
+  color: var(--tx2) !important;
+  border-radius: 8px;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+}
+.ohf-users-dt .dt-paging .dt-paging-button.current {
+  color: var(--tx) !important;
+  border-color: var(--line-2, rgba(255, 255, 255, 0.16)) !important;
+}
+.ohf-users-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+.ohf-users-create-panel {
+  width: min(420px, calc(100vw - 32px));
+}
+.ohf-users-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+.ohf-users-form .ohf-keys-head {
+  margin: 0;
+}
+.ohf-role-field {
+  position: relative;
+}
+.ohf-role-list {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--s2);
+  box-shadow: var(--shadow-2, 0 12px 32px rgba(0, 0, 0, 0.35));
+}
+.ohf-role-option {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--tx);
+  background: transparent;
+}
+.ohf-role-option:hover,
+.ohf-role-option[aria-selected="true"] {
+  background: rgba(255, 255, 255, 0.06);
+}
+.ohf-users-dt .ohf-admin-status {
+  font-weight: 600;
+}
+.ohf-users-dt .ohf-admin-status[data-status="active"] {
+  color: #7dffe0;
+  background: rgba(125, 255, 224, 0.12);
+}
+.ohf-users-dt .ohf-admin-status[data-status="pending"] {
+  color: #ffd27d;
+  background: rgba(255, 210, 125, 0.12);
+}
+.ohf-users-dt .ohf-admin-status[data-status="disabled"] {
+  color: #ff8f8f;
+  background: rgba(255, 143, 143, 0.12);
+}
+.ohf-users-dt .ohf-admin-icon {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--line-1, rgba(255, 255, 255, 0.12));
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--tx);
+}
+.ohf-users-dt .ohf-admin-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--tx);
+}
+.ohf-users-dt .ohf-admin-icon--danger:hover {
+  color: #ff8f8f;
+  border-color: rgba(255, 143, 143, 0.4);
+  background: rgba(255, 143, 143, 0.1);
+}
+.ohf-users-dt .ohf-admin-icon:disabled {
+  opacity: 0.45;
+}
 .ohf-temp-panel {
   width: min(880px, calc(100vw - 32px));
   max-height: min(82vh, 780px);

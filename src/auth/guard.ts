@@ -1,6 +1,7 @@
 import { AuthRequiredError, ForbiddenError } from "./errors";
 import { readSession } from "./session";
 import type { SessionUser } from "./types";
+import { hasStudioAdminAccess } from "./types";
 
 export { AuthRequiredError, ForbiddenError };
 
@@ -14,6 +15,6 @@ export async function requireActiveUser(): Promise<SessionUser> {
 
 export async function requireSuperadmin(): Promise<SessionUser> {
   const user = await requireActiveUser();
-  if (user.role !== "superadmin") throw new ForbiddenError();
+  if (!hasStudioAdminAccess(user.role)) throw new ForbiddenError();
   return user;
 }

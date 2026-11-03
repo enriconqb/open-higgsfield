@@ -20,6 +20,12 @@ importers:
       '@vercel/blob':
         specifier: ^2.8.0
         version: 2.8.0
+      datatables.net-dt:
+        specifier: ^3.1.5
+        version: 3.1.5
+      datatables.net-react:
+        specifier: ^2.0.0
+        version: 2.0.0(datatables.net@3.1.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       mysql2:
         specifier: ^3.24.6
         version: 3.24.6(@types/node@22.20.1)
@@ -545,6 +551,19 @@ packages:
 
   custom-error-instance@2.1.1:
     resolution: {integrity: sha512-p6JFxJc3M4OTD2li2qaHkDCw9SfMw82Ldr6OC9Je1aXiGfhx2W8p3GaoeaGrPJTUN9NirTM/KTxHWMUdR1rsUg==}
+
+  datatables.net-dt@3.1.5:
+    resolution: {integrity: sha512-JXjpuKJmTZhndDCmi9Pz0Zkxd6sodYaMaE9KYc3x0YOGIerbRlnP0s1EJ2MWBtAkmJ0AbZo5hl8GahreMAd4hg==}
+
+  datatables.net-react@2.0.0:
+    resolution: {integrity: sha512-Q8HJ8AT/y9R70eW92VMUXI1FTc4teC09gs+AQ4mgR0JealjT8gC24TBiU2Ow6/VldEZE3Wi+al1HGXsV7R1qhg==}
+    peerDependencies:
+      datatables.net: ^3.0.0
+      react: ^18.3.1 || ^19
+      react-dom: ^18.3.1 || ^19
+
+  datatables.net@3.1.5:
+    resolution: {integrity: sha512-phu9fVz1cOhD7kZDO5Ztj15qwghCkmdwX5AezLi+PxfMtnFAq0itpewvXzdwdr6bOwPqO2zuXsXWUU5x3wQptw==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -1229,6 +1248,18 @@ snapshots:
   csstype@3.2.3: {}
 
   custom-error-instance@2.1.1: {}
+
+  datatables.net-dt@3.1.5:
+    dependencies:
+      datatables.net: 3.1.5
+
+  datatables.net-react@2.0.0(datatables.net@3.1.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+    dependencies:
+      datatables.net: 3.1.5
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+
+  datatables.net@3.1.5: {}
 
   debug@4.4.3:
     dependencies:

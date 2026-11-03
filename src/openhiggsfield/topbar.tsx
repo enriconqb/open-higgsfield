@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PublicUser } from "@/auth/types";
+import { hasStudioAdminAccess } from "@/auth/types";
 
 import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
 import { ApiTokensPanel } from "./api-tokens-panel";
+import { AdminPanel } from "./admin-panel";
 import { ModelAdminPanel } from "./model-admin-panel";
 import { TemplatesPanel } from "./templates-panel";
 import {
@@ -58,7 +60,7 @@ export function Topbar({
   const menuRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [studioDialog, setStudioDialog] = useState<"models" | "templates" | "tokens" | null>(null);
+  const [studioDialog, setStudioDialog] = useState<"models" | "templates" | "tokens" | "users" | null>(null);
   const closeStudioDialog = useCallback(() => setStudioDialog(null), []);
 
   /* The indicator is measured rather than derived from equal columns, so it
@@ -246,13 +248,21 @@ export function Topbar({
                     <FormatIcon size={15} />
                     Prompt templates
                   </button>
-                  {user.role === "superadmin" && (
-                    <Link href="/admin" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
+                  {hasStudioAdminAccess(user.role) && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="ohf-user-item"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setStudioDialog("users");
+                      }}
+                    >
                       <AssetsIcon size={15} />
                       Users management
-                    </Link>
+                    </button>
                   )}
-                  {user.role === "superadmin" && (
+                  {hasStudioAdminAccess(user.role) && (
                     <button
                       type="button"
                       role="menuitem"
@@ -289,6 +299,7 @@ export function Topbar({
           </Link>
         )}
       </div>
+      {studioDialog === "users" && <AdminPanel onClose={closeStudioDialog} />}
       {studioDialog === "models" && <ModelAdminPanel onClose={closeStudioDialog} />}
       {studioDialog === "templates" && <TemplatesPanel onClose={closeStudioDialog} />}
       {studioDialog === "tokens" && <ApiTokensPanel onClose={closeStudioDialog} />}

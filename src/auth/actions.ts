@@ -171,7 +171,9 @@ async function adminSetUserStatusHandler(data: unknown): Promise<PublicUser[]> {
 
   const target = await findUserById(id);
   if (!target) throw new Error("User not found");
-  if (target.role === "superadmin") throw new Error("Cannot change superadmin status");
+  if (target.role === "superadmin" || target.role === "admin") {
+    throw new Error("Cannot change this account's status");
+  }
 
   const ok = await updateUserStatus(id, status as UserStatus);
   if (!ok) throw new Error("Could not update user");
@@ -187,15 +189,40 @@ async function adminCreateUserHandler(data: unknown): Promise<PublicUser[]> {
   const body = asObject(data);
   const username = requireUsername(body.username);
   const password = requirePassword(body.password);
+  const role =
+    body.role === undefined || body.role === "user"
+      ? "user"
+      : body.role === "admin"
+        ? "admin"
+        : body.role === "superadmin"
+          ? "superadmin"
+          : null;
+  if (!role) throw new Error("Invalid role");
   const existing = await findUserByUsername(username);
   if (existing) throw new Error("Username is already taken");
-  await createUser({
+  const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+  if (apiKey && /\s/.test(apiKey)) throw new Error("Enter an API key");
+  const passwordSalt = createPasswordSalt();
+  const id = await createUser({
     username,
     passwordHash: await hashPassword(password),
-    passwordSalt: createPasswordSalt(),
-    role: "user",
+    passwordSalt,
+    role,
     status: "active",
   });
+  if (apiKey) {
+    const provider =
+      body.provider === "higgsfield" ? "higgsfield" : body.provider === "openrouter" || body.provider === undefined ? "openrouter" : null;
+    if (!provider) throw new Error("Invalid API provider");
+    const wrappingKey = await deriveWrappingKey(password, passwordSalt);
+    const encrypted = encryptApiKey(apiKey, provider, wrappingKey);
+    await upsertApiKey(id, {
+      provider: encrypted.provider,
+      ciphertext: encrypted.ciphertext,
+      iv: encrypted.iv,
+      authTag: encrypted.authTag,
+    });
+  }
   return listUsers();
 }
 
@@ -230,6 +257,9 @@ async function adminDeleteUserHandler(data: unknown): Promise<PublicUser[]> {
   const target = await findUserById(id);
   if (!target) throw new Error("User not found");
   if (target.role === "superadmin") throw new Error("Cannot delete a superadmin");
+  if (target.role === "admin" && admin.role !== "superadmin") {
+    throw new Error("Only a superadmin can delete an admin");
+  }
   const ok = await deleteUser(id);
   if (!ok) throw new Error("Could not delete user");
   return listUsers();

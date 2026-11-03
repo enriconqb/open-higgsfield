@@ -3,6 +3,7 @@
 import type { RowDataPacket } from "mysql2/promise";
 
 import { requireActiveUser } from "@/auth/guard";
+import { hasStudioAdminAccess } from "@/auth/types";
 import { queryRows } from "@/db/client";
 import { run, type ActionResult } from "@/lib/action-result";
 
@@ -85,7 +86,7 @@ export async function loadUsageDashboard(data?: unknown): Promise<ActionResult<U
 
 async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard> {
   const user = await requireActiveUser();
-  const isSuperadmin = user.role === "superadmin";
+  const isSuperadmin = hasStudioAdminAccess(user.role);
   const filters = cleanFilters(data, isSuperadmin);
   const where = ["e.created_at >= ?", "e.created_at < DATE_ADD(?, INTERVAL 1 DAY)"];
   const params: Array<string | number> = [`${filters.from} 00:00:00`, filters.to];

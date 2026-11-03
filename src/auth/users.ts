@@ -52,7 +52,7 @@ export async function listUsers(): Promise<PublicUser[]> {
      LEFT JOIN user_api_keys k ON k.user_id = u.id
      ORDER BY u.created_at DESC`,
   );
-  return rows.map((row) => ({ ...toPublic(row), hasApiKey: Boolean(row.has_api_key) }));
+  return rows.map((row) => ({ ...toPublic(row), hasApiKey: Number(row.has_api_key) === 1 }));
 }
 
 export async function updateUserStatus(id: number, status: UserStatus): Promise<boolean> {
@@ -111,7 +111,7 @@ export async function changeOwnPassword(input: {
 }
 
 export async function deleteUser(id: number): Promise<boolean> {
-  const result = await execute(`DELETE FROM users WHERE id = ? AND role = 'user'`, [id]);
+  const result = await execute(`DELETE FROM users WHERE id = ? AND role IN ('user', 'admin')`, [id]);
   return result.affectedRows > 0;
 }
 

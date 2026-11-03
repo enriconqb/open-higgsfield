@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { getAuthState } from "@/auth/actions";
+import { hasStudioAdminAccess } from "@/auth/types";
 import { unwrap } from "@/lib/action-result";
 import { adminListModels, adminSetModelMark, type ManagedModel } from "@/models/actions";
 import { MODEL_MARKS, MODEL_MARK_LABELS, type ModelMark } from "@/models/marks";
@@ -26,7 +27,7 @@ export function ModelAdminPanel({ onClose }: { onClose: () => void }) {
       try {
         const state = unwrap(await getAuthState());
         if (!live) return;
-        if (!state.user || state.user.role !== "superadmin") {
+        if (!state.user || !hasStudioAdminAccess(state.user.role)) {
           onClose();
           return;
         }

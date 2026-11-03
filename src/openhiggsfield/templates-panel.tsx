@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { getAuthState } from "@/auth/actions";
+import { hasStudioAdminAccess } from "@/auth/types";
 import { unwrap } from "@/lib/action-result";
 import { deletePromptTemplate, listPromptTemplates, savePromptTemplate, type PromptTemplate } from "@/prompts/actions";
 
@@ -35,7 +36,7 @@ export function TemplatesPanel({ onClose }: { onClose: () => void }) {
           onClose();
           return;
         }
-        setIsSuperadmin(state.user.role === "superadmin");
+        setIsSuperadmin(hasStudioAdminAccess(state.user.role));
         const list = unwrap(await listPromptTemplates());
         if (live) setTemplates(list);
       } catch (caught) {

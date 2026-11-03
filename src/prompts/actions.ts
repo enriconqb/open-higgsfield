@@ -3,6 +3,7 @@
 import type { RowDataPacket } from "mysql2/promise";
 
 import { requireActiveUser, requireSuperadmin } from "@/auth/guard";
+import { hasStudioAdminAccess } from "@/auth/types";
 import { execute, queryOne, queryRows } from "@/db/client";
 import { run, type ActionResult } from "@/lib/action-result";
 
@@ -57,7 +58,7 @@ function cleanText(value: unknown, max: number, label: string): string {
 export async function listPromptTemplates(): Promise<ActionResult<PromptTemplate[]>> {
   return run(async () => {
     const user = await requireActiveUser();
-    return loadVisible(user.id, user.role === "superadmin");
+    return loadVisible(user.id, hasStudioAdminAccess(user.role));
   });
 }
 
@@ -80,14 +81,14 @@ export async function savePromptTemplate(input: {
       );
       if (!existing) throw new Error("Template not found");
       const global = existing.user_id == null;
-      if (global && user.role !== "superadmin") throw new Error("Forbidden");
+      if (global && !hasStudioAdminAccess(user.role)) throw new Error("Forbidden");
       if (!global && Number(existing.user_id) !== user.id) throw new Error("Forbidden");
       if (global !== (input.scope === "global")) throw new Error("Cannot change template scope");
       await execute("UPDATE prompt_templates SET title = ?, body = ? WHERE id = ?", [title, body, input.id]);
     } else {
       await execute("INSERT INTO prompt_templates (user_id, title, body) VALUES (?, ?, ?)", [ownerId, title, body]);
     }
-    return loadVisible(user.id, user.role === "superadmin");
+    return loadVisible(user.id, hasStudioAdminAccess(user.role));
   });
 }
 
@@ -103,6 +104,6 @@ export async function deletePromptTemplate(input: { id: number }): Promise<Actio
     if (global) await requireSuperadmin();
     else if (Number(existing.user_id) !== user.id) throw new Error("Forbidden");
     await execute("DELETE FROM prompt_templates WHERE id = ?", [input.id]);
-    return loadVisible(user.id, user.role === "superadmin");
+    return loadVisible(user.id, hasStudioAdminAccess(user.role));
   });
 }
