@@ -4,12 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { adminCreateUser, adminDeleteUser, adminListUsers, adminSetUserStatus, getAuthState } from "@/auth/actions";
+import {
+  adminClearUserApiKey,
+  adminCreateUser,
+  adminDeleteUser,
+  adminListUsers,
+  adminSetUserStatus,
+  getAuthState,
+} from "@/auth/actions";
 import type { PublicUser, UserStatus } from "@/auth/types";
 import { unwrap } from "@/lib/action-result";
 
 export function AdminPanel() {
   const router = useRouter();
+  const [selfId, setSelfId] = useState<number | null>(null);
   const [users, setUsers] = useState<PublicUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -27,6 +35,7 @@ export function AdminPanel() {
           router.replace("/login");
           return;
         }
+        setSelfId(state.user.id);
         const list = unwrap(await adminListUsers());
         if (live) setUsers(list);
       } catch (caught) {
@@ -49,6 +58,20 @@ export function AdminPanel() {
       setUsers(list);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Update failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function clearKey(id: number) {
+    if (!window.confirm("Remove this user's API key? They will need to save a new one before generating.")) return;
+    setBusyId(id);
+    setError(null);
+    try {
+      const list = unwrap(await adminClearUserApiKey({ id }));
+      setUsers(list);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not remove API key");
     } finally {
       setBusyId(null);
     }
@@ -91,8 +114,8 @@ export function AdminPanel() {
   return (
     <div className="ohf-admin">
       <p className="ohf-keys-copy">
-        Create an active user, change status, or delete an account. Encrypted API keys are removed
-        with the user and are never shown here.
+        Create an active user, change status, delete an account, or remove another user&apos;s API key.
+        Key contents are never shown here.
       </p>
       <form className="ohf-admin-create" onSubmit={(event) => void create(event)}>
         <label className="ohf-field">
@@ -151,8 +174,18 @@ export function AdminPanel() {
                   </span>
                 </td>
                 <td className="ohf-admin-actions">
+                  {user.hasApiKey && user.id !== selfId && (
+                    <button
+                      type="button"
+                      className="ohf-btn-quiet"
+                      disabled={busyId === user.id}
+                      onClick={() => void clearKey(user.id)}
+                    >
+                      Remove API key
+                    </button>
+                  )}
                   {user.role === "superadmin" ? (
-                    <span className="ohf-keys-copy">—</span>
+                    !user.hasApiKey || user.id === selfId ? <span className="ohf-keys-copy">—</span> : null
                   ) : (
                     <>
                       {user.status !== "active" && (

@@ -45,11 +45,14 @@ export async function createUser(input: {
 }
 
 export async function listUsers(): Promise<PublicUser[]> {
-  const rows = await queryRows<UserPacket>(
-    `SELECT id, username, password_hash, password_salt, role, status, created_at, updated_at
-     FROM users ORDER BY created_at DESC`,
+  const rows = await queryRows<UserPacket & { has_api_key: number }>(
+    `SELECT u.id, u.username, u.password_hash, u.password_salt, u.role, u.status, u.created_at, u.updated_at,
+            (k.user_id IS NOT NULL) AS has_api_key
+     FROM users u
+     LEFT JOIN user_api_keys k ON k.user_id = u.id
+     ORDER BY u.created_at DESC`,
   );
-  return rows.map(toPublic);
+  return rows.map((row) => ({ ...toPublic(row), hasApiKey: Boolean(row.has_api_key) }));
 }
 
 export async function updateUserStatus(id: number, status: UserStatus): Promise<boolean> {

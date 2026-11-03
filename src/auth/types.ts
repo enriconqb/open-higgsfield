@@ -6,6 +6,8 @@ export type PublicUser = {
   username: string;
   role: UserRole;
   status: UserStatus;
+  /** Set on the admin user list. Absent elsewhere, so a missing value is not "no key". */
+  hasApiKey?: boolean;
 };
 
 export type SessionUser = PublicUser & {

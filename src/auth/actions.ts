@@ -199,6 +199,24 @@ async function adminCreateUserHandler(data: unknown): Promise<PublicUser[]> {
   return listUsers();
 }
 
+export async function adminClearUserApiKey(data: unknown): Promise<ActionResult<PublicUser[]>> {
+  return run(() => adminClearUserApiKeyHandler(data));
+}
+
+async function adminClearUserApiKeyHandler(data: unknown): Promise<PublicUser[]> {
+  const admin = await requireSuperadmin();
+  const body = asObject(data);
+  const id = Number(body.id);
+  if (!Number.isInteger(id) || id < 1) throw new Error("Invalid user");
+  if (id === admin.id) throw new Error("Cannot remove your own API key here");
+  const target = await findUserById(id);
+  if (!target) throw new Error("User not found");
+  const key = await getApiKeyRow(id);
+  if (!key) throw new Error("This user has no API key");
+  await deleteApiKey(id);
+  return listUsers();
+}
+
 export async function adminDeleteUser(data: unknown): Promise<ActionResult<PublicUser[]>> {
   return run(() => adminDeleteUserHandler(data));
 }
