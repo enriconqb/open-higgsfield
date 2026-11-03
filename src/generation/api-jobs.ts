@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "fs/promises";
 
 import type { RowDataPacket } from "mysql2/promise";
 
-import { execute, queryOne } from "@/db/client";
+import { execute, queryOne, queryRows } from "@/db/client";
 
 import { uploadFilePath, uploadRoot, uploadTypePath } from "./local-upload";
 
@@ -41,6 +41,11 @@ export type ApiJobRow = {
   cost_usd: string | number | null;
   error: string | null;
   result: unknown;
+  /** Platform key sealed with SESSION_SECRET while a studio job is in flight.
+      NULL on every /api/v1 row, which keeps its own client in charge. */
+  sealed_credentials: string | null;
+  /** Consecutive polls that could not reach the platform. */
+  attempts: number;
   idempotency_key: string | null;
   created_at: Date;
   updated_at: Date;
@@ -49,7 +54,10 @@ export type ApiJobRow = {
 type JobPacket = ApiJobRow & RowDataPacket;
 
 const SELECT_COLUMNS = `request_id, user_id, token_id, model_id, prompt, settings, kind, status, cost_usd, error,
-   result, idempotency_key, created_at, updated_at`;
+   result, sealed_credentials, attempts, idempotency_key, created_at, updated_at`;
+
+/** Statuses the platform never moves off again. */
+export const TERMINAL_JOB_STATUSES: readonly string[] = ["completed", "failed", "canceled", "cancelled"];
 
 export async function createApiJob(input: {
   requestId: string;
@@ -63,11 +71,13 @@ export async function createApiJob(input: {
   result?: ApiJobResult | null;
   prompt?: string | null;
   settings?: Record<string, unknown> | null;
+  sealedCredentials?: string | null;
 }): Promise<void> {
   await execute(
     `INSERT INTO api_jobs
-       (request_id, user_id, token_id, model_id, prompt, settings, kind, status, cost_usd, result, idempotency_key)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (request_id, user_id, token_id, model_id, prompt, settings, kind, status, cost_usd, result,
+        sealed_credentials, idempotency_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.requestId.slice(0, 128),
       input.userId,
@@ -79,6 +89,7 @@ export async function createApiJob(input: {
       input.status.slice(0, 32),
       input.costUsd ?? null,
       input.result ? JSON.stringify(input.result) : null,
+      input.sealedCredentials ?? null,
       input.idempotencyKey ? input.idempotencyKey.slice(0, 128) : null,
     ],
   );
@@ -120,7 +131,14 @@ export async function findApiJobByIdempotency(
 
 export async function updateApiJob(
   requestId: string,
-  patch: { status?: string; costUsd?: number | null; error?: string | null; result?: ApiJobResult | null },
+  patch: {
+    status?: string;
+    costUsd?: number | null;
+    error?: string | null;
+    result?: ApiJobResult | null;
+    /** Pass `null` to retire the sealed key once the job can no longer move. */
+    sealedCredentials?: string | null;
+  },
 ): Promise<void> {
   const sets: string[] = [];
   const params: Array<string | number | null> = [];
@@ -140,9 +158,64 @@ export async function updateApiJob(
     sets.push("result = ?");
     params.push(patch.result ? JSON.stringify(patch.result) : null);
   }
+  if (patch.sealedCredentials !== undefined) {
+    sets.push("sealed_credentials = ?");
+    params.push(patch.sealedCredentials);
+  }
   if (!sets.length) return;
   params.push(requestId);
   await execute(`UPDATE api_jobs SET ${sets.join(", ")} WHERE request_id = ?`, params);
+}
+
+/** One poll that could not reach the platform. Returns the new count so the
+    caller can decide whether the job has been given up on. */
+export async function bumpApiJobAttempts(requestId: string, error: string | null): Promise<number> {
+  await execute(`UPDATE api_jobs SET attempts = attempts + 1, error = ? WHERE request_id = ?`, [
+    error,
+    requestId,
+  ]);
+  const row = await queryOne<RowDataPacket & { attempts: number }>(
+    `SELECT attempts FROM api_jobs WHERE request_id = ? LIMIT 1`,
+    [requestId],
+  );
+  return Number(row?.attempts ?? 0);
+}
+
+/** Jobs a browser is no longer needed for: they carry a sealed key and have not
+    reached a terminal state yet. */
+export async function listSettleableJobs(input: {
+  userId?: number;
+  limit?: number;
+  maxAgeMs: number;
+}): Promise<ApiJobRow[]> {
+  const params: Array<number | string> = [];
+  const marks = TERMINAL_JOB_STATUSES.map(() => "?").join(", ");
+  let sql = `SELECT ${SELECT_COLUMNS} FROM api_jobs
+              WHERE sealed_credentials IS NOT NULL
+                AND status NOT IN (${marks})
+                AND created_at > DATE_SUB(NOW(), INTERVAL ? SECOND)`;
+  params.push(...TERMINAL_JOB_STATUSES);
+  params.push(Math.max(1, Math.floor(input.maxAgeMs / 1000)));
+  if (input.userId !== undefined) {
+    sql += ` AND user_id = ?`;
+    params.push(input.userId);
+  }
+  sql += ` ORDER BY created_at ASC LIMIT ?`;
+  params.push(Math.max(1, Math.floor(input.limit ?? 10)));
+  const rows = await queryRows<JobPacket>(sql, params);
+  return rows.map((row) => ({ ...row, settings: parseSettingsColumn(row.settings) }));
+}
+
+/** Request ids of this account's jobs that are still moving, so a stale browser
+    snapshot cannot delete a row the server is about to finish. */
+export async function listActiveJobIds(userId: number): Promise<Set<string>> {
+  const marks = TERMINAL_JOB_STATUSES.map(() => "?").join(", ");
+  const rows = await queryRows<RowDataPacket & { request_id: string }>(
+    `SELECT request_id FROM api_jobs
+      WHERE user_id = ? AND sealed_credentials IS NOT NULL AND status NOT IN (${marks})`,
+    [userId, ...TERMINAL_JOB_STATUSES],
+  );
+  return new Set(rows.map((row) => row.request_id));
 }
 
 export function parseJobResult(value: unknown): ApiJobResult {

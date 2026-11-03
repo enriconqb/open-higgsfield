@@ -11,6 +11,8 @@ import {
 } from "@/auth/resolve-credentials";
 
 import type { OpenRouterCaps } from "./capabilities";
+import { createApiJob, TERMINAL_JOB_STATUSES } from "./api-jobs";
+import { getModel } from "./catalog";
 import type { GenerationPlane } from "./catalog/types";
 import { MissingCredentialsError } from "./credentials";
 import type { KeyProvider } from "./credentials";
@@ -24,8 +26,10 @@ import {
   type GenerationCredentials,
 } from "./engine";
 import type { OpenRouterQuote } from "./estimate";
+import { mirrorStudioJobToGallery } from "./gallery";
 import { openRouterBaseUrl } from "./platform";
 import type { QueuedGeneration, StatusResult } from "./platform";
+import { jobResultFromStatus, sealJobCredentials } from "./settle";
 
 export async function savePlatformCredentials(data: unknown): Promise<ActionResult<void>> {
   return run(async () => {
@@ -64,7 +68,83 @@ export type GenerationSubmit = QueuedGeneration | { error: string };
 export async function submitGeneration(
   plane: GenerationPlane,
 ): Promise<ActionResult<QueuedGeneration>> {
-  return run(async () => submitPlane(await sessionContext(), plane));
+  return run(async () => {
+    const context = await sessionContext();
+    const queued = await submitPlane(context, plane);
+    await rememberStudioJob(context, plane, queued);
+    return queued;
+  });
+}
+
+/** The server keeps its own copy of the run, so the tab that started it is no
+    longer the only thing able to finish it: the settlement worker follows the
+    row and writes the gallery record even if the browser never comes back.
+    Best-effort on purpose — a bookkeeping failure must not hide a request id
+    the account has already paid for. */
+async function rememberStudioJob(
+  context: GenerationContext,
+  plane: GenerationPlane,
+  queued: QueuedGeneration,
+): Promise<void> {
+  try {
+    const model = getModel(plane.model);
+    const immediate = queued.immediate;
+    const status = immediate?.status ?? queued.status;
+    const terminal = TERMINAL_JOB_STATUSES.includes(status);
+    const result = immediate ? jobResultFromStatus(immediate) : null;
+    const costUsd = immediate?.costUsd ?? null;
+    const error = status === "failed" ? errorTextOf(immediate?.error) : null;
+
+    await createApiJob({
+      requestId: queued.requestId,
+      userId: context.userId,
+      tokenId: null,
+      modelId: plane.model,
+      kind: model.surface,
+      status,
+      idempotencyKey: null,
+      costUsd,
+      result,
+      prompt: plane.prompt.text,
+      settings: plane.settings,
+      /* Only worth sealing while the job can still move: a terminal run has
+         nothing left to poll, and the key should not outlive that. */
+      sealedCredentials: terminal ? null : sealJobCredentials(context.credentials),
+    });
+
+    /* An image job answers inside the submit, so the server can mirror it now —
+       the same record the studio would have written, under the same id. */
+    if (terminal) {
+      await mirrorStudioJobToGallery(context.userId, {
+        request_id: queued.requestId,
+        user_id: context.userId,
+        token_id: null,
+        model_id: plane.model,
+        prompt: plane.prompt.text,
+        settings: plane.settings,
+        kind: model.surface,
+        status,
+        cost_usd: costUsd,
+        error,
+        result,
+        sealed_credentials: null,
+        attempts: 0,
+        idempotency_key: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    }
+  } catch (caught) {
+    console.error("[studio] job record failed", {
+      requestId: queued.requestId,
+      message: caught instanceof Error ? caught.message : String(caught),
+    });
+  }
+}
+
+function errorTextOf(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim().slice(0, 500);
+  return null;
 }
 
 /** Every request in flight, answered in one round trip. Next dispatches server

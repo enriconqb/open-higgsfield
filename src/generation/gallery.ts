@@ -71,12 +71,18 @@ function promptOf(row: ApiJobRow): string {
 
 /** `settings` and `prompt` are stored on the job row when it is created; rows
     made before migration 008 simply have none, which the record tolerates. */
-function recordOf(row: ApiJobRow, urls: string[], surface: Surface, remoteUrls?: string[]): RunRecord {
+function recordOf(
+  row: ApiJobRow,
+  urls: string[],
+  surface: Surface,
+  opts: { remoteUrls?: string[]; id?: string; viaApi?: boolean } = {},
+): RunRecord {
   const status: RunRecord["status"] =
     row.status === "completed" ? "completed" : row.status === "failed" || row.status === "canceled" ? "failed" : "running";
   const createdAt = row.created_at instanceof Date ? row.created_at.getTime() : Date.parse(String(row.created_at));
+  const id = opts.id ?? `${row.request_id}#api`;
   const record: RunRecord = {
-    id: `${row.request_id}#api`,
+    id,
     surface,
     modelId: row.model_id,
     modelLabel: labelOf(row.model_id),
@@ -85,13 +91,12 @@ function recordOf(row: ApiJobRow, urls: string[], surface: Surface, remoteUrls?:
     meta: metaOf(row),
     kind: row.kind,
     urls,
-    ...(remoteUrls ? { remoteUrls } : {}),
+    ...(opts.remoteUrls ? { remoteUrls: opts.remoteUrls } : {}),
     status,
     requestId: row.request_id,
-    art: tileArt(row.request_id),
+    art: tileArt(id),
     createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
-    via: "api",
-    tokenId: row.token_id,
+    ...(opts.viaApi ? { via: "api" as const, tokenId: row.token_id } : {}),
     ...(badgeOf(row) ? { badge: badgeOf(row) } : {}),
     ...(row.cost_usd === null ? {} : { costUsd: Number(row.cost_usd) }),
     ...(row.error ? { error: String(row.error).slice(0, 500) } : {}),
@@ -164,6 +169,18 @@ export async function upsertGenerationResult(userId: number, record: RunRecord):
 /** Terminal jobs are mirrored into the owner's gallery; called after a poll or a
     submit has settled a job, so a token run shows up without any browser. */
 export async function mirrorJobToGallery(userId: number, job: ApiJobRow): Promise<void> {
+  await mirrorJob(userId, job, "api");
+}
+
+/** The same mirror for a job the *server* settled: a studio run whose browser
+    closed (or was never reopened). The row keeps the studio's own id — one run,
+    one tile — so an open studio saving the identical run upserts this row
+    instead of adding a second one beside it. */
+export async function mirrorStudioJobToGallery(userId: number, job: ApiJobRow): Promise<void> {
+  await mirrorJob(userId, job, "studio");
+}
+
+async function mirrorJob(userId: number, job: ApiJobRow, mode: "api" | "studio"): Promise<void> {
   try {
     const result = parseJobResult(job.result);
     const { images, videoUrl, videoSourceUrl } = await archiveJobMedia(result, userId, job.request_id);
@@ -180,17 +197,71 @@ export async function mirrorJobToGallery(userId: number, job: ApiJobRow): Promis
       job.request_id,
     ]).catch(() => undefined);
 
-    const urls = buildUrls(job, images, videoUrl);
-    /* One entry per url, aligned the way the studio reads it: the gallery takes
-       the CDN link while it lasts and the archived copy once it stops. */
-    const remoteUrls = urls.map((_url, index) =>
-      surface === "image" ? (images[index]?.sourceUrl ?? "") : (videoSourceUrl ?? ""),
-    );
-    const record = recordOf(job, urls, surface, remoteUrls.some(Boolean) ? remoteUrls : undefined);
-    await upsertGenerationResult(userId, record);
+    const records =
+      mode === "api"
+        ? [apiRecord(job, images, videoUrl, videoSourceUrl, surface)]
+        : studioRecords(job, images, videoUrl, videoSourceUrl, surface);
+    for (const record of records) await upsertGenerationResult(userId, record);
   } catch (caught) {
     console.error("[gallery] mirror failed", caught instanceof Error ? caught.message : caught);
   }
+}
+
+/** One row per request, the shape the token client reads: every url in `urls`
+    and the provider links aligned beside them. */
+function apiRecord(
+  job: ApiJobRow,
+  images: StoredImage[],
+  videoUrl: string | null,
+  videoSourceUrl: string | undefined,
+  surface: Surface,
+): RunRecord {
+  const urls = buildUrls(job, images, videoUrl);
+  /* One entry per url, aligned the way the studio reads it: the gallery takes
+     the CDN link while it lasts and the archived copy once it stops. */
+  const remoteUrls = urls.map((_url, index) =>
+    surface === "image" ? (images[index]?.sourceUrl ?? "") : (videoSourceUrl ?? ""),
+  );
+  return recordOf(job, urls, surface, {
+    viaApi: true,
+    ...(remoteUrls.some(Boolean) ? { remoteUrls } : {}),
+  });
+}
+
+/** The rows the studio itself would have written: a video is one row named by
+    the request id, a batch of stills is one row per still with the same
+    `<requestId>#<offset>` ids the composer builds. */
+function studioRecords(
+  job: ApiJobRow,
+  images: StoredImage[],
+  videoUrl: string | null,
+  videoSourceUrl: string | undefined,
+  surface: Surface,
+): RunRecord[] {
+  if (surface === "image" && images.length > 0) {
+    const count = images.length;
+    return images.map((image, index) => {
+      const url = image.id ? `/api/uploads/${image.id}` : (image.url ?? "");
+      const remote = image.sourceUrl && image.sourceUrl !== url ? [image.sourceUrl] : undefined;
+      return recordOf(job, url ? [url] : [], surface, {
+        id: rowIdOf(job.request_id, index, count),
+        ...(remote ? { remoteUrls: remote } : {}),
+      });
+    });
+  }
+  const urls = buildUrls(job, images, videoUrl);
+  const remoteUrls = urls.map(() => videoSourceUrl ?? "");
+  return [
+    recordOf(job, urls, surface, {
+      id: job.request_id,
+      ...(remoteUrls.some(Boolean) ? { remoteUrls } : {}),
+    }),
+  ];
+}
+
+/** Mirrors the composer's `rowId`: a lone result is named by the request. */
+function rowIdOf(requestId: string, offset: number, count: number): string {
+  return count > 1 ? `${requestId}#${offset}` : requestId;
 }
 
 /** The URLs the studio renders. Archived bytes become `/api/uploads/<id>`, which

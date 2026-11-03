@@ -7,13 +7,33 @@ import type { GenerationStatus, StatusResult } from "./platform";
 const TERMINAL = new Set(["completed", "failed", "nsfw", "canceled"]);
 
 export const POLL_INTERVAL_MS = 4000;
-export const POLL_DEADLINE_MS = 10 * 60_000;
+export const POLL_DEADLINE_MS = 60 * 60_000;
 /** Rounds allowed to fail back to back before the watches are given up on. One
     dropped round must not end every generation in flight. */
 const MAX_MISSES = 3;
+/** Answers a single request may fail to get in a row before its watch is given
+    up on. A dropped poll is not a failed generation: the platform keeps working
+    and the server keeps following the job, so the watch is left alone. */
+const MAX_REQUEST_MISSES = 6;
+
+/** The watch stopped being answerable — which is not the same as the platform
+    reporting a failure. Callers must keep the run as it is: the platform may
+    still finish it, and the server-side settlement worker writes the finished
+    record even if this browser never asks again. */
+export class WatchAbandonedError extends Error {
+  readonly reason: "transport" | "timeout";
+
+  constructor(reason: "transport" | "timeout", message: string) {
+    super(message);
+    this.name = "WatchAbandonedError";
+    this.reason = reason;
+  }
+}
 
 type Waiter = {
   deadline: number;
+  /** Consecutive polls this request could not be answered for. */
+  misses: number;
   resolve: (status: GenerationStatus) => void;
   reject: (reason: Error) => void;
 };
@@ -38,6 +58,7 @@ export function watchRequest(
   const promise = new Promise<GenerationStatus>((resolve, reject) => {
     waiting.set(requestId, {
       deadline: opts?.deadline ?? Date.now() + POLL_DEADLINE_MS,
+      misses: 0,
       resolve: (status) => {
         inflight.delete(requestId);
         resolve(status);
@@ -79,7 +100,12 @@ async function round(): Promise<void> {
     sweep();
   } catch (caught) {
     if (++misses < MAX_MISSES) return;
-    settleAll(caught instanceof Error ? caught : new Error(String(caught)));
+    abandonAll(
+      new WatchAbandonedError(
+        "transport",
+        caught instanceof Error ? caught.message : String(caught),
+      ),
+    );
   } finally {
     polling = false;
     schedule();
@@ -90,10 +116,15 @@ function deliver(result: StatusResult): void {
   const waiter = waiting.get(result.requestId);
   if (!waiter) return;
   if ("error" in result) {
+    /* One unanswered poll is noise; the run is only given up on after several
+       in a row, and even then it is never rewritten as a failure. */
+    waiter.misses += 1;
+    if (waiter.misses < MAX_REQUEST_MISSES) return;
     waiting.delete(result.requestId);
-    waiter.reject(new Error(result.error));
+    waiter.reject(new WatchAbandonedError("transport", result.error));
     return;
   }
+  waiter.misses = 0;
   if (!TERMINAL.has(result.status.status)) return;
   waiting.delete(result.requestId);
   waiter.resolve(result.status);
@@ -106,11 +137,11 @@ function sweep(): void {
   for (const [requestId, waiter] of [...waiting]) {
     if (now <= waiter.deadline) continue;
     waiting.delete(requestId);
-    waiter.reject(new Error("timed out waiting for the platform"));
+    waiter.reject(new WatchAbandonedError("timeout", "timed out waiting for the platform"));
   }
 }
 
-function settleAll(reason: Error): void {
+function abandonAll(reason: Error): void {
   const waiters = [...waiting.values()];
   waiting.clear();
   misses = 0;
