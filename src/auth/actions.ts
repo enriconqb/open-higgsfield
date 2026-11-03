@@ -75,18 +75,25 @@ async function registerAccountHandler(data: unknown): Promise<{ message: string 
   const username = requireUsername(body.username);
   const password = requirePassword(body.password);
 
-  const existing = await findUserByUsername(username);
-  if (existing) throw new Error("Username is already taken");
+  /* One answer for both outcomes. Reporting "username is already taken" turned
+     /register into an account-name oracle for anonymous callers (pentest finding
+     vuln-0002, 2 Nov 2026). A registration whose name is taken simply gets the same
+     pending-approval notice — and is never approved, because no row is written.
 
+     The hash is computed before the lookup and on both paths, so a taken name does
+     not answer measurably faster than a free one either. */
   const passwordHash = await hashPassword(password);
   const passwordSalt = createPasswordSalt();
-  await createUser({
-    username,
-    passwordHash,
-    passwordSalt,
-    role: "user",
-    status: "pending",
-  });
+  const existing = await findUserByUsername(username);
+  if (!existing) {
+    await createUser({
+      username,
+      passwordHash,
+      passwordSalt,
+      role: "user",
+      status: "pending",
+    });
+  }
 
   return {
     message: "Registration received. Wait for a superadmin to approve your account before logging in.",
