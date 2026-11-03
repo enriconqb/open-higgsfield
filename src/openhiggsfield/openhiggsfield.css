@@ -5040,6 +5040,12 @@ a.ohf-key-link {
 
 .ohf-tl-frame {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
 }
 
 /* The stage takes the height the panel has left after the sequence strip and the
@@ -5050,7 +5056,8 @@ a.ohf-key-link {
   position: relative;
   flex: 1 1 auto;
   min-height: 220px;
-  container-type: size;
+  display: flex;
+  flex-direction: column;
   background: var(--rail);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -5123,9 +5130,11 @@ a.ohf-key-link {
 .ohf-tl-transport {
   display: flex;
   align-items: center;
+  flex: none;
   gap: 10px;
   width: min(100%, calc(56vh * 16 / 9));
-  margin: 8px auto 0;
+  margin: 8px auto;
+  padding: 0 12px 10px;
 }
 
 .ohf-tl-play {
@@ -5153,13 +5162,14 @@ a.ohf-key-link {
 
 .ohf-tl-share {
   flex: none;
-  min-height: 36px;
-  padding: 0 14px;
+  height: 32px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 999px;
-  background: var(--s3);
+  border-radius: 8px;
+  background: transparent;
   color: var(--tx);
   font: inherit;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }

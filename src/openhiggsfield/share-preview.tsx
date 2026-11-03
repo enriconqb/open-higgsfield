@@ -138,6 +138,7 @@ export function SharePreview({
                 startAt={startAt}
                 volume={volume}
                 lockDownload
+                loopSequence
                 onActiveVideo={setActiveVideo}
                 onProgress={(index, nextRatio, duration) => {
                   setActiveIndex(index);

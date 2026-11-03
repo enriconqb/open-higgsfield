@@ -8,12 +8,18 @@ import { createShare } from "@/share/actions";
 
 import { defaultKv } from "./idb";
 import type { RunRecord } from "./history";
-import { CheckIcon, CloseIcon, PauseIcon, PlayBadgeIcon, PlayIcon } from "./icons";
+import { CheckIcon, CloseIcon, PlayBadgeIcon, PlayIcon, StopIcon, VolumeIcon, VolumeOffIcon } from "./icons";
 import { sharePageUrl } from "./share-link";
 import { TimelinePlayer } from "./timeline-player";
 import { loadUploads, type UploadRecord } from "./uploads";
 
 const TIMELINE_KEY = "timeline.v1";
+
+function clock(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${(whole % 60).toString().padStart(2, "0")}`;
+}
 
 type ClipSource = {
   key: string;
@@ -36,6 +42,8 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
   const [shared, setShared] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [volume, setVolume] = useState(1);
+  const [heldVolume, setHeldVolume] = useState(1);
 
   useEffect(() => {
     let live = true;
@@ -123,22 +131,6 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
     weights.slice(0, activeIndex).reduce((sum, weight) => sum + weight, 0) +
     (weights[activeIndex] ?? 0) * ratio;
 
-  function seekTo(fraction: number) {
-    if (clips.length === 0 || total <= 0) return;
-    const target = Math.min(1, Math.max(0, fraction)) * total;
-    let cursor = 0;
-    for (let index = 0; index < clips.length; index += 1) {
-      const weight = weights[index] ?? 0;
-      const end = cursor + weight;
-      if (target <= end || index === clips.length - 1) {
-        const into = weight > 0 ? ((target - cursor) / weight) * (known ? weight : 0) : 0;
-        playFrom(index, into);
-        return;
-      }
-      cursor = end;
-    }
-  }
-
   function toggle(key: string) {
     setPlaying(false);
     setStartIndex(0);
@@ -179,12 +171,14 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
         {clips.length > 0 ? (
           <>
             <div className="ohf-tl-frame">
+            <div className="ohf-share-stage">
             <TimelinePlayer
               urls={urls}
               playing={playing}
               startIndex={startIndex}
               startAt={startAt}
               seekNonce={seekNonce}
+              volume={volume}
               onProgress={(index, nextRatio, duration) => {
                 setActiveIndex(index);
                 setRatio(nextRatio);
@@ -195,44 +189,100 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
                 }
               }}
             />
-            </div>
-            <div className="ohf-tl-transport">
             <button
               type="button"
-              className="ohf-tl-play"
+              className="ohf-share-hit"
               aria-label={playing ? "Pause" : "Play"}
               onClick={() => setPlaying((on) => !on)}
-            >
-              {playing ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
-            </button>
-            <input
-              className="ohf-tl-range"
-              type="range"
-              min={0}
-              max={1}
-              step={0.001}
-              value={total > 0 ? Math.min(1, elapsed / total) : 0}
-              aria-label="Sequence progress"
-              onChange={(event) => seekTo(Number(event.target.value))}
             />
-            <button
-              type="button"
-              className="ohf-tl-share"
-              disabled={clips.length === 0 || shared === "busy"}
-              onClick={() => {
-                setShared("busy");
-                void createShare({
-                  kind: "timeline",
-                  clips: clips.map((clip) => ({ kind: "video" as const, url: clip.url })),
-                })
-                  .then(unwrap)
-                  .then((created) => navigator.clipboard.writeText(sharePageUrl(created.token)))
-                  .then(() => setShared("done"))
-                  .catch(() => setShared("error"));
-              }}
-            >
-              {shared === "done" ? "Link copied" : shared === "error" ? "Cannot share" : shared === "busy" ? "Sharing…" : "Share"}
-            </button>
+            {!playing && (
+              <span className="ohf-share-play" aria-hidden>
+                <PlayIcon size={28} />
+              </span>
+            )}
+            <div className="ohf-share-controls">
+              <button
+                type="button"
+                className="ohf-share-toggle"
+                aria-label={playing ? "Pause" : "Play"}
+                onClick={() => setPlaying((on) => !on)}
+              >
+                {playing ? <StopIcon size={14} /> : <PlayIcon size={14} />}
+              </button>
+              <span className="ohf-share-time">{known ? clock(elapsed) : `${activeIndex + 1}/${clips.length}`}</span>
+              <div className="ohf-share-segs" role="group" aria-label="Sequence progress">
+                {clips.map((clip, index) => {
+                  const fill = index < activeIndex ? 1 : index === activeIndex ? ratio : 0;
+                  return (
+                    <button
+                      key={clip.key}
+                      type="button"
+                      className="ohf-share-seg"
+                      aria-label={`Clip ${index + 1}`}
+                      aria-current={index === activeIndex || undefined}
+                      onClick={(event) => {
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        const at = rect.width <= 0 ? 0 : (event.clientX - rect.left) / rect.width;
+                        const length = durations[clip.key] ?? 0;
+                        playFrom(index, length > 0 ? at * length : 0);
+                      }}
+                    >
+                      <span style={{ width: `${Math.min(1, Math.max(0, fill)) * 100}%` }} />
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="ohf-share-time ohf-share-time--end">{known ? clock(total) : ""}</span>
+              <div className="ohf-share-volume">
+                <button
+                  type="button"
+                  className="ohf-share-toggle"
+                  aria-label={volume === 0 ? "Unmute" : "Mute"}
+                  onClick={() => {
+                    if (volume === 0) setVolume(heldVolume || 1);
+                    else {
+                      setHeldVolume(volume);
+                      setVolume(0);
+                    }
+                  }}
+                >
+                  {volume === 0 ? <VolumeOffIcon size={16} /> : <VolumeIcon size={16} />}
+                </button>
+                <input
+                  className="ohf-share-volume-range"
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={volume}
+                  aria-label="Volume"
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    setVolume(next);
+                    if (next > 0) setHeldVolume(next);
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="ohf-tl-share"
+                disabled={shared === "busy"}
+                onClick={() => {
+                  setShared("busy");
+                  void createShare({
+                    kind: "timeline",
+                    clips: clips.map((clip) => ({ kind: "video" as const, url: clip.url })),
+                  })
+                    .then(unwrap)
+                    .then((created) => navigator.clipboard.writeText(sharePageUrl(created.token)))
+                    .then(() => setShared("done"))
+                    .catch(() => setShared("error"));
+                }}
+              >
+                {shared === "done" ? "Copied" : shared === "error" ? "Failed" : shared === "busy" ? "…" : "Share"}
+              </button>
+            </div>
+            </div>
             </div>
           </>
         ) : (

@@ -15,6 +15,7 @@ export function TimelinePlayer({
   startAt = 0,
   volume = 1,
   lockDownload = false,
+  loopSequence = false,
   onProgress,
   onActiveVideo,
 }: {
@@ -27,6 +28,8 @@ export function TimelinePlayer({
   /** 0–1. Applied to both stacked videos. */
   volume?: number;
   lockDownload?: boolean;
+  /** After the last clip, continue at the first. The studio leaves this off. */
+  loopSequence?: boolean;
   onProgress: (index: number, ratio: number, duration: number) => void;
   /** The video element currently painted in front. */
   onActiveVideo?: (video: HTMLVideoElement | null) => void;
@@ -41,6 +44,8 @@ export function TimelinePlayer({
   const startAtRef = useRef(startAt);
   const volumeRef = useRef(volume);
   const playingRef = useRef(playing);
+  const loopRef = useRef(loopSequence);
+  const pendingIndex = useRef<number | null>(null);
   const onActiveVideoRef = useRef(onActiveVideo);
   onActiveVideoRef.current = onActiveVideo;
   const seekPending = useRef(false);
@@ -49,6 +54,7 @@ export function TimelinePlayer({
   startAtRef.current = startAt;
   volumeRef.current = volume;
   playingRef.current = playing;
+  loopRef.current = loopSequence;
   const [front, setFront] = useState<0 | 1>(0);
 
   function slot(which: 0 | 1) {
@@ -153,11 +159,13 @@ export function TimelinePlayer({
       }
     };
     applyVolume(first);
-    if (!sameMedia(first, urls[index])) first.src = urls[index];
+    const changed = !sameMedia(first, urls[index] ?? "");
+    if (changed && urls[index]) first.src = urls[index];
     first.pause();
-    if (first.readyState >= 1) seekTo();
+    /* A leftover readyState belongs to the previous source. Wait until the new one reports. */
+    if (!changed && first.readyState >= 1) seekTo();
     else first.addEventListener("loadedmetadata", seekTo, { once: true });
-    prime(second, urls[index + 1]);
+    prime(second, urlAfter(index));
     return () => {
       cancelled = true;
       seekPending.current = false;
@@ -191,23 +199,64 @@ export function TimelinePlayer({
     onActiveVideoRef.current?.(slot(front));
   }, [front]);
 
-  function armNext(from: 0 | 1) {
-    const nextIndex = indexRef.current + 1;
-    const next = slot(from === 0 ? 1 : 0);
+  function indexAfter(fromIndex: number): number | null {
     const list = urlsRef.current;
-    if (!next || next.readyState < 2 || nextIndex >= list.length) return;
-    handoffRef.current = true;
-    try {
-      next.currentTime = 0;
-    } catch {
-      /* still seeking */
+    if (list.length === 0) return null;
+    const next = fromIndex + 1;
+    if (next < list.length) return next;
+    return loopRef.current ? 0 : null;
+  }
+
+  function urlAfter(fromIndex: number): string | undefined {
+    const next = indexAfter(fromIndex);
+    if (next === null || next === fromIndex) return undefined;
+    return urlsRef.current[next];
+  }
+
+  function armNext(from: 0 | 1) {
+    const nextIndex = indexAfter(indexRef.current);
+    if (nextIndex === null) return;
+    const current = slot(from);
+    if (nextIndex === indexRef.current && current) {
+      try {
+        current.currentTime = 0;
+      } catch {
+        /* still seeking */
+      }
+      void current.play().catch(() => {});
+      onProgressRef.current(indexRef.current, 0, current.duration || 0);
+      return;
     }
-    void next.play().catch(() => {
-      handoffRef.current = false;
-    });
+    const next = slot(from === 0 ? 1 : 0);
+    const url = urlsRef.current[nextIndex];
+    if (!next || !url) return;
+    pendingIndex.current = nextIndex;
+    handoffRef.current = true;
+    const start = () => {
+      try {
+        next.currentTime = 0;
+      } catch {
+        /* still seeking */
+      }
+      void next.play().catch(() => {
+        handoffRef.current = false;
+        pendingIndex.current = null;
+      });
+    };
+    if (next.getAttribute("src") !== url) {
+      next.src = url;
+      next.addEventListener("loadeddata", start, { once: true });
+      return;
+    }
+    if (next.readyState < 2) {
+      next.addEventListener("loadeddata", start, { once: true });
+      return;
+    }
+    start();
   }
 
   function onTime(which: 0 | 1) {
+    if (seekPending.current) return;
     if (activeRef.current !== which || handoffRef.current) return;
     const current = slot(which);
     if (!current || !Number.isFinite(current.duration) || current.duration === 0) return;
@@ -221,11 +270,12 @@ export function TimelinePlayer({
     const previous = slot(activeRef.current);
     previous?.pause();
     activeRef.current = which;
-    indexRef.current += 1;
+    indexRef.current = pendingIndex.current ?? indexRef.current + 1;
+    pendingIndex.current = null;
     handoffRef.current = false;
     setFront(which);
     onProgressRef.current(indexRef.current, 0, 0);
-    prime(previous, urlsRef.current[indexRef.current + 1]);
+    prime(previous, urlAfter(indexRef.current));
   }
 
   function onEnded(which: 0 | 1) {
