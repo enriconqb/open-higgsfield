@@ -147,11 +147,10 @@ export function AssetPicker({
      staged before this panel opened, so reopening does not re-select it. */
   const seen = useRef(staged);
 
-  /* A new role is a new library and a new set — a start frame cannot follow the
-     switch to audio — so the shelf and the selection are both re-seeded. */
+  /* A new role is a new set of attachments. The shelf stays: Uploads or
+     Generations should not jump back when the slot below changes. */
   function pickRole(next: MediaRole) {
     setRole(next);
-    setSource(null);
     setSelected(urlsOf(items, next));
   }
 
