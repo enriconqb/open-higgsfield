@@ -1,5 +1,5 @@
 /** OpenRouter rejects a reference video outside this duration and width/height range. */
-export const VIDEO_MAX_SECONDS = 30;
+export const VIDEO_MAX_SECONDS = 31;
 export const VIDEO_MIN_RATIO = 0.39;
 export const VIDEO_MAX_RATIO = 2.5;
 
