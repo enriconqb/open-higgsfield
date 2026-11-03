@@ -44,6 +44,7 @@ import { CloseIcon, UndoIcon } from "./icons";
 import { SelectionBar, type SaveProgress } from "./selection-bar";
 import { Timeline } from "./timeline";
 import { Topbar } from "./topbar";
+import { UnFace } from "./unface-panel";
 import { Viewer } from "./viewer";
 
 /* Long enough to read the bar and reach it; the drain line states the window. */
@@ -464,6 +465,14 @@ function persistLocal(records: RunRecord[]) {
     return history.filter((record) => record.surface === view);
   }, [history, view]);
 
+  const keepUnface = useCallback((record: RunRecord) => {
+    setHistory((prev) => {
+      const next = [record, ...prev];
+      persistLocal(next);
+      return next;
+    });
+  }, []);
+
   const switchView = useCallback(
     (next: GalleryView) => {
       setView(next);
@@ -857,6 +866,8 @@ function persistLocal(records: RunRecord[]) {
             <Timeline history={history} ready={historyLoaded} />
           ) : view === "compare" ? (
             <Compare history={history} ready={historyLoaded} />
+          ) : view === "unface" ? (
+            <UnFace history={history} onSaved={keepUnface} />
           ) : (
             <Gallery
               view={view}

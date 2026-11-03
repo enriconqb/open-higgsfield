@@ -35,6 +35,7 @@ const VIEW_ICONS: Record<GalleryView, () => React.ReactNode> = {
   favorites: () => <HeartIcon size={15} />,
   timeline: () => <TimelineIcon />,
   compare: () => <CompareIcon />,
+  unface: () => <SlidersIcon />,
 };
 
 export function Topbar({

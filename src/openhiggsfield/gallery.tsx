@@ -47,6 +47,10 @@ const EMPTY: Record<GalleryView, { title: string; hint: string }> = {
     title: "Compare",
     hint: "Two items are shown side by side on the Compare tab.",
   },
+  unface: {
+    title: "unFace",
+    hint: "Overlay tools live on the Tools tab.",
+  },
 };
 
 /* Action labels name the run they act on — tabbing a long grid otherwise
