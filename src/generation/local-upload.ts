@@ -26,7 +26,7 @@ export function uploadTypePath(id: string): string {
 /** Uploads are reference material, not deliverables: a photograph is a few MB,
     so the cap only has to stop a mistaken video-sized file. `UPLOAD_MAX_BYTES`
     raises it for a deployment that sends large clips through the studio. */
-export const DEFAULT_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+export const DEFAULT_UPLOAD_MAX_BYTES = 512 * 1024 * 1024;
 
 export function uploadMaxBytes(): number {
   const raw = process.env.UPLOAD_MAX_BYTES?.trim();

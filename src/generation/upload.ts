@@ -1,10 +1,20 @@
+import { Upload } from "tus-js-client";
+
 import { apiUrl } from "@/base-path";
 import type { GenerationPlane, MediaRole } from "./catalog/types";
 
+/** One request stays under the 50MB gateway. The finished file may be larger. */
+const UPLOAD_CHUNK_BYTES = 40 * 1024 * 1024;
+
 export async function uploadMedia(file: File): Promise<{ url: string }> {
+  if (file.size > UPLOAD_CHUNK_BYTES) return uploadInChunks(file);
+  return uploadWhole(file);
+}
+
+function uploadWhole(file: File): Promise<{ url: string }> {
   const body = new FormData();
   body.set("file", file);
-  const res = await fetch(apiUrl("/api/uploads"), { method: "POST", body });
+  return fetch(apiUrl("/api/uploads"), { method: "POST", body }).then(async (res) => {
   if (!res.ok) {
     const payload = (await res.json().catch(() => null)) as { error?: unknown } | null;
     const detail = payload && typeof payload.error === "string" ? payload.error : "";
@@ -13,6 +23,33 @@ export async function uploadMedia(file: File): Promise<{ url: string }> {
   const payload = (await res.json()) as { url?: unknown };
   if (typeof payload.url !== "string") throw new Error("Local upload failed");
   return { url: apiUrl(payload.url) };
+  });
+}
+
+/** Each PATCH stays near 40MB so a 50MB gateway accepts it. The server joins them. */
+function uploadInChunks(file: File): Promise<{ url: string }> {
+  return new Promise((resolve, reject) => {
+    let published = "";
+    const upload = new Upload(file, {
+      endpoint: apiUrl("/api/uploads/tus"),
+      chunkSize: UPLOAD_CHUNK_BYTES,
+      retryDelays: [0, 1000, 3000, 5000],
+      metadata: { filename: file.name, filetype: file.type || "application/octet-stream" },
+      onAfterResponse(_request, response) {
+        const header = response.getHeader("X-Upload-Url");
+        if (header) published = header;
+      },
+      onError: reject,
+      onSuccess() {
+        if (!published) {
+          reject(new Error("Local upload failed"));
+          return;
+        }
+        resolve({ url: apiUrl(published) });
+      },
+    });
+    upload.start();
+  });
 }
 
 /** Data URLs from finished image runs are too large for a server action. Store
