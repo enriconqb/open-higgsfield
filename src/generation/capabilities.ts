@@ -50,13 +50,17 @@ export function snapSettings(
 
 const RESOLUTION_ORDER = ["480p", "720p", "1080p", "4k", "512", "768", "1k", "1.5k", "2k", "4k-image"];
 
-/** Catalog values stay, and anything OpenRouter reports is added. Bare "1080" matches "1080p". */
+/** Catalog values stay until OpenRouter names the same size; the provider spelling is what gets sent. */
 export function mergeResolutions(catalog: readonly string[], extra: readonly string[]): string[] {
   const byKey = new Map<string, string>();
-  for (const value of [...catalog, ...extra]) {
+  for (const value of catalog) {
     if (!value) continue;
     const key = resolutionKey(value);
-    if (!byKey.has(key)) byKey.set(key, canonicalResolution(value));
+    if (!byKey.has(key)) byKey.set(key, value);
+  }
+  for (const value of extra) {
+    if (!value) continue;
+    byKey.set(resolutionKey(value), value);
   }
   const entries = [...byKey.entries()];
   /* Image sizes share the letters "4k" with video. On a list that is only image
@@ -84,17 +88,8 @@ function resolutionField(values: string[] | undefined, current: SettingField | u
 
 function resolutionKey(value: string): string {
   const lower = value.trim().toLowerCase();
-  if (lower === "4k" && value !== "4k") return "4k-image";
   if (/^\d+$/.test(lower) && ["480", "720", "1080"].includes(lower)) return `${lower}p`;
   return lower;
-}
-
-function canonicalResolution(value: string): string {
-  const key = resolutionKey(value);
-  if (key === "4k-image") return "4K";
-  if (key.endsWith("p")) return key;
-  if (value === "4k") return "4k";
-  return value;
 }
 
 function resolutionRank(key: string): number {

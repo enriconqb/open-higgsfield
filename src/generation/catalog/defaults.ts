@@ -16,7 +16,7 @@ export function imageModel(id: string, label: string, paths: PlatformPaths): Mod
     roles: { reference: 8 },
     settings: {
       aspectRatio: { type: "enum", values: IMAGE_ASPECT, default: "1:1" },
-      resolution: { type: "enum", values: ["1k", "2k", "4k"], default: "1k" },
+      resolution: { type: "enum", values: ["1K", "2K", "4K"], default: "1K" },
     },
     paths,
   };
