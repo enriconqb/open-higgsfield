@@ -29,29 +29,33 @@ export async function generateMetadata({
   params: Promise<{ token: string }>;
 }): Promise<Metadata> {
   const { token } = await params;
-  const share = await readPublicShare(token);
-  const robots = { index: false, follow: false };
-  if (!share || share.kind !== "image") return { title: "Preview", robots };
   const origin = publicOrigin(await headers());
   const image = `${origin}${configuredBasePath()}/share-banner.jpg`;
   const url = `${origin}${configuredBasePath()}/s/${token}`;
+  const banner = {
+    url: image,
+    width: 1024,
+    height: 576,
+    type: "image/jpeg" as const,
+    alt: `${SHARE_TITLE} — ${SHARE_DESCRIPTION}`,
+  };
   return {
     title: SHARE_TITLE,
     description: SHARE_DESCRIPTION,
-    robots,
+    robots: { index: false, follow: false },
     openGraph: {
       type: "website",
       siteName: SITE_NAME,
       title: SHARE_TITLE,
       description: SHARE_DESCRIPTION,
       url,
-      images: [{ url: image, alt: `${SHARE_TITLE} — ${SHARE_DESCRIPTION}` }],
+      images: [banner],
     },
     twitter: {
       card: "summary_large_image",
       title: SHARE_TITLE,
       description: SHARE_DESCRIPTION,
-      images: [image],
+      images: [banner],
     },
   };
 }
