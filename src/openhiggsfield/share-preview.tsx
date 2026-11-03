@@ -230,7 +230,7 @@ export function SharePreview({
                 </div>
                 <button
                   type="button"
-                  className="ohf-share-toggle"
+                  className="ohf-share-toggle ohf-share-fullscreen"
                   aria-label={fullscreen ? "Exit full screen" : "Full screen"}
                   onClick={toggleFullscreen}
                 >
