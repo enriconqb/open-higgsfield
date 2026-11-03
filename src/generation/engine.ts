@@ -1,6 +1,6 @@
 import { estimatePlaneUsd, recordUsage, settleUsage, usageSpec, usageStatusFromPlatform } from "@/usage/record";
 
-import { overlayModel, snapSettings } from "./capabilities";
+import { mergeResolutions, overlayModel, snapSettings } from "./capabilities";
 import type { OpenRouterCaps } from "./capabilities";
 import { getModel, parseSettings } from "./catalog";
 import { openRouterSlug } from "./catalog/openrouter-slugs";
@@ -107,23 +107,10 @@ async function imageCaps(
     collect(asObject(endpoint, "caps").supported_parameters);
   }
   return {
-    ...(resolution.size ? { resolution: sortResolutions([...resolution]) } : {}),
+    ...(resolution.size ? { resolution: mergeResolutions([], [...resolution]) } : {}),
     ...(aspectRatio.size ? { aspectRatio: [...aspectRatio] } : {}),
     ...(quality.size ? { quality: [...quality] } : {}),
   };
-}
-
-const RESOLUTION_ORDER = ["512", "768", "1K", "1.5K", "2K", "4K"];
-
-function sortResolutions(values: string[]): string[] {
-  return values.sort((a, b) => {
-    const ai = RESOLUTION_ORDER.indexOf(a);
-    const bi = RESOLUTION_ORDER.indexOf(b);
-    if (ai === -1 && bi === -1) return a.localeCompare(b);
-    if (ai === -1) return 1;
-    if (bi === -1) return -1;
-    return ai - bi;
-  });
 }
 
 async function videoCaps(
@@ -134,7 +121,7 @@ async function videoCaps(
   for (const item of asList(payload && typeof payload === "object" ? (payload as { data?: unknown }).data : null)) {
     const row = asObject(item, "caps");
     if (row.id !== slug) continue;
-    const resolution = stringList(row.supported_resolutions);
+    const resolution = mergeResolutions([], stringList(row.supported_resolutions));
     const aspectRatio = stringList(row.supported_aspect_ratios);
     const duration = numberList(row.supported_durations);
     return {

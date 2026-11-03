@@ -10,7 +10,7 @@ export type OpenRouterCaps = {
 export function overlayModel(model: ModelEntry, caps: OpenRouterCaps | null): ModelEntry {
   if (!caps) return model;
   const settings = { ...model.settings };
-  const resolution = enumField(caps.resolution, model.settings.resolution);
+  const resolution = resolutionField(caps.resolution, model.settings.resolution);
   const aspectRatio = enumField(caps.aspectRatio, model.settings.aspectRatio);
   if (resolution) settings.resolution = resolution;
   else delete settings.resolution;
@@ -46,6 +46,60 @@ export function snapSettings(
     else next[key] = field.default;
   }
   return next;
+}
+
+const RESOLUTION_ORDER = ["480p", "720p", "1080p", "4k", "512", "768", "1k", "1.5k", "2k", "4k-image"];
+
+/** Catalog values stay, and anything OpenRouter reports is added. Bare "1080" matches "1080p". */
+export function mergeResolutions(catalog: readonly string[], extra: readonly string[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const value of [...catalog, ...extra]) {
+    if (!value) continue;
+    const key = resolutionKey(value);
+    if (!byKey.has(key)) byKey.set(key, canonicalResolution(value));
+  }
+  const entries = [...byKey.entries()];
+  /* Image sizes share the letters "4k" with video. On a list that is only image
+     sizes, that value belongs after 2K, not up with the video tiers. */
+  const imageList =
+    entries.some(([key]) => IMAGE_SIZE.has(key)) && !entries.some(([key]) => VIDEO_TIER.has(key));
+  return entries
+    .sort((a, b) => {
+      const left = imageList && a[0] === "4k" ? "4k-image" : a[0];
+      const right = imageList && b[0] === "4k" ? "4k-image" : b[0];
+      return resolutionRank(left) - resolutionRank(right) || a[1].localeCompare(b[1]);
+    })
+    .map(([, label]) => label);
+}
+
+const IMAGE_SIZE = new Set(["512", "768", "1k", "1.5k", "2k", "4k-image"]);
+const VIDEO_TIER = new Set(["480p", "720p", "1080p"]);
+
+function resolutionField(values: string[] | undefined, current: SettingField | undefined): SettingField | undefined {
+  const catalog = current?.type === "enum" ? current.values : [];
+  const merged = mergeResolutions(catalog, values ?? []);
+  if (!merged.length) return undefined;
+  return { type: "enum", values: merged, default: merged[0]! };
+}
+
+function resolutionKey(value: string): string {
+  const lower = value.trim().toLowerCase();
+  if (lower === "4k" && value !== "4k") return "4k-image";
+  if (/^\d+$/.test(lower) && ["480", "720", "1080"].includes(lower)) return `${lower}p`;
+  return lower;
+}
+
+function canonicalResolution(value: string): string {
+  const key = resolutionKey(value);
+  if (key === "4k-image") return "4K";
+  if (key.endsWith("p")) return key;
+  if (value === "4k") return "4k";
+  return value;
+}
+
+function resolutionRank(key: string): number {
+  const index = RESOLUTION_ORDER.indexOf(key);
+  return index === -1 ? RESOLUTION_ORDER.length : index;
 }
 
 function enumField(values: string[] | undefined, current: SettingField | undefined): SettingField | undefined {

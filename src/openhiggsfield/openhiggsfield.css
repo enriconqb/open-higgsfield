@@ -1704,7 +1704,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   min-width: 0;
   padding: 2px 12px 12px;
 }
@@ -1713,7 +1713,7 @@
   align-items: center;
   gap: 6px;
   flex: 1 1 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   min-width: 0;
 }
 
@@ -1798,9 +1798,15 @@
   color: var(--accent);
 }
 .ohf-ctl--model {
+  flex: 1 1 auto;
+  min-width: 0;
   background: var(--s3);
   box-shadow: var(--shadow-1);
   color: var(--tx);
+}
+.ohf-ctl:not(.ohf-ctl--model),
+.ohf-batch {
+  flex-shrink: 0;
 }
 .ohf-ctl--model:hover {
   background: var(--s4);
@@ -3839,9 +3845,11 @@ a.ohf-btn-solid {
   .ohf-composer-row {
     gap: 8px;
     padding: 2px 10px 10px;
+    flex-wrap: wrap;
   }
   .ohf-controls {
     gap: 8px;
+    flex-wrap: wrap;
   }
   .ohf-composer {
     border-radius: 20px;

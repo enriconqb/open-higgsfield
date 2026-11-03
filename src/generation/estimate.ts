@@ -71,8 +71,38 @@ function outputPerSecond(
   const audioPool = pool.filter(([key]) => (audio ? /with_audio/.test(key) : /without_audio/.test(key)));
   const ranked = (audioPool.length ? audioPool : pool.filter(([key]) => !/with_audio|without_audio/.test(key))).slice();
   ranked.sort((a, b) => score(b[0], res) - score(a[0], res));
-  const best = ranked[0];
-  return best && score(best[0], res) > 0 ? best[1] : undefined;
+  const wanted = videoTier(res);
+  const priced = ranked.flatMap(([key, rate]) => {
+    const tier = tierInKey(key);
+    return tier ? [{ tier, rate }] : [];
+  });
+  /* A flat per-second table has no resolution in its names, so every tier shares it. */
+  if (!wanted || priced.length === 0) {
+    const best = ranked[0];
+    return best && score(best[0], res) > 0 ? best[1] : undefined;
+  }
+  const exact = priced.find((item) => item.tier === wanted);
+  if (exact) return exact.rate;
+  const wantedSide = SHORT_SIDE[wanted]!;
+  const nearest = priced.reduce((best, item) =>
+    Math.abs(SHORT_SIDE[item.tier]! - wantedSide) < Math.abs(SHORT_SIDE[best.tier]! - wantedSide) ? item : best,
+  );
+  return nearest.rate * (wantedSide / SHORT_SIDE[nearest.tier]!) ** 2;
+}
+
+const VIDEO_TIERS = ["1080p", "720p", "480p", "4k"] as const;
+
+function videoTier(resolution: string): (typeof VIDEO_TIERS)[number] | null {
+  if (!resolution) return null;
+  if (resolution.includes("1080")) return "1080p";
+  if (resolution.includes("720")) return "720p";
+  if (resolution.includes("480")) return "480p";
+  if (resolution.includes("4k") || resolution.includes("2160")) return "4k";
+  return null;
+}
+
+function tierInKey(key: string): (typeof VIDEO_TIERS)[number] | null {
+  return videoTier(key.toLowerCase());
 }
 
 function score(key: string, resolution: string): number {

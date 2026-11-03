@@ -96,7 +96,21 @@ export function SettingPill({
           {glyph}
         </span>
       )}
-      <span className="ohf-ctl-value">{settingValueLabel(settingKey, value)}</span>
+      <span
+        className="ohf-ctl-value"
+        style={
+          settingKey === "resolution" && field.type === "enum"
+            ? {
+                minWidth: `${field.values.reduce(
+                  (widest, option) => Math.max(widest, settingValueLabel(settingKey, option).length),
+                  1,
+                )}ch`,
+              }
+            : undefined
+        }
+      >
+        {settingValueLabel(settingKey, value)}
+      </span>
     </button>
   );
 }
