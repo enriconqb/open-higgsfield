@@ -167,7 +167,7 @@ const og = `<!doctype html><meta charset="utf-8">
 <div class="band mark">${markSvg(58, { stroke: 2.5 })}</div>
 <div class="mid"><div class="band">
   <h1>Vicend VTA AI</h1>
-  <div class="descriptor">Open source AI studio</div>
+  <div class="descriptor">AI Studio</div>
   <div class="rule"></div>
   <p>One prompt bar for image and video. Each model&rsquo;s own settings, and every finished run in one gallery.</p>
 </div></div>

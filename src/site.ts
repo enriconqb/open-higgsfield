@@ -16,7 +16,7 @@ function resolveOrigin(): string {
 export const SITE_URL = resolveOrigin();
 
 export const SITE_NAME = "Vicend VTA AI";
-export const SITE_DESCRIPTOR = "Open source AI studio";
+export const SITE_DESCRIPTOR = "AI Studio";
 export const SITE_TITLE = `${SITE_NAME} — ${SITE_DESCRIPTOR}`;
 
 export const SITE_DESCRIPTION =
@@ -36,7 +36,7 @@ export const OG_IMAGE = {
   width: 1200,
   height: 630,
   type: "image/png",
-  alt: "The Vicend VTA AI open-frame mark on a near-black field, above the Vicend VTA AI wordmark, the words Open source AI studio, and a line describing one prompt bar for image and video with every finished run in one gallery.",
+  alt: "The Vicend VTA AI open-frame mark on a near-black field, above the Vicend VTA AI wordmark, the words AI Studio, and a line describing one prompt bar for image and video with every finished run in one gallery.",
 };
 
 /* Next replaces the whole `openGraph` (and `twitter`) object when a route

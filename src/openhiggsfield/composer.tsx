@@ -140,7 +140,7 @@ export function Composer({
     const next = snapSettings(overlayModel(model, caps), settings.byModel[model.id] ?? {});
     const current = settings.byModel[model.id] ?? {};
     const patch: Record<string, unknown> = {};
-    for (const key of ["resolution", "aspectRatio", "duration", "quality"] as const) {
+    for (const key of ["resolution", "aspectRatio", "duration", "quality", "effort"] as const) {
       if (next[key] !== current[key]) patch[key] = next[key];
     }
     if (Object.keys(patch).length > 0) settings.set(model.id, patch);

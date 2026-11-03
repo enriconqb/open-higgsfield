@@ -5,6 +5,7 @@ export type OpenRouterCaps = {
   aspectRatio?: string[];
   duration?: number[];
   quality?: string[];
+  effort?: string[];
 };
 
 export function overlayModel(model: ModelEntry, caps: OpenRouterCaps | null): ModelEntry {
@@ -16,6 +17,8 @@ export function overlayModel(model: ModelEntry, caps: OpenRouterCaps | null): Mo
   else delete settings.resolution;
   const quality = enumField(caps.quality, model.settings.quality);
   if (!resolution && quality) settings.quality = quality;
+  const effort = enumField(caps.effort, model.settings.effort);
+  if (effort) settings.effort = effort;
   if (model.settings.aspectRatio) {
     if (aspectRatio) settings.aspectRatio = aspectRatio;
     else delete settings.aspectRatio;

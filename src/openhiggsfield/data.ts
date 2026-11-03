@@ -90,6 +90,7 @@ const SETTING_LABELS: Record<string, string> = {
   aspectRatio: "Aspect ratio",
   resolution: "Resolution",
   quality: "Quality",
+  effort: "Effort",
   outputFormat: "Format",
   duration: "Duration",
   generateAudio: "Generate audio",

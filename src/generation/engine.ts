@@ -89,12 +89,14 @@ async function imageCaps(
   const resolution = new Set<string>();
   const aspectRatio = new Set<string>();
   const quality = new Set<string>();
+  const effort = new Set<string>();
   const collect = (params: unknown) => {
     if (!params || typeof params !== "object") return;
-    const record = params as { resolution?: unknown; aspect_ratio?: unknown; quality?: unknown };
+    const record = params as { resolution?: unknown; aspect_ratio?: unknown; quality?: unknown; effort?: unknown };
     for (const value of enumValues(record.resolution)) resolution.add(value);
     for (const value of enumValues(record.aspect_ratio)) aspectRatio.add(value);
     for (const value of enumValues(record.quality)) quality.add(value);
+    for (const value of enumValues(record.effort)) effort.add(value);
   };
   for (const item of asList(list && typeof list === "object" ? (list as { data?: unknown }).data : null)) {
     const row = asObject(item, "caps");
@@ -110,6 +112,7 @@ async function imageCaps(
     ...(resolution.size ? { resolution: mergeResolutions([], [...resolution]) } : {}),
     ...(aspectRatio.size ? { aspectRatio: [...aspectRatio] } : {}),
     ...(quality.size ? { quality: [...quality] } : {}),
+    ...(effort.size ? { effort: [...effort] } : {}),
   };
 }
 
