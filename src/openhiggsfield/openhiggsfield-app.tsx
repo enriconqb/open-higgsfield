@@ -269,15 +269,7 @@ function persistLocal(records: RunRecord[]) {
     const teamId = activeTeamId;
     void (async () => {
       const key = historyKeyFor(user.id, teamId);
-      let local = await loadHistory(undefined, undefined, key).catch(() => [] as RunRecord[]);
-      if (local.length === 0 && teamId == null) {
-        const older = await loadHistory().catch(() => [] as RunRecord[]);
-        if (older.length > 0) {
-          local = older;
-          await saveHistory(older, undefined, undefined, key);
-          await saveHistory([]);
-        }
-      }
+      const local = await loadHistory(undefined, undefined, key).catch(() => [] as RunRecord[]);
       tombstones.current = new Set(await loadTombstones(user.id, undefined, teamId));
       const visible = (rows: RunRecord[]) => rows.filter((record) => !tombstones.current.has(record.id));
       let remote: RunRecord[] = [];
@@ -289,8 +281,13 @@ function persistLocal(records: RunRecord[]) {
         remoteOk = false;
       }
       if (!live || teamIdRef.current !== teamId) return;
+      const remoteVisible = visible(remote);
+      const localVisible = visible(local);
+      const keptLocal = remoteOk
+        ? localVisible.filter((record) => record.status === "running" && !remoteVisible.some((row) => row.id === record.id))
+        : localVisible;
       loadedTeamRef.current = teamId;
-      setHistory(mergeHistory(visible(remote), visible(local)));
+      setHistory(mergeHistory(remoteVisible, keptLocal));
       setSyncServer(remoteOk);
       setHistoryLoaded(true);
     })();

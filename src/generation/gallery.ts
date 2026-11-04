@@ -156,11 +156,35 @@ async function archiveRemote(
 export async function upsertGenerationResult(userId: number, record: RunRecord): Promise<void> {
   if (!isRunRecord(record)) return;
   const stored = { ...record, id: record.id.slice(0, 191) };
+  const { readSession } = await import("@/auth/session");
+  const session = await readSession();
+  const inWorkspace = session?.id === userId;
+  let teamId: number | null = null;
+  if (inWorkspace && session) {
+    const { workspaceFor } = await import("@/teams/access");
+    teamId = (await workspaceFor(session)).teamId;
+  }
+  const owner = await queryOne<RowDataPacket & { username: string }>(
+    `SELECT username FROM users WHERE id = ?`,
+    [userId],
+  );
+  if (owner?.username && !stored.createdBy) stored.createdBy = owner.username;
+  if (inWorkspace) {
+    await execute(
+      `INSERT INTO generation_results (user_id, team_id, created_by, client_id, payload)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE payload = VALUES(payload), team_id = VALUES(team_id), created_by = COALESCE(generation_results.created_by, VALUES(created_by)), updated_at = CURRENT_TIMESTAMP`,
+      [userId, teamId, userId, stored.id, JSON.stringify(stored)],
+    ).catch((caught) => {
+      console.error("[gallery] upsert failed", caught instanceof Error ? caught.message : caught);
+    });
+    return;
+  }
   await execute(
-    `INSERT INTO generation_results (user_id, client_id, payload)
-     VALUES (?, ?, ?)
-     ON DUPLICATE KEY UPDATE payload = VALUES(payload), updated_at = CURRENT_TIMESTAMP`,
-    [userId, stored.id, JSON.stringify(stored)],
+    `INSERT INTO generation_results (user_id, created_by, client_id, payload)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE payload = VALUES(payload), created_by = COALESCE(generation_results.created_by, VALUES(created_by)), updated_at = CURRENT_TIMESTAMP`,
+    [userId, userId, stored.id, JSON.stringify(stored)],
   ).catch((caught) => {
     console.error("[gallery] upsert failed", caught instanceof Error ? caught.message : caught);
   });
