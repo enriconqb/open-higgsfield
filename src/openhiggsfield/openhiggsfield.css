@@ -5079,6 +5079,82 @@ a.ohf-key-link {
   padding: 1rem;
 }
 
+.ohf-usage-scopes {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ohf-usage-scopes legend {
+  margin-bottom: 0.45rem;
+  font-family: var(--font-usage-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--usage-dim);
+}
+
+.ohf-usage-scope-row,
+.ohf-usage-scope-checks,
+.ohf-usage-scopes-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ohf-usage-scope-row button {
+  border: 1px solid var(--usage-line);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+}
+
+.ohf-usage-scope-checks label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+}
+
+.ohf-usage-scope-checks em {
+  font-style: normal;
+  color: var(--usage-dim);
+  font-size: 11px;
+}
+
+.ohf-usage-scopes-summary {
+  margin-top: 0.75rem;
+}
+
+.ohf-usage-scopes-summary article {
+  min-width: 9rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--usage-surface);
+  border: 1px solid var(--usage-line);
+  border-radius: 8px;
+}
+
+.ohf-usage-scopes-summary span,
+.ohf-usage-scopes-summary em {
+  display: block;
+  color: var(--usage-dim);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.ohf-usage-scopes-summary strong {
+  display: block;
+  margin: 0.2rem 0;
+  font-size: 1.1rem;
+}
+
 .ohf-usage-filters label {
   display: flex;
   flex-direction: column;

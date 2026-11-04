@@ -15,6 +15,9 @@ const EMPTY: UsageFilters = {
   status: "",
   requestId: "",
   username: "",
+  platform: false,
+  personal: false,
+  teamIds: [],
 };
 
 export function UsagePanel() {
@@ -23,6 +26,12 @@ export function UsagePanel() {
   const [draft, setDraft] = useState<UsageFilters>(EMPTY);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+
+  function applyScope(scope: Pick<UsageFilters, "platform" | "personal" | "teamIds">) {
+    const next = { ...draft, ...scope };
+    setDraft(next);
+    void load(next);
+  }
 
   async function load(filters?: UsageFilters) {
     setLoading(true);
@@ -51,7 +60,8 @@ export function UsagePanel() {
     if (!data) return;
     const headers = [
       "Time",
-      ...(data.isSuperadmin ? ["User"] : []),
+      "Workspace",
+      ...(data.showUsers ? ["User"] : []),
       "Model",
       "Type",
       "Spec",
@@ -61,7 +71,8 @@ export function UsagePanel() {
     ];
     const body = data.rows.map((row) => [
       formatTime(row.createdAt),
-      ...(data.isSuperadmin ? [row.username] : []),
+      row.workspace,
+      ...(data.showUsers ? [row.username] : []),
       row.modelId,
       row.kind,
       row.spec,
@@ -84,7 +95,7 @@ export function UsagePanel() {
   const successRate = generations === 0 ? 0 : (data!.kpis.success / generations) * 100;
   const failRate = generations === 0 ? 0 : (data!.kpis.failed / generations) * 100;
   const dayUsd = data?.days.reduce((sum, day) => sum + day.usd, 0) ?? 0;
-  const columns = data?.isSuperadmin ? 8 : 7;
+  const columns = 8 + (data?.showUsers ? 1 : 0);
 
   return (
     <div className="ohf-usage">
@@ -96,9 +107,9 @@ export function UsagePanel() {
           <p className="ohf-usage-eyebrow">Account</p>
           <h1>Usage</h1>
           <p className="ohf-usage-lead">
-            {data?.isSuperadmin
+            {data?.filters.platform
               ? "Spend and generation logs for every account, shown in USD."
-              : "Spend and generation logs for your account, shown in USD."}
+              : "Each generation is counted in one workspace. Combine personal and teams without counting it twice."}
           </p>
         </div>
         <div className="ohf-usage-actions">
@@ -119,6 +130,63 @@ export function UsagePanel() {
           void load(draft);
         }}
       >
+        <fieldset className="ohf-usage-scopes">
+          <legend>Workspaces</legend>
+          <div className="ohf-usage-scope-row">
+            <button type="button" onClick={() => applyScope({ platform: false, personal: data?.activeTeamId == null, teamIds: data?.activeTeamId ? [data.activeTeamId] : [] })}>
+              Active
+            </button>
+            <button type="button" onClick={() => applyScope({ platform: false, personal: true, teamIds: (data?.workspaces ?? []).map((team) => team.id) })}>
+              All
+            </button>
+            <button type="button" onClick={() => applyScope({ platform: false, personal: true, teamIds: [] })}>
+              Personal only
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const teamIds = (data?.workspaces ?? []).map((team) => team.id);
+                if (teamIds.length === 0) return;
+                applyScope({ platform: false, personal: false, teamIds });
+              }}
+            >
+              Teams only
+            </button>
+            {data?.isSuperadmin && (
+              <button type="button" onClick={() => applyScope({ platform: true, personal: false, teamIds: [] })}>
+                All accounts
+              </button>
+            )}
+          </div>
+          {!draft.platform && (
+            <div className="ohf-usage-scope-checks">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={draft.personal}
+                  onChange={(event) => setDraft({ ...draft, personal: event.target.checked, platform: false })}
+                />
+                Personal
+              </label>
+              {(data?.workspaces ?? []).map((team) => (
+                <label key={team.id}>
+                  <input
+                    type="checkbox"
+                    checked={draft.teamIds.includes(team.id)}
+                    onChange={(event) => {
+                      const teamIds = event.target.checked
+                        ? [...draft.teamIds, team.id]
+                        : draft.teamIds.filter((id) => id !== team.id);
+                      setDraft({ ...draft, teamIds, platform: false });
+                    }}
+                  />
+                  {team.name}
+                  <em>{team.role === "team_admin" ? "Team admin" : "Member"}</em>
+                </label>
+              ))}
+            </div>
+          )}
+        </fieldset>
         <label>
           From
           <input type="date" value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value })} />
@@ -127,7 +195,7 @@ export function UsagePanel() {
           To
           <input type="date" value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} />
         </label>
-        {data?.isSuperadmin && (
+        {data?.filters.platform && (
           <label>
             User
             <select value={draft.username} onChange={(event) => setDraft({ ...draft, username: event.target.value })}>
@@ -207,12 +275,24 @@ export function UsagePanel() {
               note={generations ? `${failRate.toFixed(1)}% fail rate` : "No generations"}
               tone="bad"
             />
-            {data.isSuperadmin && (
+            {data.showUsers && (
               <Kpi label="Active users" value={formatCount(data.kpis.activeUsers)} note="In this range" />
             )}
           </section>
 
-          <section className={`ohf-usage-split${data.isSuperadmin ? "" : " is-solo"}`}>
+          {!data.filters.platform && data.workspaceTotals.length > 0 && (
+            <section className="ohf-usage-scopes-summary" aria-label="Spend by workspace">
+              {data.workspaceTotals.map((workspace) => (
+                <article key={workspace.name}>
+                  <span>{workspace.name}</span>
+                  <strong>{formatUsageUsd(workspace.usd)}</strong>
+                  <em>{formatCount(workspace.generations)} generations</em>
+                </article>
+              ))}
+            </section>
+          )}
+
+          <section className={`ohf-usage-split${data.showUsers ? "" : " is-solo"}`}>
             <article className="ohf-usage-card">
               <div className="ohf-usage-card-head">
                 <div>
@@ -234,7 +314,7 @@ export function UsagePanel() {
               )}
               <p className="ohf-usage-footnote">Daily total {formatUsageUsd(dayUsd)}</p>
             </article>
-            {data.isSuperadmin && (
+            {data.showUsers && (
               <article className="ohf-usage-card">
                 <div className="ohf-usage-card-head">
                   <div>
@@ -276,7 +356,8 @@ export function UsagePanel() {
                 <thead>
                   <tr>
                     <th>Time</th>
-                    {data.isSuperadmin && <th>User</th>}
+                    <th>Workspace</th>
+                    {data.showUsers && <th>User</th>}
                     <th>Model</th>
                     <th>Type</th>
                     <th>Spec</th>
@@ -291,7 +372,7 @@ export function UsagePanel() {
                       <td colSpan={columns}>No generations in this range.</td>
                     </tr>
                   ) : (
-                    data.rows.map((row) => <LogRow key={`${row.requestId}-${row.createdAt}`} row={row} showUser={data.isSuperadmin} />)
+                    data.rows.map((row) => <LogRow key={`${row.requestId}-${row.createdAt}`} row={row} showUser={data.showUsers} />)
                   )}
                 </tbody>
               </table>
@@ -327,6 +408,7 @@ function LogRow({ row, showUser }: { row: UsageRow; showUser: boolean }) {
   return (
     <tr>
       <td className="ohf-usage-mono">{formatTime(row.createdAt)}</td>
+      <td>{row.workspace}</td>
       {showUser && <td>{row.username}</td>}
       <td>{row.modelId}</td>
       <td className="ohf-usage-kind">{row.kind}</td>

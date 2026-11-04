@@ -15,10 +15,27 @@ export type UsageFilters = {
   status: "" | "pending" | "success" | "failed";
   requestId: string;
   username: string;
+  /** Superadmin view of every account. Workspace checks are ignored. */
+  platform: boolean;
+  personal: boolean;
+  teamIds: number[];
+};
+
+export type UsageWorkspaceOption = {
+  id: number;
+  name: string;
+  role: "member" | "team_admin";
+};
+
+export type UsageWorkspaceTotal = {
+  name: string;
+  generations: number;
+  usd: number;
 };
 
 export type UsageRow = {
   createdAt: string;
+  workspace: string;
   username: string;
   modelId: string;
   kind: "image" | "video";
@@ -34,6 +51,10 @@ export type UsageTopUser = { username: string; generations: number; usd: number 
 
 export type UsageDashboard = {
   isSuperadmin: boolean;
+  showUsers: boolean;
+  activeTeamId: number | null;
+  workspaces: UsageWorkspaceOption[];
+  workspaceTotals: UsageWorkspaceTotal[];
   filters: UsageFilters;
   usernames: string[];
   models: string[];
@@ -69,6 +90,9 @@ function cleanFilters(data: unknown, isSuperadmin: boolean): UsageFilters {
   const kind = raw.kind === "image" || raw.kind === "video" ? raw.kind : "";
   const status =
     raw.status === "pending" || raw.status === "success" || raw.status === "failed" ? raw.status : "";
+  const teamIds = Array.isArray(raw.teamIds)
+    ? [...new Set(raw.teamIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))].slice(0, 50)
+    : [];
   return {
     from: from <= to ? from : to,
     to: from <= to ? to : from,
@@ -77,6 +101,9 @@ function cleanFilters(data: unknown, isSuperadmin: boolean): UsageFilters {
     status,
     requestId: typeof raw.requestId === "string" ? raw.requestId.trim().slice(0, 128) : "",
     username: isSuperadmin && typeof raw.username === "string" ? raw.username.slice(0, 64) : "",
+    platform: isSuperadmin && raw.platform === true,
+    personal: raw.personal === true,
+    teamIds,
   };
 }
 
@@ -88,20 +115,60 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
   const user = await requireActiveUser();
   const isSuperadmin = hasStudioAdminAccess(user.role);
   const filters = cleanFilters(data, isSuperadmin);
+  const { listTeamsForUser } = await import("@/teams/store");
+  const { workspaceFor } = await import("@/teams/access");
+  const [memberships, workspace] = await Promise.all([
+    listTeamsForUser(user.id),
+    workspaceFor(user).catch(() => null),
+  ]);
+  const workspaces: UsageWorkspaceOption[] = memberships
+    .filter((team) => team.status === "active")
+    .map((team) => ({ id: team.id, name: team.name, role: team.role }));
+  const known = new Map(workspaces.map((team) => [team.id, team]));
+  const raw = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const choosing = raw.personal === true || Array.isArray(raw.teamIds) || raw.platform === true;
+  if (!choosing) {
+    filters.platform = false;
+    filters.personal = !workspace?.teamId;
+    filters.teamIds = workspace?.teamId ? [workspace.teamId] : [];
+  }
+  if (!filters.platform) {
+    filters.teamIds = filters.teamIds.filter((id) => known.has(id));
+    if (!filters.personal && filters.teamIds.length === 0) {
+      throw new Error("Choose at least one workspace");
+    }
+  }
   const where = ["e.created_at >= ?", "e.created_at < DATE_ADD(?, INTERVAL 1 DAY)"];
   const params: Array<string | number> = [`${filters.from} 00:00:00`, filters.to];
-  const { workspaceFor } = await import("@/teams/access");
-  const workspace = await workspaceFor(user).catch(() => null);
-  if (!isSuperadmin && workspace?.teamId && workspace.role === "team_admin") {
-    where.push("e.team_id = ?");
-    params.push(workspace.teamId);
-  } else if (!isSuperadmin) {
-    where.push("e.user_id = ?");
-    params.push(user.id);
-  } else if (filters.username) {
-    where.push("u.username = ?");
-    params.push(filters.username);
+  const selectedTeams = filters.teamIds.map((id) => known.get(id)!);
+  const showUsers =
+    filters.platform ||
+    selectedTeams.some((team) => team.role === "team_admin") ||
+    (filters.personal ? 1 : 0) + selectedTeams.length > 1;
+  if (filters.platform) {
+    if (filters.username) {
+      where.push("u.username = ?");
+      params.push(filters.username);
+    }
+  } else {
+    const parts: string[] = [];
+    if (filters.personal) {
+      parts.push("(e.user_id = ? AND e.team_id IS NULL)");
+      params.push(user.id);
+    }
+    for (const team of selectedTeams) {
+      if (team.role === "team_admin") {
+        parts.push("e.team_id = ?");
+        params.push(team.id);
+      } else {
+        parts.push("(e.team_id = ? AND e.user_id = ?)");
+        params.push(team.id, user.id);
+      }
+    }
+    where.push(`(${parts.join(" OR ")})`);
   }
+  const scopeWhere = filters.platform ? "1=1" : where.slice(2).join(" AND ");
+  const scopeParams = filters.platform ? [] : params.slice(2);
   if (filters.modelId) {
     where.push("e.model_id = ?");
     params.push(filters.modelId);
@@ -120,10 +187,7 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
   }
   const clause = where.join(" AND ");
 
-  const scopeWhere = isSuperadmin ? "1=1" : "e.user_id = ?";
-  const scopeParams = isSuperadmin ? [] : [user.id];
-
-  const [summary, days, rows, models, usernames, topUsers] = await Promise.all([
+  const [summary, days, rows, models, usernames, topUsers, workspaceTotals] = await Promise.all([
     queryRows<RowDataPacket>(
       `SELECT
          COALESCE(SUM(CASE WHEN e.status = 'success' THEN COALESCE(e.cost_usd, e.credits / 100) ELSE 0 END), 0) AS usd,
@@ -147,9 +211,10 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
       params,
     ),
     queryRows<RowDataPacket>(
-      `SELECT e.created_at, u.username, e.model_id, e.kind, e.spec, e.credits, e.cost_usd, e.status, e.request_id
+      `SELECT e.created_at, COALESCE(t.name, 'Personal') AS workspace, u.username, e.model_id, e.kind, e.spec, e.credits, e.cost_usd, e.status, e.request_id
        FROM usage_events e
        INNER JOIN users u ON u.id = e.user_id
+       LEFT JOIN teams t ON t.id = e.team_id
        WHERE ${clause}
        ORDER BY e.created_at DESC
        LIMIT 500`,
@@ -162,7 +227,7 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
        ORDER BY e.model_id`,
       scopeParams,
     ),
-    isSuperadmin
+    isSuperadmin && filters.platform
       ? queryRows<RowDataPacket>(
           `SELECT DISTINCT u.username
            FROM usage_events e
@@ -170,7 +235,7 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
            ORDER BY u.username`,
         )
       : Promise.resolve([]),
-    isSuperadmin
+    showUsers
       ? queryRows<RowDataPacket>(
           `SELECT u.username, COUNT(*) AS generations,
                   COALESCE(SUM(CASE WHEN e.status = 'success' THEN COALESCE(e.cost_usd, e.credits / 100) ELSE 0 END), 0) AS usd
@@ -183,11 +248,32 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
           params,
         )
       : Promise.resolve([]),
+    filters.platform
+      ? Promise.resolve([])
+      : queryRows<RowDataPacket>(
+          `SELECT COALESCE(MAX(t.name), 'Personal') AS workspace, COUNT(*) AS generations,
+                  COALESCE(SUM(CASE WHEN e.status = 'success' THEN COALESCE(e.cost_usd, e.credits / 100) ELSE 0 END), 0) AS usd
+           FROM usage_events e
+           INNER JOIN users u ON u.id = e.user_id
+           LEFT JOIN teams t ON t.id = e.team_id
+           WHERE ${clause}
+           GROUP BY e.team_id
+           ORDER BY workspace`,
+          params,
+        ),
   ]);
 
   const head = summary[0] ?? {};
   return {
     isSuperadmin,
+    showUsers,
+    activeTeamId: workspace?.teamId ?? null,
+    workspaces,
+    workspaceTotals: workspaceTotals.map((row) => ({
+      name: String(row.workspace),
+      generations: Number(row.generations ?? 0),
+      usd: Number(row.usd ?? 0),
+    })),
     filters,
     usernames: usernames.map((row) => String(row.username)),
     models: models.map((row) => String(row.model_id)),
@@ -206,6 +292,7 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
     })),
     rows: rows.map((row) => ({
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      workspace: String(row.workspace ?? "Personal"),
       username: String(row.username),
       modelId: String(row.model_id),
       kind: row.kind === "video" ? "video" : "image",
