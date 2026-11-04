@@ -26,8 +26,10 @@ export interface MarkSettings {
   /** Center, 0–1 across the source image. */
   cx: number;
   cy: number;
-  /** Box side as a percent of the shorter source edge. */
-  size: number;
+  /** Box width as a fraction of the image width. */
+  w: number;
+  /** Box height as a fraction of the image height. */
+  h: number;
   rotation: number;
 }
 
@@ -51,7 +53,8 @@ export const SHEET_TITLE = "CHARACTER REFERENCE SHEET";
 export const DEFAULT_MARK: MarkSettings = {
   cx: 0.5,
   cy: 0.42,
-  size: 30,
+  w: 0.3,
+  h: 0.3,
   rotation: -8,
 };
 
@@ -68,8 +71,11 @@ export function outputSize(
   return { width: imageWidth, height: imageHeight + header, header };
 }
 
-export function markSide(imageWidth: number, imageHeight: number, sizePercent: number): number {
-  return (Math.min(imageWidth, imageHeight) * sizePercent) / 100;
+export function markExtent(imageWidth: number, imageHeight: number, mark: MarkSettings): number {
+  const shorter = Math.min(imageWidth, imageHeight);
+  if (shorter <= 0) return 1;
+  const average = (mark.w * imageWidth + mark.h * imageHeight) / 2;
+  return (average / shorter) * 100;
 }
 
 export function drawComposite(ctx: CanvasRenderingContext2D, input: CompositeInput): void {
@@ -145,21 +151,24 @@ function drawMark(
   header: number,
   mark: MarkSettings,
 ): void {
-  const side = markSide(imageWidth, imageHeight, mark.size);
+  const boxW = Math.max(1, mark.w * imageWidth);
+  const boxH = Math.max(1, mark.h * imageHeight);
   const cx = mark.cx * imageWidth;
   const cy = header + mark.cy * imageHeight;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate((mark.rotation * Math.PI) / 180);
   ctx.strokeStyle = "#e23d3d";
-  ctx.lineWidth = Math.max(8, side * 0.2);
+  ctx.lineWidth = Math.max(1, Math.min(boxW, boxH) * 0.16);
   ctx.lineCap = "round";
-  const arm = side * 0.42;
+  const inset = ctx.lineWidth / 2;
+  const armX = Math.max(0, boxW / 2 - inset);
+  const armY = Math.max(0, boxH / 2 - inset);
   ctx.beginPath();
-  ctx.moveTo(-arm, -arm);
-  ctx.lineTo(arm, arm);
-  ctx.moveTo(arm, -arm);
-  ctx.lineTo(-arm, arm);
+  ctx.moveTo(-armX, -armY);
+  ctx.lineTo(armX, armY);
+  ctx.moveTo(armX, -armY);
+  ctx.lineTo(-armX, armY);
   ctx.stroke();
   ctx.restore();
 }

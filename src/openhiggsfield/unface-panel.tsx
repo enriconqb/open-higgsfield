@@ -13,7 +13,7 @@ import {
   DEFAULT_MARK,
   drawComposite,
   fitBox,
-  markSide,
+  markExtent,
   outputSize,
   type GridSettings,
   type MarkSettings,
@@ -106,8 +106,9 @@ export function UnFace({
   const [presetId, setPresetId] = useState<(typeof SCENERY_PRESETS)[number]["id"]>("mist");
   const [customScenery, setCustomScenery] = useState<{ url: string; name: string } | null>(null);
   const [sceneryRaster, setSceneryRaster] = useState<Raster | null>(null);
-  const [marks, setMarks] = useState<XMark[]>(() => [createMark()]);
+  const [marks, setMarks] = useState<XMark[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [draft, setDraft] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [frame, setFrame] = useState<PlacedFrame | null>(null);
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
   const [busy, setBusy] = useState<"download" | "save" | null>(null);
@@ -118,6 +119,8 @@ export function UnFace({
 
   const marksRef = useRef(marks);
   marksRef.current = marks;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const sceneryRef = useRef(scenery);
   sceneryRef.current = scenery;
   const sourceRef = useRef(source);
@@ -194,7 +197,7 @@ export function UnFace({
       grid,
       scenery,
       sceneryImage: sceneryRaster,
-      marks: marksRef.current,
+      marks: marksForPaint(marksRef.current, draftRef.current),
     });
   }, [grid, method, scenery, sceneryRaster]);
 
@@ -209,7 +212,7 @@ export function UnFace({
 
   useEffect(() => {
     paint();
-  }, [marks, paint]);
+  }, [marks, draft, paint]);
 
   const library = useMemo(() => {
     const items: LibraryItem[] = [];
@@ -434,9 +437,13 @@ export function UnFace({
     }
     const local = localPoint(event.clientX, event.clientY, rect, drag.mark, imageWidth, imageHeight);
     if (drag.mode === "resize") {
-      const reach = Math.max(Math.abs(local.lx), Math.abs(local.ly)) * 2;
-      const percent = (reach / Math.min(imageWidth, imageHeight)) * 100;
-      writeMark({ ...drag.mark, size: clamp(percent, 12, 90) });
+      const halfW = Math.abs(local.lx) / imageWidth;
+      const halfH = Math.abs(local.ly) / imageHeight;
+      writeMark({
+        ...drag.mark,
+        w: clamp(halfW * 2, 0.005, 4),
+        h: clamp(halfH * 2, 0.005, 4),
+      });
       return;
     }
     const degrees = (Math.atan2(local.dy, local.dx) * 180) / Math.PI - 90;
@@ -445,10 +452,56 @@ export function UnFace({
 
   function onPointerUp(event: React.PointerEvent<HTMLElement>) {
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
+    const box = draftRef.current;
+    if (!box) return;
+    setDraft(null);
+    const w = Math.abs(box.x1 - box.x0);
+    const h = Math.abs(box.y1 - box.y0);
+    const rect = photoRef.current?.getBoundingClientRect();
+    const pixelW = rect ? w * rect.width : 0;
+    const pixelH = rect ? h * rect.height : 0;
+    if (pixelW < 4 && pixelH < 4) return;
+    const next = createMark({
+      cx: (box.x0 + box.x1) / 2,
+      cy: (box.y0 + box.y1) / 2,
+      w: clamp(w, 0.005, 4),
+      h: clamp(h, 0.005, 4),
+      rotation: 0,
+    });
+    setMarks((prev) => [...prev, next]);
+    setSelectedId(next.id);
+  }
+
+  function onDrawDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (method !== "x" && method !== "sheet") return;
+    if (event.target !== event.currentTarget) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    setDraft({ x0: x, y0: y, x1: x, y1: y });
+    dragRef.current = null;
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* A synthetic pointer has no active id. */
+    }
+  }
+
+  function onDrawMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!draftRef.current) {
+      onPointerMove(event);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    setDraft((prev) => (prev ? { ...prev, x1: x, y1: y } : prev));
   }
 
   const output = source ? outputSize(source.raster.width, source.raster.height, method) : null;
-  const selectedMark = marks.find((item) => item.id === selectedId) ?? marks[0]!;
+  const selectedMark = marks.find((item) => item.id === selectedId) ?? null;
   const activePreset = SCENERY_PRESETS.find((item) => item.id === presetId);
 
   return (
@@ -510,7 +563,11 @@ export function UnFace({
                     top: frame.top + frame.header * frame.scale,
                     width: frame.width,
                     height: frame.height - frame.header * frame.scale,
+                    cursor: method === "x" || method === "sheet" ? "crosshair" : undefined,
                   }}
+                  onPointerDown={onDrawDown}
+                  onPointerMove={onDrawMove}
+                  onPointerUp={onPointerUp}
                 >
                   {method === "scenery" ? (
                     <div
@@ -540,8 +597,7 @@ export function UnFace({
                     </div>
                   ) : (
                     marks.map((item) => {
-                      const chosen = item.id === selectedMark.id;
-                      const itemSide = markSide(source.raster.width, source.raster.height, item.size);
+                      const chosen = item.id === selectedMark?.id;
                       return (
                         <div
                           key={item.id}
@@ -550,8 +606,8 @@ export function UnFace({
                           style={{
                             left: `${item.cx * 100}%`,
                             top: `${item.cy * 100}%`,
-                            width: `${(itemSide / source.raster.width) * 100}%`,
-                            height: `${(itemSide / source.raster.height) * 100}%`,
+                            width: `${item.w * 100}%`,
+                            height: `${item.h * 100}%`,
                             transform: `translate(-50%, -50%) rotate(${item.rotation}deg)`,
                           }}
                           onPointerDown={(event) => onPointerDown(event, "move", "mark", item.id)}
@@ -583,6 +639,17 @@ export function UnFace({
                         </div>
                       );
                     })
+                  )}
+                  {draft && (method === "x" || method === "sheet") && (
+                    <div
+                      className="ohf-unface-draft"
+                      style={{
+                        left: `${Math.min(draft.x0, draft.x1) * 100}%`,
+                        top: `${Math.min(draft.y0, draft.y1) * 100}%`,
+                        width: `${Math.abs(draft.x1 - draft.x0) * 100}%`,
+                        height: `${Math.abs(draft.y1 - draft.y0) * 100}%`,
+                      }}
+                    />
                   )}
                 </div>
               )}
@@ -750,18 +817,15 @@ export function UnFace({
                   type="button"
                   className="ohf-unface-quiet"
                   onClick={() => {
-                    const first = createMark();
-                    setMarks([first]);
-                    setSelectedId(first.id);
+                    setMarks([]);
+                    setSelectedId("");
                   }}
                 >
                   Reset X
                 </button>
               </div>
               <p className="ohf-unface-copy">
-                {method === "sheet"
-                  ? "A header is added above the image. Add as many red X marks as you need, then drag each one on its own."
-                  : "Add more than one X. Click a box to select it, then drag, resize, or rotate that mark."}
+                Drag on the picture to draw a box. The X fills that box, wide or tall, as you pulled it. Drag again on empty space to add another.
               </p>
               <div className="ohf-unface-card-head">
                 <button
@@ -772,7 +836,8 @@ export function UnFace({
                     const next = createMark({
                       cx: clamp(last.cx + 0.12, 0.08, 0.92),
                       cy: clamp(last.cy + 0.1, 0.08, 0.92),
-                      size: last.size,
+                      w: last.w,
+                      h: last.h,
                       rotation: last.rotation,
                     });
                     setMarks((prev) => [...prev, next]);
@@ -785,8 +850,9 @@ export function UnFace({
                 <button
                   type="button"
                   className="ohf-unface-quiet"
-                  disabled={marks.length < 2}
+                  disabled={!selectedMark}
                   onClick={() => {
+                    if (!selectedMark) return;
                     const next = marks.filter((item) => item.id !== selectedMark.id);
                     setMarks(next);
                     setSelectedId(next[0]?.id ?? "");
@@ -798,17 +864,25 @@ export function UnFace({
               <p className="ohf-unface-note">
                 {marks.length} mark{marks.length === 1 ? "" : "s"}. Place each X so it covers at least one eye.
               </p>
+              {selectedMark && source && (
+                <>
               <Slider
                 label="X size"
-                min={12}
-                max={90}
+                min={1}
+                max={400}
                 suffix="%"
-                value={Math.round(selectedMark.size)}
-                onChange={(size) =>
+                value={Math.round(clamp(markExtent(source.raster.width, source.raster.height, selectedMark), 1, 400))}
+                onChange={(size) => {
+                  const current = markExtent(source.raster.width, source.raster.height, selectedMark);
+                  const ratio = current < 0.5 ? 1 : size / current;
                   setMarks((prev) =>
-                    prev.map((item) => (item.id === selectedMark.id ? { ...item, size } : item)),
-                  )
-                }
+                    prev.map((item) =>
+                      item.id === selectedMark.id
+                        ? { ...item, w: clamp(item.w * ratio, 0.005, 4), h: clamp(item.h * ratio, 0.005, 4) }
+                        : item,
+                    ),
+                  );
+                }}
               />
               <Slider
                 label="Rotation"
@@ -822,6 +896,8 @@ export function UnFace({
                   )
                 }
               />
+                </>
+              )}
             </>
           )}
         </div>
@@ -1000,6 +1076,24 @@ function isCrossOrigin(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+function marksForPaint(marks: XMark[], draft: { x0: number; y0: number; x1: number; y1: number } | null): XMark[] {
+  if (!draft) return marks;
+  const w = Math.abs(draft.x1 - draft.x0);
+  const h = Math.abs(draft.y1 - draft.y0);
+  if (w < 0.005 && h < 0.005) return marks;
+  return [
+    ...marks,
+    {
+      id: "draft",
+      cx: (draft.x0 + draft.x1) / 2,
+      cy: (draft.y0 + draft.y1) / 2,
+      w,
+      h,
+      rotation: 0,
+    },
+  ];
 }
 
 function localPoint(

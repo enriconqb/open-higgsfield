@@ -6626,6 +6626,13 @@ a.ohf-key-link {
   border-color: rgba(168, 176, 255, 0.4);
 }
 
+.ohf-unface-draft {
+  position: absolute;
+  border: 1.5px solid #e23d3d;
+  background: rgba(226, 61, 61, 0.12);
+  pointer-events: none;
+}
+
 .ohf-unface-handle,
 .ohf-unface-rotate {
   position: absolute;
