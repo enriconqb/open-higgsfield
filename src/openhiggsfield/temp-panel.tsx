@@ -73,9 +73,11 @@ export function trashCountdown(expiresAt: number, now = Date.now()): string {
 }
 
 export function TempPanel({
+  live = false,
   onClose,
   onRestore,
 }: {
+  live?: boolean;
   onClose: () => void;
   onRestore: (records: RunRecord[]) => void;
 }) {
@@ -96,23 +98,35 @@ export function TempPanel({
   }, []);
 
   useEffect(() => {
-    let live = true;
-    void (async () => {
-      try {
-        const list = unwrap(await loadGalleryTrash());
-        const allowed = unwrap(await trashMayPurge());
-        if (live) {
-          setItems(list);
-          setCanPurge(allowed);
+    let alive = true;
+    const pull = (quiet: boolean) => {
+      void (async () => {
+        try {
+          const list = unwrap(await loadGalleryTrash());
+          const allowed = unwrap(await trashMayPurge());
+          if (alive) {
+            setItems(list);
+            setCanPurge(allowed);
+            if (quiet) setError(null);
+          }
+        } catch (caught) {
+          if (alive && !quiet) setError(caught instanceof Error ? caught.message : "Could not load Temp");
         }
-      } catch (caught) {
-        if (live) setError(caught instanceof Error ? caught.message : "Could not load Temp");
-      }
-    })();
-    return () => {
-      live = false;
+      })();
     };
-  }, []);
+    pull(false);
+    if (!live) {
+      return () => {
+        alive = false;
+      };
+    }
+    const onRefresh = () => pull(true);
+    window.addEventListener("ohf-gallery-refresh", onRefresh);
+    return () => {
+      alive = false;
+      window.removeEventListener("ohf-gallery-refresh", onRefresh);
+    };
+  }, [live]);
 
   async function restore(item: GalleryTrashItem) {
     setBusyId(item.record.id);

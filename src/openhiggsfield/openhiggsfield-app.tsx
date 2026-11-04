@@ -39,7 +39,7 @@ import {
 import { Gallery } from "./gallery";
 import { loadHistory, loadTombstones, mergeHistory, replaceRequest, saveHistory, saveTombstones, historyKeyFor, stepRun, type RunRecord } from "./history";
 import { sourcesFor } from "./media-source";
-import { loadGenerationResults, saveGenerationResults } from "@/generation/result-actions";
+import { loadGenerationResults, restoreTeamGallery, saveGenerationResults, trashTeamGallery } from "@/generation/result-actions";
 import { CloseIcon, UndoIcon } from "./icons";
 import { SelectionBar, type SaveProgress } from "./selection-bar";
 import { Timeline } from "./timeline";
@@ -351,6 +351,51 @@ function persistLocal(records: RunRecord[]) {
   }, [historyLoaded, history, user, syncServer]);
 
   useEffect(() => {
+    if (!historyLoaded || !user || activeTeamId == null) return;
+    let live = true;
+    const teamId = activeTeamId;
+    let queued = false;
+    const pull = () => {
+      void loadGenerationResults()
+        .then(unwrap)
+        .then((remote) => {
+          if (!live || teamIdRef.current !== teamId) return;
+          window.dispatchEvent(new Event("ohf-gallery-refresh"));
+          setHistory((current) => {
+            const remoteIds = new Set(remote.map((record) => record.id));
+            const kept = current.filter((record) => {
+              if (tombstones.current.has(record.id)) return false;
+              if (record.status === "running" && !remoteIds.has(record.id)) return true;
+              return remoteIds.has(record.id);
+            });
+            const have = new Set(kept.map((record) => record.id));
+            const added = remote.filter((record) => !have.has(record.id) && !tombstones.current.has(record.id));
+            const same =
+              added.length === 0 &&
+              kept.length === current.length &&
+              kept.every((record) => current.some((row) => row.id === record.id));
+            if (same) return current;
+            return [...added, ...kept].sort((a, b) => b.createdAt - a.createdAt);
+          });
+        })
+        .catch(() => undefined);
+    };
+    const source = new EventSource(apiUrl(`/api/studio/gallery?team=${teamId}`));
+    source.onmessage = () => {
+      if (queued) return;
+      queued = true;
+      window.setTimeout(() => {
+        queued = false;
+        if (live) pull();
+      }, 300);
+    };
+    return () => {
+      live = false;
+      source.close();
+    };
+  }, [activeTeamId, historyLoaded, user]);
+
+  useEffect(() => {
     void getAuthState()
       .then(unwrap)
       .then((state) => {
@@ -647,7 +692,9 @@ function persistLocal(records: RunRecord[]) {
     const ids = new Set(records.map((record) => record.id));
     for (const id of ids) tombstones.current.add(id);
     const userId = userIdRef.current;
-    if (userId) void saveTombstones(userId, tombstones.current, undefined, teamIdRef.current);
+    const teamId = teamIdRef.current;
+    if (userId) void saveTombstones(userId, tombstones.current, undefined, teamId);
+    if (teamId) void trashTeamGallery([...ids]);
     setHistory((prev) => prev.filter((entry) => !ids.has(entry.id)));
     setDeleted(records);
   }, []);
@@ -661,6 +708,7 @@ function persistLocal(records: RunRecord[]) {
     for (const record of records) tombstones.current.delete(record.id);
     const userId = userIdRef.current;
     if (userId) void saveTombstones(userId, tombstones.current, undefined, teamIdRef.current);
+    if (teamIdRef.current) void restoreTeamGallery(records.map((record) => record.id));
     setHistory((prev) => {
       const here = new Set(prev.map((entry) => entry.id));
       const back = records.filter((entry) => !here.has(entry.id));
@@ -982,6 +1030,7 @@ function persistLocal(records: RunRecord[]) {
         )}
         {tempOpen && (
           <TempPanel
+            live={activeTeamId != null}
             onClose={() => setTempOpen(false)}
             onRestore={restoreRecords}
           />

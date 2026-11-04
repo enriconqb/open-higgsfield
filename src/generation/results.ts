@@ -81,7 +81,8 @@ export async function replaceGenerationResultsFor(
       return archived;
     }),
   );
-  const kept = new Set(next.map((record) => record.id.slice(0, 191)));
+  const publish = await teamPublishable(next, userId, teamId);
+  const kept = new Set(publish.map((record) => record.id.slice(0, 191)));
   const scope = teamId == null ? `user_id = ? AND team_id IS NULL` : `user_id = ? AND team_id = ?`;
   const scopeParams = teamId == null ? [userId] : [userId, teamId];
   /* A row the server is still following but this browser has not seen yet is
@@ -116,9 +117,11 @@ export async function replaceGenerationResultsFor(
     }
     if (kept.size > 0) {
       const marks = [...kept].map(() => "?").join(", ");
+      const trashScope = teamId == null ? scope : `team_id = ?`;
+      const trashParams = teamId == null ? scopeParams : [teamId];
       await connection.query(
-        `DELETE FROM gallery_trash WHERE ${scope} AND client_id IN (${marks})`,
-        [...scopeParams, ...kept],
+        `DELETE FROM gallery_trash WHERE ${trashScope} AND client_id IN (${marks})`,
+        [...trashParams, ...kept],
       );
     }
     const protectedMarks = [...moving];
@@ -129,7 +132,7 @@ export async function replaceGenerationResultsFor(
       `DELETE FROM generation_results WHERE ${scope} AND client_id NOT LIKE '%#api'${keepMoving}`,
       [...scopeParams, ...protectedMarks],
     );
-    for (const record of next) {
+    for (const record of publish) {
       await connection.query(
         `INSERT INTO generation_results (user_id, team_id, created_by, client_id, payload) VALUES (?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE payload = VALUES(payload), team_id = VALUES(team_id), created_by = COALESCE(generation_results.created_by, VALUES(created_by)), updated_at = CURRENT_TIMESTAMP`,
@@ -144,7 +147,108 @@ export async function replaceGenerationResultsFor(
     connection.release();
   }
   await purgeGalleryTrashFor(userId, { reason: "expired" });
-  return next;
+  return publish;
+}
+
+/** Moves team gallery rows into Temp for every member, whoever created them. */
+export async function trashTeamResults(clientIds: string[]): Promise<void> {
+  const user = await requireActiveUser();
+  const { workspaceFor } = await import("@/teams/access");
+  const workspace = await workspaceFor(user);
+  if (!workspace.teamId) return;
+  const ids = uniqueIds(clientIds);
+  if (ids.length === 0) return;
+  const marks = ids.map(() => "?").join(", ");
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query<(ResultRow & { user_id: number; created_by: number | null })[]>(
+      `SELECT user_id, created_by, client_id, payload FROM generation_results
+       WHERE team_id = ? AND client_id IN (${marks})`,
+      [workspace.teamId, ...ids],
+    );
+    for (const row of rows) {
+      await connection.query(
+        `INSERT INTO gallery_trash (user_id, team_id, created_by, client_id, payload, deleted_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${TRASH_DAYS} DAY))
+         ON DUPLICATE KEY UPDATE payload = VALUES(payload), team_id = VALUES(team_id), deleted_at = CURRENT_TIMESTAMP,
+           expires_at = VALUES(expires_at)`,
+        [row.user_id, workspace.teamId, row.created_by, row.client_id, JSON.stringify(parsePayload(row.payload) ?? row.payload)],
+      );
+    }
+    await connection.query(
+      `DELETE FROM generation_results WHERE team_id = ? AND client_id IN (${marks})`,
+      [workspace.teamId, ...ids],
+    );
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+  const { notifyTeamGallery } = await import("./gallery-signal");
+  notifyTeamGallery(workspace.teamId);
+}
+
+/** Puts Temp rows back on the team gallery and removes them from Temp. */
+export async function restoreTeamResults(clientIds: string[]): Promise<void> {
+  const user = await requireActiveUser();
+  const { workspaceFor } = await import("@/teams/access");
+  const workspace = await workspaceFor(user);
+  if (!workspace.teamId) return;
+  const ids = uniqueIds(clientIds);
+  if (ids.length === 0) return;
+  const marks = ids.map(() => "?").join(", ");
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query<(ResultRow & { user_id: number; created_by: number | null })[]>(
+      `SELECT user_id, created_by, client_id, payload FROM gallery_trash
+       WHERE team_id = ? AND client_id IN (${marks})`,
+      [workspace.teamId, ...ids],
+    );
+    for (const row of rows) {
+      await connection.query(
+        `INSERT INTO generation_results (user_id, team_id, created_by, client_id, payload)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE payload = VALUES(payload), team_id = VALUES(team_id), updated_at = CURRENT_TIMESTAMP`,
+        [row.user_id, workspace.teamId, row.created_by, row.client_id, JSON.stringify(parsePayload(row.payload) ?? row.payload)],
+      );
+    }
+    await connection.query(
+      `DELETE FROM gallery_trash WHERE team_id = ? AND client_id IN (${marks})`,
+      [workspace.teamId, ...ids],
+    );
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+  const { notifyTeamGallery } = await import("./gallery-signal");
+  notifyTeamGallery(workspace.teamId);
+}
+
+async function teamPublishable(records: RunRecord[], userId: number, teamId: number | null): Promise<RunRecord[]> {
+  if (!teamId || records.length === 0) return records;
+  const ids = records.map((record) => record.id.slice(0, 191));
+  const marks = ids.map(() => "?").join(", ");
+  const trashed = await queryRows<ResultRow & { client_id: string }>(
+    `SELECT client_id FROM gallery_trash WHERE team_id = ? AND client_id IN (${marks})`,
+    [teamId, ...ids],
+  );
+  const foreign = await queryRows<ResultRow & { client_id: string }>(
+    `SELECT client_id FROM generation_results WHERE team_id = ? AND user_id <> ? AND client_id IN (${marks})`,
+    [teamId, userId, ...ids],
+  );
+  const skip = new Set([...trashed, ...foreign].map((row) => row.client_id));
+  return records.filter((record) => !skip.has(record.id.slice(0, 191)));
+}
+
+function uniqueIds(clientIds: string[]): string[] {
+  return [...new Set(clientIds.map((id) => id.slice(0, 191)).filter(Boolean))];
 }
 
 function stampCreator(payload: unknown, username: string | undefined): unknown {

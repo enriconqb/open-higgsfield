@@ -4,7 +4,7 @@ import type { RunRecord } from "@/openhiggsfield/history";
 import { run, type ActionResult } from "@/lib/action-result";
 
 import { discardGalleryTrash, listGalleryTrash, type GalleryTrashItem } from "./gallery-trash";
-import { listGenerationResults, replaceGenerationResults } from "./results";
+import { listGenerationResults, replaceGenerationResults, restoreTeamResults, trashTeamResults } from "./results";
 
 export async function loadGenerationResults(): Promise<ActionResult<RunRecord[]>> {
   return run(listGenerationResults);
@@ -30,4 +30,12 @@ export async function discardGalleryTrashItems(clientIds: string[]): Promise<Act
 
 export async function saveGenerationResults(records: RunRecord[]): Promise<ActionResult<RunRecord[]>> {
   return run(() => replaceGenerationResults(records));
+}
+
+export async function trashTeamGallery(clientIds: string[]): Promise<ActionResult<void>> {
+  return run(() => trashTeamResults(clientIds));
+}
+
+export async function restoreTeamGallery(clientIds: string[]): Promise<ActionResult<void>> {
+  return run(() => restoreTeamResults(clientIds));
 }

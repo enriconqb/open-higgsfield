@@ -178,6 +178,8 @@ export async function upsertGenerationResult(userId: number, record: RunRecord):
     ).catch((caught) => {
       console.error("[gallery] upsert failed", caught instanceof Error ? caught.message : caught);
     });
+    const { notifyTeamGallery } = await import("./gallery-signal");
+    notifyTeamGallery(teamId);
     return;
   }
   await execute(
@@ -188,6 +190,12 @@ export async function upsertGenerationResult(userId: number, record: RunRecord):
   ).catch((caught) => {
     console.error("[gallery] upsert failed", caught instanceof Error ? caught.message : caught);
   });
+  const storedTeam = await queryOne<RowDataPacket & { team_id: number | null }>(
+    `SELECT team_id FROM generation_results WHERE user_id = ? AND client_id = ?`,
+    [userId, stored.id],
+  );
+  const { notifyTeamGallery } = await import("./gallery-signal");
+  notifyTeamGallery(storedTeam?.team_id == null ? null : Number(storedTeam.team_id));
 }
 
 /** Terminal jobs are mirrored into the owner's gallery; called after a poll or a
