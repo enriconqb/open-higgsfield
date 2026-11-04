@@ -387,7 +387,7 @@ export function TeamPanel({
             </>
           )}
         </div>
-        {activeTeam && (desk.createdBy === desk.viewerId || desk.isSuperadmin) && (
+        {desk && activeTeam && (desk.createdBy === desk.viewerId || desk.isSuperadmin) && (
           <button type="button" className="ohf-team-dissolve" disabled={busy} onClick={() => setDissolveOpen(true)}>
             <TrashIcon size={13} />
             Dissolve
