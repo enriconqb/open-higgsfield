@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatUsd } from "@/generation/estimate";
+import type { PublicUser } from "@/auth/types";
 import { hasStudioAdminAccess } from "@/auth/types";
 
 import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
