@@ -513,9 +513,7 @@ export function UnFace({
             New image
           </button>
           <span className="ohf-unface-meta">
-            {source && output
-              ? `${output.width} × ${output.height} px${source.name ? ` · ${source.name}` : ""}`
-              : "No image yet"}
+            {source && output ? `${output.width} × ${output.height} px` : "No image yet"}
           </span>
           <input
             ref={fileRef}

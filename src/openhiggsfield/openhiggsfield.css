@@ -1686,8 +1686,9 @@
   flex: 1;
   min-width: 0;
   resize: none;
+  height: 40px !important;
   min-height: 40px;
-  max-height: 168px;
+  max-height: 40px !important;
   overflow: hidden;
   background: transparent;
   border: none;
@@ -1695,6 +1696,11 @@
   font-size: 15px;
   line-height: 1.5;
   outline: none;
+}
+.ohf-prompt:focus {
+  height: auto !important;
+  max-height: 168px !important;
+  overflow: auto;
 }
 .ohf-prompt:focus-visible {
   outline: none;

@@ -287,34 +287,28 @@ export function Composer({
     };
   }, [overlay]);
 
-  /* A long prompt stays one line until the field is focused, then grows. */
+  /* Measure height only while the field is focused. A prompt filled from
+     elsewhere stays one line until the visitor clicks it. */
   useEffect(() => {
     const el = promptRef.current;
     if (!el) return;
     const grow = () => {
       if (document.activeElement !== el) {
-        el.style.height = "";
-        el.style.overflow = "hidden";
+        el.style.removeProperty("height");
         return;
       }
-      el.style.overflow = "auto";
-      el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, PROMPT_MAX_HEIGHT)}px`;
+      el.style.setProperty("height", "auto", "important");
+      const next = Math.min(el.scrollHeight, PROMPT_MAX_HEIGHT);
+      el.style.setProperty("height", `${next}px`, "important");
     };
-    grow();
-    el.addEventListener("focus", grow);
-    el.addEventListener("blur", grow);
-    let width = el.clientWidth;
-    const observer = new ResizeObserver(() => {
-      if (el.clientWidth === width) return;
-      width = el.clientWidth;
-      grow();
-    });
-    observer.observe(el);
+    const onFocus = () => grow();
+    const onBlur = () => el.style.removeProperty("height");
+    el.addEventListener("focus", onFocus);
+    el.addEventListener("blur", onBlur);
+    if (document.activeElement === el) grow();
     return () => {
-      el.removeEventListener("focus", grow);
-      el.removeEventListener("blur", grow);
-      observer.disconnect();
+      el.removeEventListener("focus", onFocus);
+      el.removeEventListener("blur", onBlur);
     };
   }, [prompt.text]);
 
