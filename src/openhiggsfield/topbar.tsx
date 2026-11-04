@@ -51,6 +51,7 @@ export function Topbar({
   onTemp,
   creditAlerts = 0,
   pendingInvites = 0,
+  workspaceName = "Personal",
   onTeamChanged,
 }: {
   view: GalleryView;
@@ -65,6 +66,8 @@ export function Topbar({
   onTemp: () => void;
   creditAlerts?: number;
   pendingInvites?: number;
+  /** Name of the workspace currently in use. */
+  workspaceName?: string;
   onTeamChanged?: () => void;
 }) {
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -221,21 +224,24 @@ export function Topbar({
               </button>
               {menuOpen && (
                 <div className="ohf-user-panel" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="ohf-user-item"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setStudioDialog("team");
-                    }}
-                  >
-                    <UserIcon size={15} />
-                    Team
-                    {creditAlerts + pendingInvites > 0 && (
-                      <span className="ohf-alert-badge">{creditAlerts + pendingInvites}</span>
-                    )}
-                  </button>
+                  <div className="ohf-user-workspace">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="ohf-user-item"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setStudioDialog("team");
+                      }}
+                    >
+                      <UserIcon size={15} />
+                      Workspace
+                      <span className="ohf-workspace-badge">{workspaceName}</span>
+                      {creditAlerts + pendingInvites > 0 && (
+                        <span className="ohf-alert-badge">{creditAlerts + pendingInvites}</span>
+                      )}
+                    </button>
+                  </div>
                   <Link href="/profile" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                     <UserIcon size={15} />
                     Profile

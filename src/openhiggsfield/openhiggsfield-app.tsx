@@ -207,6 +207,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const [kindReady, setKindReady] = useState(false);
   const [user, setUser] = useState<PublicUser | null>(null);
   const [activeTeamId, setActiveTeamId] = useState<number | null>(null);
+  const [teams, setTeams] = useState<{ id: number; name: string }[]>([]);
   const [creditAlerts, setCreditAlerts] = useState(0);
   const [teamBalance, setTeamBalance] = useState<number | null>(null);
   const [pendingInvites, setPendingInvites] = useState(0);
@@ -355,6 +356,7 @@ function persistLocal(records: RunRecord[]) {
       .then((state) => {
         setUser(state.user);
         setActiveTeamId(state.activeTeamId);
+        setTeams(state.teams);
         setCreditAlerts(state.creditAlerts);
         setPendingInvites(state.pendingInvites);
         setTeamBalance(state.teamBalance);
@@ -871,11 +873,13 @@ function persistLocal(records: RunRecord[]) {
             user={user}
             creditAlerts={creditAlerts}
             pendingInvites={pendingInvites}
+            workspaceName={teams.find((team) => team.id === activeTeamId)?.name ?? "Personal"}
             onTeamChanged={() => {
               void getAuthState()
                 .then(unwrap)
                 .then((state) => {
                   setActiveTeamId(state.activeTeamId);
+        setTeams(state.teams);
                   setCreditAlerts(state.creditAlerts);
                   setPendingInvites(state.pendingInvites);
                   setTeamBalance(state.teamBalance);

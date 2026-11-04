@@ -4685,6 +4685,26 @@ button.ohf-team-icon:hover:not(:disabled) {
   font: inherit;
   cursor: pointer;
 }
+.ohf-user-workspace {
+  margin: -4px -4px 6px;
+  padding: 4px 4px 8px;
+  border-bottom: 1px solid var(--line-1, rgba(255, 255, 255, 0.08));
+}
+
+.ohf-workspace-badge {
+  margin-left: auto;
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
 .ohf-user-item--split {
   margin-top: 6px;
   border-top: 1px solid var(--line-1, rgba(255, 255, 255, 0.08));
