@@ -208,6 +208,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const [user, setUser] = useState<PublicUser | null>(null);
   const [activeTeamId, setActiveTeamId] = useState<number | null>(null);
   const [creditAlerts, setCreditAlerts] = useState(0);
+  const [teamBalance, setTeamBalance] = useState<number | null>(null);
   const [pendingInvites, setPendingInvites] = useState(0);
   const modelBySurface = useActive((state) => state.modelBySurface);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -356,6 +357,7 @@ function persistLocal(records: RunRecord[]) {
         setActiveTeamId(state.activeTeamId);
         setCreditAlerts(state.creditAlerts);
         setPendingInvites(state.pendingInvites);
+        setTeamBalance(state.teamBalance);
         setKeyConfigured(state.hasApiKey);
         if (state.user) {
           return platformKeyKind().then(unwrap).then((kind) => {
@@ -429,6 +431,7 @@ function persistLocal(records: RunRecord[]) {
           return next;
         });
         markFresh(records.filter((record) => record.status === "completed").map((record) => record.id));
+        void getAuthState().then(unwrap).then((state) => setTeamBalance(state.teamBalance)).catch(() => undefined);
         if (records.some((record) => record.status === "failed")) {
           const failure = records[0]?.error ?? "the platform reported a failure";
           setError(
@@ -583,6 +586,7 @@ function persistLocal(records: RunRecord[]) {
             return next;
           });
           setRuns((prev) => prev.filter((active) => !slot.skeletons.includes(active.id)));
+          void getAuthState().then(unwrap).then((state) => setTeamBalance(state.teamBalance)).catch(() => undefined);
           return;
         }
         setHistory((prev) => {
@@ -862,6 +866,7 @@ function persistLocal(records: RunRecord[]) {
             onView={switchView}
             busy={busy}
             keyConfigured={keyConfigured}
+            teamBalance={teamBalance}
             onKeys={openKeys}
             user={user}
             creditAlerts={creditAlerts}
@@ -873,6 +878,7 @@ function persistLocal(records: RunRecord[]) {
                   setActiveTeamId(state.activeTeamId);
                   setCreditAlerts(state.creditAlerts);
                   setPendingInvites(state.pendingInvites);
+                  setTeamBalance(state.teamBalance);
                 })
                 .catch(() => undefined);
             }}

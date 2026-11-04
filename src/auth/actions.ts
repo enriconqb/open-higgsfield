@@ -49,6 +49,7 @@ export type AuthState = {
   teams: { id: number; name: string; role: "team_admin" | "member" }[];
   pendingInvites: number;
   creditAlerts: number;
+  teamBalance: number | null;
 };
 
 export async function getAuthState(): Promise<ActionResult<AuthState>> {
@@ -58,7 +59,7 @@ export async function getAuthState(): Promise<ActionResult<AuthState>> {
 async function getAuthStateHandler(): Promise<AuthState> {
   const session = await readSession();
   if (!session) {
-    return { user: null, hasApiKey: false, activeTeamId: null, teams: [], pendingInvites: 0, creditAlerts: 0 };
+    return { user: null, hasApiKey: false, activeTeamId: null, teams: [], pendingInvites: 0, creditAlerts: 0, teamBalance: null };
   }
   const key = await getApiKeyRow(session.id);
   const empty = {
@@ -73,6 +74,7 @@ async function getAuthStateHandler(): Promise<AuthState> {
     teams: [] as { id: number; name: string; role: "team_admin" | "member" }[],
     pendingInvites: 0,
     creditAlerts: 0,
+    teamBalance: null,
   };
   try {
     const { listTeamsForUser, pendingInvitesFor, countUnreadCreditAlerts } = await import("@/teams/store");
@@ -82,12 +84,19 @@ async function getAuthStateHandler(): Promise<AuthState> {
     const invites = await pendingInvitesFor(session.username);
     const creditAlerts =
       workspace.teamId && workspace.role === "team_admin" ? await countUnreadCreditAlerts(workspace.teamId) : 0;
+    let teamBalance: number | null = null;
+    if (workspace.teamId) {
+      const { snapshotFor } = await import("@/teams/credits");
+      const snap = await snapshotFor(workspace.teamId, session.id, true);
+      teamBalance = snap.remaining;
+    }
     return {
       ...empty,
       activeTeamId: workspace.teamId,
       teams: teams.map((team) => ({ id: team.id, name: team.name, role: team.role })),
       pendingInvites: invites.length,
       creditAlerts,
+      teamBalance,
     };
   } catch (caught) {
     console.error("[auth] team state unavailable", caught instanceof Error ? caught.message : caught);
@@ -173,6 +182,7 @@ async function loginAccountHandler(data: unknown): Promise<AuthState & { session
     teams: [],
     pendingInvites: 0,
     creditAlerts: 0,
+    teamBalance: null,
     session,
   };
 }
@@ -335,6 +345,7 @@ async function saveEncryptedPlatformKeyHandler(data: unknown): Promise<AuthState
     teams: [],
     pendingInvites: 0,
     creditAlerts: 0,
+    teamBalance: null,
   };
 }
 
@@ -534,6 +545,7 @@ async function clearEncryptedPlatformKeyHandler(): Promise<AuthState> {
     teams: [],
     pendingInvites: 0,
     creditAlerts: 0,
+    teamBalance: null,
   };
 }
 

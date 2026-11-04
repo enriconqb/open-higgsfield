@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { PublicUser } from "@/auth/types";
+import { formatUsd } from "@/generation/estimate";
 import { hasStudioAdminAccess } from "@/auth/types";
 
 import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
@@ -44,6 +44,7 @@ export function Topbar({
   onView,
   busy,
   keyConfigured,
+  teamBalance,
   onKeys,
   user,
   onLogout,
@@ -56,6 +57,8 @@ export function Topbar({
   onView: (next: GalleryView) => void;
   busy: boolean;
   keyConfigured: boolean;
+  /** Remaining team balance. Null in the personal workspace. */
+  teamBalance: number | null;
   onKeys: () => void;
   user: PublicUser | null;
   onLogout: () => void;
@@ -187,13 +190,16 @@ export function Topbar({
               className="ohf-key"
               data-busy={busy}
               data-ready={keyConfigured}
+              data-balance={teamBalance != null}
               onClick={onKeys}
-              aria-label={keyConfigured ? "Edit platform key" : "Add platform key"}
-              title={keyConfigured ? "Edit platform key" : "Add platform key"}
+              aria-label={teamBalance != null ? `Team balance ${formatUsd(teamBalance)}` : keyConfigured ? "Edit platform key" : "Add platform key"}
+              title={teamBalance != null ? "Team balance" : keyConfigured ? "Edit platform key" : "Add platform key"}
             >
-              <KeyIcon />
-              <span className="ohf-key-text">{keyConfigured ? "Your key" : "Add key"}</span>
-              <span className="ohf-lamp" />
+              {teamBalance == null && <KeyIcon />}
+              <span className={teamBalance != null ? "ohf-key-balance" : "ohf-key-text"}>
+                {teamBalance != null ? formatUsd(teamBalance) : keyConfigured ? "Your key" : "Add key"}
+              </span>
+              {teamBalance == null && <span className="ohf-lamp" />}
             </button>
             <div className="ohf-user-menu" ref={menuRef}>
               <button
