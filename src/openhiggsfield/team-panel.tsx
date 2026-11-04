@@ -107,11 +107,9 @@ export function TeamPanel({
               <section className="ohf-team-section">
                 <div className="ohf-team-section-head">
                   <div className="ohf-field-label">Workspace</div>
-                  {desk.isSuperadmin && (
-                    <button type="button" className="ohf-keys-save" disabled={busy} onClick={() => setCreateOpen(true)}>
-                      Create team
-                    </button>
-                  )}
+                  <button type="button" className="ohf-keys-save" disabled={busy} onClick={() => setCreateOpen(true)}>
+                    Create team
+                  </button>
                 </div>
                 <div className="ohf-team-switch" role="listbox" aria-label="Workspace">
                   <button

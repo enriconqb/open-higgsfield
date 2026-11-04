@@ -104,7 +104,7 @@ export async function switchTeam(teamId: number | null): Promise<ActionResult<vo
 
 export async function createTeam(name: unknown): Promise<ActionResult<void>> {
   return run(async () => {
-    const session = await requireSuperadmin();
+    const session = await requireActiveUser();
     const label = cleanName(name);
     const result = await execute(
       `INSERT INTO teams (name, created_by) VALUES (?, ?)`,
