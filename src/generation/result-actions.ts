@@ -32,8 +32,8 @@ export async function saveGenerationResults(records: RunRecord[]): Promise<Actio
   return run(() => replaceGenerationResults(records));
 }
 
-export async function trashTeamGallery(clientIds: string[]): Promise<ActionResult<void>> {
-  return run(() => trashTeamResults(clientIds));
+export async function trashTeamGallery(records: RunRecord[]): Promise<ActionResult<void>> {
+  return run(() => trashTeamResults(records));
 }
 
 export async function restoreTeamGallery(clientIds: string[]): Promise<ActionResult<void>> {

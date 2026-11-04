@@ -317,15 +317,17 @@ function persistLocal(records: RunRecord[]) {
         .then(unwrap)
         .then((saved) => {
           if (!alive.current || userIdRef.current !== userId || teamIdRef.current !== teamId) return;
-          const sent = new Set(snapshot.map((record) => record.id));
-          let cleared = false;
-          for (const id of [...tombstones.current]) {
-            if (!sent.has(id)) {
-              tombstones.current.delete(id);
-              cleared = true;
+          if (alive.current && userIdRef.current === userId && teamIdRef.current === teamId && teamId == null) {
+            const sent = new Set(snapshot.map((record) => record.id));
+            let cleared = false;
+            for (const id of [...tombstones.current]) {
+              if (!sent.has(id)) {
+                tombstones.current.delete(id);
+                cleared = true;
+              }
             }
+            if (cleared) void saveTombstones(userId, tombstones.current, undefined, teamIdRef.current);
           }
-          if (cleared) void saveTombstones(userId, tombstones.current, undefined, teamIdRef.current);
           const archived = new Map(saved.map((record) => [record.id, record]));
           setHistory((current) => {
             let changed = false;
@@ -694,7 +696,7 @@ function persistLocal(records: RunRecord[]) {
     const userId = userIdRef.current;
     const teamId = teamIdRef.current;
     if (userId) void saveTombstones(userId, tombstones.current, undefined, teamId);
-    if (teamId) void trashTeamGallery([...ids]);
+    if (teamId) void trashTeamGallery(records);
     setHistory((prev) => prev.filter((entry) => !ids.has(entry.id)));
     setDeleted(records);
   }, []);

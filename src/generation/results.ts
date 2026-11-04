@@ -1,4 +1,4 @@
-import type { RowDataPacket } from "mysql2/promise";
+import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 
 import { requireActiveUser } from "@/auth/guard";
 import { hasStudioAdminAccess } from "@/auth/types";
@@ -135,7 +135,8 @@ export async function replaceGenerationResultsFor(
         [...scopeParams, ...protectedMarks],
       );
     }
-    for (const record of publish) {
+    const ready = teamId == null ? publish : await withoutTeamTrash(connection, teamId, publish);
+    for (const record of ready) {
       await connection.query(
         `INSERT INTO generation_results (user_id, team_id, created_by, client_id, payload) VALUES (?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE payload = VALUES(payload), team_id = VALUES(team_id), created_by = COALESCE(generation_results.created_by, VALUES(created_by)), updated_at = CURRENT_TIMESTAMP`,
@@ -153,15 +154,17 @@ export async function replaceGenerationResultsFor(
   return publish;
 }
 
-/** Moves team gallery rows into Temp for every member, whoever created them. */
-export async function trashTeamResults(clientIds: string[]): Promise<void> {
+/** Moves the chosen team assets into Temp, including a run whose gallery row is not stored yet. */
+export async function trashTeamResults(records: RunRecord[]): Promise<void> {
   const user = await requireActiveUser();
   const { workspaceFor } = await import("@/teams/access");
   const workspace = await workspaceFor(user);
   if (!workspace.teamId) return;
-  const ids = uniqueIds(clientIds);
+  const chosen = records.filter(isRunRecord);
+  const ids = uniqueIds(chosen.map((record) => record.id));
   if (ids.length === 0) return;
   const marks = ids.map(() => "?").join(", ");
+  const byId = new Map(chosen.map((record) => [record.id.slice(0, 191), record]));
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
@@ -171,13 +174,27 @@ export async function trashTeamResults(clientIds: string[]): Promise<void> {
       [workspace.teamId, ...ids],
     );
     assertOwnRows(user.id, workspace.role, user.role, rows, "delete");
+    const found = new Set<string>();
     for (const row of rows) {
+      found.add(row.client_id ?? "");
       await connection.query(
         `INSERT INTO gallery_trash (user_id, team_id, created_by, client_id, payload, deleted_at, expires_at)
          VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${TRASH_DAYS} DAY))
          ON DUPLICATE KEY UPDATE payload = VALUES(payload), team_id = VALUES(team_id), deleted_at = CURRENT_TIMESTAMP,
            expires_at = VALUES(expires_at)`,
         [row.user_id, workspace.teamId, row.created_by, row.client_id, JSON.stringify(parsePayload(row.payload) ?? row.payload)],
+      );
+    }
+    for (const id of ids) {
+      if (found.has(id)) continue;
+      const record = byId.get(id);
+      if (!record) continue;
+      await connection.query(
+        `INSERT INTO gallery_trash (user_id, team_id, created_by, client_id, payload, deleted_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${TRASH_DAYS} DAY))
+         ON DUPLICATE KEY UPDATE payload = VALUES(payload), team_id = VALUES(team_id), deleted_at = CURRENT_TIMESTAMP,
+           expires_at = VALUES(expires_at)`,
+        [user.id, workspace.teamId, user.id, id, JSON.stringify(record)],
       );
     }
     await connection.query(
@@ -264,6 +281,18 @@ function assertOwnRows(
   if (foreign) {
     throw new Error(action === "delete" ? "You can only delete runs you created" : "You can only restore runs you created");
   }
+}
+
+async function withoutTeamTrash(connection: PoolConnection, teamId: number, records: RunRecord[]): Promise<RunRecord[]> {
+  if (records.length === 0) return records;
+  const ids = records.map((record) => record.id.slice(0, 191));
+  const marks = ids.map(() => "?").join(", ");
+  const [rows] = await connection.query<ResultRow[]>(
+    `SELECT client_id FROM gallery_trash WHERE team_id = ? AND client_id IN (${marks})`,
+    [teamId, ...ids],
+  );
+  const blocked = new Set(rows.map((row) => row.client_id).filter((id): id is string => Boolean(id)));
+  return records.filter((record) => !blocked.has(record.id.slice(0, 191)));
 }
 
 function uniqueIds(clientIds: string[]): string[] {
