@@ -287,18 +287,23 @@ export function Composer({
     };
   }, [overlay]);
 
-  /* Auto-grow the prompt, including when text is set programmatically — and
-     again when the column narrows, because the field shares its line with the
-     attachment now and the same text rewraps onto more of them. Only a width
-     change re-measures: reacting to the height we just set would loop. */
+  /* A long prompt stays one line until the field is focused, then grows. */
   useEffect(() => {
     const el = promptRef.current;
     if (!el) return;
     const grow = () => {
+      if (document.activeElement !== el) {
+        el.style.height = "";
+        el.style.overflow = "hidden";
+        return;
+      }
+      el.style.overflow = "auto";
       el.style.height = "auto";
       el.style.height = `${Math.min(el.scrollHeight, PROMPT_MAX_HEIGHT)}px`;
     };
     grow();
+    el.addEventListener("focus", grow);
+    el.addEventListener("blur", grow);
     let width = el.clientWidth;
     const observer = new ResizeObserver(() => {
       if (el.clientWidth === width) return;
@@ -306,7 +311,11 @@ export function Composer({
       grow();
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      el.removeEventListener("focus", grow);
+      el.removeEventListener("blur", grow);
+      observer.disconnect();
+    };
   }, [prompt.text]);
 
   useEffect(() => {

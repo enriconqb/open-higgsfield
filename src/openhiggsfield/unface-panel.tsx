@@ -94,7 +94,6 @@ export function UnFace({
   } | null>(null);
 
   const [method, setMethod] = useState<UnfaceMethod>("grid");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [source, setSource] = useState<SourceImage | null>(null);
   const [grid, setGrid] = useState<GridSettings>({
     columns: 6,
@@ -686,19 +685,6 @@ export function UnFace({
           ))}
         </div>
 
-        {source && (
-          <button
-            type="button"
-            className="ohf-unface-settings"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen((open) => !open)}
-          >
-            <span>{METHODS.find((item) => item.id === method)?.label}</span>
-            <span>{settingsOpen ? "Hide" : "Show"}</span>
-          </button>
-        )}
-
-        {(!source || settingsOpen) && (
         <div className="ohf-unface-controls">
           {method === "grid" && (
             <>
@@ -915,7 +901,6 @@ export function UnFace({
             </>
           )}
         </div>
-        )}
 
         {error && <p className="ohf-unface-error">{error}</p>}
         {notice && !error && <p className="ohf-unface-notice">{notice}</p>}
