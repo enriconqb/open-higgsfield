@@ -6819,6 +6819,29 @@ a.ohf-key-link {
   color: var(--accent-ink);
 }
 
+.ohf-unface-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--tx);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ohf-unface-settings span:last-child {
+  color: var(--tx3);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .ohf-unface-controls {
   display: flex;
   flex-direction: column;
