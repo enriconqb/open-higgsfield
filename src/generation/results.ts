@@ -5,7 +5,9 @@ import { getPool, queryOne, queryRows } from "@/db/client";
 import { capHistory, isRunRecord, type RunRecord } from "@/openhiggsfield/history";
 
 import { archiveRunRecord } from "./archive-media";
+import { listActiveJobIds } from "./api-jobs";
 import { purgeGalleryTrashFor, TRASH_DAYS } from "./gallery-trash";
+import { kickSettle } from "./settle";
 
 type ResultRow = RowDataPacket & {
   client_id?: string;
@@ -14,6 +16,10 @@ type ResultRow = RowDataPacket & {
 
 export async function listGenerationResults(): Promise<RunRecord[]> {
   const user = await requireActiveUser();
+  /* Opening the studio is a good moment to finish whatever the server is still
+     following, so a run that completed while nobody watched is already here
+     instead of waiting for the next worker tick. */
+  kickSettle(user.id);
   const { workspaceFor } = await import("@/teams/access");
   const workspace = await workspaceFor(user);
   if (workspace.teamId) return listGenerationResultsForTeam(workspace.teamId);
@@ -78,6 +84,11 @@ export async function replaceGenerationResultsFor(
   const kept = new Set(next.map((record) => record.id.slice(0, 191)));
   const scope = teamId == null ? `user_id = ? AND team_id IS NULL` : `user_id = ? AND team_id = ?`;
   const scopeParams = teamId == null ? [userId] : [userId, teamId];
+  /* A row the server is still following but this browser has not seen yet is
+     not a deletion: it belongs to a job in flight, and the settlement worker
+     writes its finished copy under the same id. Dropping it here would move a
+     running generation to Temp behind the visitor's back. */
+  const moving = await listActiveJobIds(userId).catch(() => new Set<string>());
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
@@ -87,7 +98,7 @@ export async function replaceGenerationResultsFor(
     );
     const dropped: string[] = [];
     for (const row of existing) {
-      if (!row.client_id || kept.has(row.client_id)) continue;
+      if (!row.client_id || kept.has(row.client_id) || moving.has(row.client_id)) continue;
       dropped.push(row.client_id);
       await connection.query(
         `INSERT INTO gallery_trash (user_id, team_id, created_by, client_id, payload, deleted_at, expires_at)
@@ -110,9 +121,13 @@ export async function replaceGenerationResultsFor(
         [...scopeParams, ...kept],
       );
     }
+    const protectedMarks = [...moving];
+    const keepMoving = protectedMarks.length
+      ? ` AND client_id NOT IN (${protectedMarks.map(() => "?").join(", ")})`
+      : "";
     await connection.query(
-      `DELETE FROM generation_results WHERE ${scope} AND client_id NOT LIKE '%#api'`,
-      scopeParams,
+      `DELETE FROM generation_results WHERE ${scope} AND client_id NOT LIKE '%#api'${keepMoving}`,
+      [...scopeParams, ...protectedMarks],
     );
     for (const record of next) {
       await connection.query(

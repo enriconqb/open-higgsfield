@@ -16,7 +16,7 @@ import { MODELS, getModel, modelsFor } from "@/generation/catalog";
 import type { Surface } from "@/generation/catalog";
 import { assemblePlane } from "@/generation/plane";
 import type { GenerationStatus } from "@/generation/platform";
-import { POLL_DEADLINE_MS, stopWatching, watchRequest } from "@/generation/poll";
+import { POLL_DEADLINE_MS, WatchAbandonedError, stopWatching, watchRequest } from "@/generation/poll";
 import { useActive } from "@/generation/stores/active";
 import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
 import { useSettings } from "@/generation/stores/settings";
@@ -157,14 +157,6 @@ function terminalRows(requestId: string, draft: RunDraft, status: GenerationStat
       costUsd: status.costUsd ?? draft.costUsd,
     };
   });
-}
-
-function failedRows(requestId: string, count: number, draft: RunDraft, error: string): RunRecord[] {
-  return runningRows(requestId, count, draft).map((row) => ({
-    ...row,
-    status: "failed" as const,
-    error,
-  }));
 }
 
 function failureText(status: GenerationStatus): string {
@@ -424,10 +416,13 @@ function persistLocal(records: RunRecord[]) {
   /* One watch per platform request, used both by Generate and by a reload that
      found running rows already in the log. */
   const resume = useCallback(
-    async (requestId: string, draft: RunDraft, expected: number) => {
+    async (requestId: string, draft: RunDraft) => {
       try {
+        /* The clock starts when the watch does, not when the run was submitted:
+           a tab reopened an hour later must still be able to pick a finished
+           run up rather than time out on the first round. */
         const status = await watchRequest(requestId, {
-          deadline: draft.createdAt + POLL_DEADLINE_MS,
+          deadline: Date.now() + POLL_DEADLINE_MS,
         });
         if (!alive.current) return;
         const records = terminalRows(requestId, draft, status);
@@ -446,13 +441,23 @@ function persistLocal(records: RunRecord[]) {
         }
       } catch (caught) {
         if (!alive.current) return;
+        /* "Could not ask" is not "the platform failed it". The run stays as it
+           is and the server keeps following the job, so it is never rewritten
+           as a failure by a dropped poll or a restarting server. */
+        if (caught instanceof WatchAbandonedError) {
+          setError(
+            (prev) =>
+              prev ??
+              "Still rendering — the server is following this run and it will appear here when it finishes.",
+          );
+          return;
+        }
         const message = describeError(caught);
+        if (message.includes("Sign in")) {
+          window.location.href = apiUrl("/login");
+          return;
+        }
         if (message.includes("platform key")) setKeysOpen(true);
-        setHistory((prev) => {
-          const next = replaceRequest(prev, requestId, failedRows(requestId, expected, draft, message));
-          persistLocal(next);
-          return next;
-        });
         setError((prev) => prev ?? message);
       }
     },
@@ -472,7 +477,7 @@ function persistLocal(records: RunRecord[]) {
       groups.set(record.requestId, rows);
     }
     for (const [requestId, rows] of groups) {
-      void resume(requestId, draftOf(rows[0]!), rows.length);
+      void resume(requestId, draftOf(rows[0]!));
     }
   }, [historyLoaded, resume]);
 
@@ -589,7 +594,7 @@ function persistLocal(records: RunRecord[]) {
           return next;
         });
         setRuns((prev) => prev.filter((active) => !slot.skeletons.includes(active.id)));
-        await resume(queued.requestId, draft, slot.skeletons.length);
+        await resume(queued.requestId, draft);
       } catch (caught) {
         if (!alive.current) return;
         const message = describeError(caught);

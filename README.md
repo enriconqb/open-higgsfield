@@ -74,14 +74,33 @@ Next.js 16 App Router on Vercel · React 19 · plain CSS · Zustand · pnpm
 ### State and errors
 
 - **History persists** in IndexedDB in this browser (60 records). Favorites are
-  a deliberate keep and never age out of the cap. Result URLs belong to the
-  generation platform, so old history can outlive its CDN lifetime and show gaps.
+  a deliberate keep and never age out of the cap. A finished run is copied into
+  the server's uploads directory and the gallery, so it survives the platform's
+  CDN lifetime.
 - **Failed, NSFW and canceled runs** are recorded as failed tiles carrying the
-  reason and a retry that restores the prompt and model.
+  reason and a retry that restores the prompt and model. A poll that merely
+  could not be answered (a dropped connection, a server restart, a slow
+  platform) is *not* a failure: the tile stays in flight and the server settles
+  the run instead.
 - **Your own platform key.** Sign in, then enter a key in the modal. It is
   encrypted per account (admins cannot read plaintext). Guests can browse;
   generate requires an approved login. The topbar lamp states whether a key is
   held and whether a run is in flight.
+
+### Runs keep going without the browser
+
+A submit from the studio is written to `api_jobs` with the platform key sealed
+by `SESSION_SECRET` (the envelope `api_tokens.sealed_wrapping_key` already uses),
+and a worker started from `src/instrumentation.ts` keeps polling it inside the
+`next start` process. Closing the tab, closing the browser, or turning the PC off
+therefore changes nothing: the run still finishes, the bytes are archived into
+`UPLOAD_DIR`, the charge recorded at submit is settled, and the gallery record is
+written under the same id the studio would have used — so opening the studio
+later (on any device) shows it already completed. The sealed key is dropped the
+moment the job reaches a terminal state, and a job the platform never answers is
+marked failed after `STUDIO_SETTLE_MAX_AGE_MS` (6h) or
+`STUDIO_SETTLE_MAX_ATTEMPTS` consecutive unreachable polls instead of pending
+forever. `STUDIO_SETTLE_DISABLED=1` turns the worker off; see `.env.example`.
 
 ---
 

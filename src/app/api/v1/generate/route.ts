@@ -67,6 +67,10 @@ export async function POST(request: Request): Promise<Response> {
       cost_usd: costUsd,
       error: null,
       result,
+      /* Token jobs are followed by their own client, so the settlement worker
+         leaves them alone. */
+      sealed_credentials: null,
+      attempts: 0,
       idempotency_key: idempotencyKey,
       created_at: new Date(),
       updated_at: new Date(),
