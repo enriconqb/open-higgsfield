@@ -10,6 +10,7 @@ import {
   addTeamBalance,
   removeTeamBalance,
   createTeam,
+  dissolveTeam,
   inviteMember,
   loadTeamDesk,
   readBalanceAlerts,
@@ -49,6 +50,7 @@ export function TeamPanel({
   const [busy, setBusy] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [dissolveOpen, setDissolveOpen] = useState(false);
   const [apiQuery, setApiQuery] = useState("");
   const [apiOpen, setApiOpen] = useState(false);
 
@@ -134,6 +136,11 @@ export function TeamPanel({
                     </button>
                   ))}
                 </div>
+                {activeTeam && (desk.createdBy === desk.viewerId || desk.isSuperadmin) && (
+                  <button type="button" className="ohf-btn-quiet" disabled={busy} onClick={() => setDissolveOpen(true)}>
+                    Dissolve team
+                  </button>
+                )}
               </section>
 
               {desk.invites.length > 0 && (
@@ -359,9 +366,11 @@ export function TeamPanel({
                               <UserIcon size={14} />
                             </button>
                           )}
-                          <button type="button" className="ohf-team-icon is-danger" title="Remove from team" disabled={busy} onClick={() => void run(() => removeMember(activeTeam.id, member.userId).then(unwrap))}>
-                            <TrashIcon size={14} />
-                          </button>
+                          {member.userId !== desk.viewerId && (
+                            <button type="button" className="ohf-team-icon is-danger" title="Remove from team" disabled={busy} onClick={() => void run(() => removeMember(activeTeam.id, member.userId).then(unwrap))}>
+                              <TrashIcon size={14} />
+                            </button>
+                          )}
                         </div>
                       </li>
                     ))}
@@ -390,6 +399,23 @@ export function TeamPanel({
               onSaved={async () => {
                 setKeyMember(null);
                 await reload();
+              }}
+            />
+          </div>,
+          document.body,
+        )}
+      {dissolveOpen && activeTeam &&
+        createPortal(
+          <div className={themeClass()}>
+            <DissolveTeamDialog
+              busy={busy}
+              teamName={activeTeam.name}
+              onClose={() => setDissolveOpen(false)}
+              onConfirm={async (typed) => {
+                unwrap(await dissolveTeam(activeTeam.id, typed));
+                setDissolveOpen(false);
+                await reload();
+                onChanged();
               }}
             />
           </div>,
@@ -530,6 +556,61 @@ function MemberKeyDialog({
               {busy ? "Saving…" : member.hasTeamKey ? "Replace key" : "Save key"}
             </button>
           </div>
+        </form>
+      </div>
+    </dialog>
+  );
+}
+
+function DissolveTeamDialog({
+  busy,
+  teamName,
+  onClose,
+  onConfirm,
+}: {
+  busy: boolean;
+  teamName: string;
+  onClose: () => void;
+  onConfirm: (name: string) => Promise<void>;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+  const matches = typed === teamName;
+
+  return (
+    <dialog ref={ref} className="ohf-team-activity-dialog" onClick={(event) => event.target === event.currentTarget && onClose()} onClose={onClose}>
+      <div className="ohf-dialog-panel ohf-team-create">
+        <div className="ohf-keys-head">
+          <div>
+            <div className="ohf-keys-title">Dissolve team</div>
+            <p className="ohf-keys-copy">Type {teamName} exactly. The team leaves the workspace list. Its usage stays for a superadmin.</p>
+          </div>
+          <button type="button" className="ohf-icon-btn" aria-label="Close" onClick={onClose}>
+            <CloseIcon size={13} />
+          </button>
+        </div>
+        <form
+          className="ohf-keys-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!matches) return;
+            void onConfirm(typed).catch((caught) => setError(caught instanceof Error ? caught.message : "Request failed"));
+          }}
+        >
+          {error && (
+            <div className="ohf-alert" role="alert">
+              <span className="ohf-alert-text">{error}</span>
+            </div>
+          )}
+          <input className="ohf-input" value={typed} onChange={(event) => setTyped(event.target.value)} placeholder={teamName} autoComplete="off" />
+          <button type="submit" className="ohf-keys-save" disabled={busy || !matches}>
+            {busy ? "Dissolving…" : "Dissolve team"}
+          </button>
         </form>
       </div>
     </dialog>

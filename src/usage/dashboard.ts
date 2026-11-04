@@ -211,7 +211,8 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
       params,
     ),
     queryRows<RowDataPacket>(
-      `SELECT e.created_at, COALESCE(t.name, 'Personal') AS workspace, u.username, e.model_id, e.kind, e.spec, e.credits, e.cost_usd, e.status, e.request_id
+      `SELECT e.created_at,
+              COALESCE(CASE WHEN t.status = 'disabled' THEN CONCAT(t.name, ' (dissolved)') ELSE t.name END, 'Personal') AS workspace, u.username, e.model_id, e.kind, e.spec, e.credits, e.cost_usd, e.status, e.request_id
        FROM usage_events e
        INNER JOIN users u ON u.id = e.user_id
        LEFT JOIN teams t ON t.id = e.team_id
@@ -251,7 +252,7 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
     filters.platform
       ? Promise.resolve([])
       : queryRows<RowDataPacket>(
-          `SELECT COALESCE(MAX(t.name), 'Personal') AS workspace, COUNT(*) AS generations,
+          `SELECT COALESCE(MAX(CASE WHEN t.status = 'disabled' THEN CONCAT(t.name, ' (dissolved)') ELSE t.name END), 'Personal') AS workspace, COUNT(*) AS generations,
                   COALESCE(SUM(CASE WHEN e.status = 'success' THEN COALESCE(e.cost_usd, e.credits / 100) ELSE 0 END), 0) AS usd
            FROM usage_events e
            INNER JOIN users u ON u.id = e.user_id

@@ -47,6 +47,7 @@ export type TeamDesk = {
   audit: AuditRow[];
   canAdmin: boolean;
   isSuperadmin: boolean;
+  createdBy: number | null;
   apiUserId: number | null;
   viewerId: number;
 };
@@ -71,6 +72,9 @@ export async function loadTeamDesk(): Promise<ActionResult<TeamDesk>> {
       expiresAt: row.expiresAt.toISOString(),
     }));
     const active = workspace.teamId;
+    const owner = active
+      ? await queryOne<RowDataPacket & { created_by: number }>(`SELECT created_by FROM teams WHERE id = ?`, [active])
+      : null;
     const ownKey = (await getApiKeyRow(session.id)) !== null;
     const canAdmin = workspace.role === "team_admin" || hasStudioAdminAccess(session.role);
     return {
@@ -84,6 +88,7 @@ export async function loadTeamDesk(): Promise<ActionResult<TeamDesk>> {
       audit: active && canAdmin ? await listAudit(active) : [],
       canAdmin: Boolean(active && canAdmin),
       isSuperadmin: session.role === "superadmin",
+      createdBy: owner?.created_by == null ? null : Number(owner.created_by),
       apiUserId: active ? await teamApiUserId(active) : null,
       viewerId: session.id,
     };
@@ -126,6 +131,26 @@ export async function renameTeam(teamId: number, name: unknown): Promise<ActionR
     const label = cleanName(name);
     await execute(`UPDATE teams SET name = ? WHERE id = ?`, [label, teamId]);
     await insertAudit(teamId, session.id, "rename", label);
+  });
+}
+
+export async function dissolveTeam(teamId: number, name: unknown): Promise<ActionResult<void>> {
+  return run(async () => {
+    const session = await requireActiveUser();
+    if (typeof name !== "string") throw new Error("Type the team name exactly");
+    const team = await queryOne<RowDataPacket & { name: string; created_by: number; status: string }>(
+      `SELECT name, created_by, status FROM teams WHERE id = ?`,
+      [teamId],
+    );
+    if (!team || team.status !== "active") throw new Error("This team is already dissolved");
+    if (name !== team.name) throw new Error("Type the team name exactly");
+    const founder = Number(team.created_by) === session.id;
+    if (!founder && session.role !== "superadmin") throw new ForbiddenError();
+    await execute(`UPDATE teams SET status = 'disabled' WHERE id = ?`, [teamId]);
+    await insertAudit(teamId, session.id, "status", "disabled");
+    if (session.activeTeamId === teamId) {
+      await writeSession({ ...session, activeTeamId: null });
+    }
   });
 }
 

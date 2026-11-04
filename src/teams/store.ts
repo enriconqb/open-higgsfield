@@ -17,7 +17,7 @@ export async function listTeamsForUser(userId: number): Promise<TeamSummary[]> {
     `SELECT t.id, t.name, t.status, t.billing_mode, m.role
      FROM team_members m
      INNER JOIN teams t ON t.id = m.team_id
-     WHERE m.user_id = ?
+     WHERE m.user_id = ? AND t.status = 'active'
      ORDER BY t.name`,
     [userId],
   );
