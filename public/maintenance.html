@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- vicend-maintenance-page v1 — halaman ini disajikan nginx saat aplikasi
+     (Next.js di 127.0.0.1:3000) sedang tidak bisa dihubungi, mis. pada detik
+     restart di tengah deploy. Lihat tools/vicend-oneclick/README.md.
+
+     ATURAN: berkas ini harus BERDIRI SENDIRI — tidak boleh memuat gambar,
+     font, CSS, atau skrip dari URL mana pun (termasuk /logo.png di host ini),
+     karena saat maintenance SEMUA permintaan ke host ini juga dilayani oleh
+     halaman ini. Semua gaya dan ikon ditulis inline. -->
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#0a0a0b" />
+    <!-- Pulih sendiri begitu deploy selesai: muat ulang tiap 15 detik. -->
+    <meta http-equiv="refresh" content="15" />
+    <title>Sedang Maintenance — Vicend</title>
+    <style>
+      :root {
+        --bg: #0a0a0b;
+        --panel: #121216;
+        --line: rgba(255, 255, 255, 0.08);
+        --ink: #f4f4f6;
+        --muted: #9a9aa8;
+        --accent: #7b88ff;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(900px 480px at 50% -140px, rgba(123, 136, 255, 0.18), transparent 70%),
+          var(--bg);
+        color: var(--ink);
+        font: 400 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 20px;
+      }
+      main {
+        width: 100%;
+        max-width: 560px;
+        text-align: center;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 28px;
+      }
+      .brand svg { display: block; }
+      .brand span {
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 40px 32px 34px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        background: rgba(123, 136, 255, 0.12);
+        border: 1px solid rgba(123, 136, 255, 0.32);
+        border-radius: 999px;
+        padding: 7px 14px;
+        margin-bottom: 22px;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.35; transform: scale(0.8); }
+      }
+      h1 {
+        margin: 0 0 14px;
+        font-size: 27px;
+        line-height: 1.25;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      p {
+        margin: 0 auto;
+        max-width: 430px;
+        color: var(--muted);
+        font-size: 15px;
+      }
+      .note {
+        margin-top: 26px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+        font-size: 13.5px;
+        color: var(--muted);
+      }
+      .note strong { color: var(--ink); font-weight: 600; }
+      .bar {
+        margin: 22px auto 0;
+        height: 3px;
+        width: 148px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.07);
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        width: 40%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        animation: slide 1.5s linear infinite;
+      }
+      @keyframes slide {
+        from { transform: translateX(-110%); }
+        to { transform: translateX(260%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dot, .bar i { animation: none; }
+      }
+      @media (max-width: 420px) {
+        .card { padding: 32px 22px 28px; border-radius: 16px; }
+        h1 { font-size: 23px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <svg width="26" height="26" viewBox="0 0 32 32" role="img" aria-label="Vicend">
+          <rect x="1" y="1" width="30" height="30" rx="9" fill="none" stroke="#7b88ff" stroke-opacity="0.45" />
+          <path d="M9 10.5l7 12 7-12" fill="none" stroke="#7b88ff" stroke-width="2.6"
+                stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span>Vicend</span>
+      </div>
+
+      <div class="card">
+        <div class="badge"><span class="dot"></span>Sedang maintenance</div>
+        <h1>Situs sedang diperbarui sejenak</h1>
+        <p>
+          Kami sedang memasang pembaruan pada server. Halaman ini akan
+          <strong>memuat ulang otomatis</strong> dalam beberapa detik —
+          tidak perlu ditutup atau dimuat manual.
+        </p>
+        <div class="bar"><i></i></div>
+        <p class="note">
+          Bila halaman ini tetap tampil setelah beberapa menit, silakan hubungi
+          tim IT. Pekerjaan Anda tidak hilang: proses deploy berjalan di server,
+          bukan di peramban Anda.
+        </p>
+      </div>
+    </main>
+  </body>
+</html>
