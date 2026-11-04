@@ -33,6 +33,7 @@ import {
   listMembers,
   listTeamsForUser,
   pendingInvitesFor,
+  rememberWorkspace,
 } from "./store";
 import type { AuditRow, CreditSnapshot, LedgerRow, TeamInviteView, TeamMemberView, TeamSummary } from "./types";
 
@@ -100,10 +101,12 @@ export async function switchTeam(teamId: number | null): Promise<ActionResult<vo
     const session = await requireActiveUser();
     if (teamId == null) {
       await writeSession({ ...session, activeTeamId: null });
+      await rememberWorkspace(session.id, null);
       return;
     }
     await requireTeamRole(session, teamId, false);
     await writeSession({ ...session, activeTeamId: teamId });
+    await rememberWorkspace(session.id, teamId);
   });
 }
 
@@ -151,6 +154,10 @@ export async function dissolveTeam(teamId: number, name: unknown): Promise<Actio
     if (session.activeTeamId === teamId) {
       await writeSession({ ...session, activeTeamId: null });
     }
+    await execute(
+      `UPDATE users SET last_team_id = NULL WHERE last_team_id = ?`,
+      [teamId],
+    );
   });
 }
 
@@ -258,6 +265,10 @@ export async function removeMember(teamId: number, userId: number): Promise<Acti
     }
     await clearApiOwner(teamId, userId);
     await execute(`DELETE FROM team_members WHERE team_id = ? AND user_id = ?`, [teamId, userId]);
+    await execute(
+      `UPDATE users SET last_team_id = NULL WHERE id = ? AND last_team_id = ?`,
+      [userId, teamId],
+    );
     await insertAudit(teamId, session.id, "remove", String(userId));
   });
 }

@@ -3,7 +3,7 @@ import { readSession, writeSession } from "@/auth/session";
 import type { SessionUser } from "@/auth/types";
 import { hasStudioAdminAccess } from "@/auth/types";
 
-import { membership } from "./store";
+import { membership, rememberWorkspace } from "./store";
 import type { TeamRole } from "./types";
 
 export type Workspace = {
@@ -21,6 +21,7 @@ export async function workspaceFor(session: SessionUser): Promise<Workspace> {
   if (!row || row.status !== "active") {
     if (session.activeTeamId) {
       await writeSession({ ...session, activeTeamId: null });
+      await rememberWorkspace(session.id, null);
     }
     return { teamId: null, role: null, billingMode: null, teamName: null };
   }

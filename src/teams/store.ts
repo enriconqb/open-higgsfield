@@ -192,4 +192,25 @@ export async function listLedger(teamId: number): Promise<LedgerRow[]> {
   }));
 }
 
+/** NULL is the personal workspace. Written on every switch so the next login, on any device, opens the same place. */
+export async function rememberWorkspace(userId: number, teamId: number | null): Promise<void> {
+  await execute(`UPDATE users SET last_team_id = ? WHERE id = ?`, [teamId, userId]);
+}
+
+/** Last workspace, or null when it was personal, the team is gone, or the user is no longer a member. */
+export async function rememberedWorkspace(userId: number): Promise<number | null> {
+  const row = await queryOne<RowDataPacket & { last_team_id: number | null }>(
+    `SELECT last_team_id FROM users WHERE id = ?`,
+    [userId],
+  );
+  const teamId = row?.last_team_id == null ? null : Number(row.last_team_id);
+  if (!teamId) return null;
+  const rowMembership = await membership(teamId, userId);
+  if (!rowMembership || rowMembership.status !== "active") {
+    await rememberWorkspace(userId, null);
+    return null;
+  }
+  return teamId;
+}
+
 export type { InviteStatus, TeamRole };

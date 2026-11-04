@@ -365,7 +365,7 @@ function persistLocal(records: RunRecord[]) {
           return platformKeyKind().then(unwrap).then((kind) => {
             setKeyKind(kind);
             setKindReady(true);
-            if (!state.hasApiKey) setKeysOpen(true);
+            if (!state.hasApiKey && state.activeTeamId == null) setKeysOpen(true);
           });
         }
         setKeyKind(null);
@@ -459,7 +459,7 @@ function persistLocal(records: RunRecord[]) {
           window.location.href = apiUrl("/login");
           return;
         }
-        if (message.includes("platform key")) setKeysOpen(true);
+        if (teamIdRef.current == null && message.includes("platform key")) setKeysOpen(true);
         setError((prev) => prev ?? message);
       }
     },
@@ -522,7 +522,7 @@ function persistLocal(records: RunRecord[]) {
       window.location.href = apiUrl("/login");
       return;
     }
-    if (!keyConfigured) {
+    if (!keyConfigured && activeTeamId == null) {
       setKeysOpen(true);
       setError("Add your platform key to generate.");
       return;
@@ -603,7 +603,7 @@ function persistLocal(records: RunRecord[]) {
         const message = describeError(caught);
         if (message.includes("Sign in")) {
           window.location.href = apiUrl("/login");
-        } else if (message.includes("platform key")) {
+        } else if (activeTeamId == null && message.includes("platform key")) {
           setKeysOpen(true);
         }
         setError((prev) => prev ?? message);
@@ -615,7 +615,7 @@ function persistLocal(records: RunRecord[]) {
     };
 
     await Promise.all(slots.map(runOne));
-  }, [keyConfigured, resume, user]);
+  }, [activeTeamId, keyConfigured, resume, user]);
 
   /* Reuse restores the whole plane the run was made from — model, its dials,
      then the words. A reuse that dropped the ratio and resolution would

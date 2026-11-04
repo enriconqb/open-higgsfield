@@ -170,15 +170,18 @@ async function loginAccountHandler(data: unknown): Promise<AuthState & { session
 
   const wrappingKey = await deriveWrappingKey(password, user.password_salt);
   const publicUser = toPublic(user);
+  const { rememberedWorkspace } = await import("@/teams/store");
+  const activeTeamId = await rememberedWorkspace(publicUser.id);
   const session: SessionUser = {
     ...publicUser,
     wrappingKey: wrappingKey.toString("base64"),
+    activeTeamId,
   };
   const key = await getApiKeyRow(publicUser.id);
   return {
     user: publicUser,
     hasApiKey: key !== null,
-    activeTeamId: null,
+    activeTeamId,
     teams: [],
     pendingInvites: 0,
     creditAlerts: 0,
