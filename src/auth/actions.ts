@@ -45,6 +45,10 @@ import {
 export type AuthState = {
   user: PublicUser | null;
   hasApiKey: boolean;
+  activeTeamId: number | null;
+  teams: { id: number; name: string; role: "team_admin" | "member" }[];
+  pendingInvites: number;
+  creditAlerts: number;
 };
 
 export async function getAuthState(): Promise<ActionResult<AuthState>> {
@@ -53,9 +57,11 @@ export async function getAuthState(): Promise<ActionResult<AuthState>> {
 
 async function getAuthStateHandler(): Promise<AuthState> {
   const session = await readSession();
-  if (!session) return { user: null, hasApiKey: false };
+  if (!session) {
+    return { user: null, hasApiKey: false, activeTeamId: null, teams: [], pendingInvites: 0, creditAlerts: 0 };
+  }
   const key = await getApiKeyRow(session.id);
-  return {
+  const empty = {
     user: {
       id: session.id,
       username: session.username,
@@ -63,7 +69,30 @@ async function getAuthStateHandler(): Promise<AuthState> {
       status: session.status,
     },
     hasApiKey: key !== null,
+    activeTeamId: null as number | null,
+    teams: [] as { id: number; name: string; role: "team_admin" | "member" }[],
+    pendingInvites: 0,
+    creditAlerts: 0,
   };
+  try {
+    const { listTeamsForUser, pendingInvitesFor, countUnreadCreditAlerts } = await import("@/teams/store");
+    const { workspaceFor } = await import("@/teams/access");
+    const teams = await listTeamsForUser(session.id);
+    const workspace = await workspaceFor(session);
+    const invites = await pendingInvitesFor(session.username);
+    const creditAlerts =
+      workspace.teamId && workspace.role === "team_admin" ? await countUnreadCreditAlerts(workspace.teamId) : 0;
+    return {
+      ...empty,
+      activeTeamId: workspace.teamId,
+      teams: teams.map((team) => ({ id: team.id, name: team.name, role: team.role })),
+      pendingInvites: invites.length,
+      creditAlerts,
+    };
+  } catch (caught) {
+    console.error("[auth] team state unavailable", caught instanceof Error ? caught.message : caught);
+    return empty;
+  }
 }
 
 export async function registerAccount(data: unknown): Promise<ActionResult<{ message: string }>> {
@@ -137,7 +166,15 @@ async function loginAccountHandler(data: unknown): Promise<AuthState & { session
     wrappingKey: wrappingKey.toString("base64"),
   };
   const key = await getApiKeyRow(publicUser.id);
-  return { user: publicUser, hasApiKey: key !== null, session };
+  return {
+    user: publicUser,
+    hasApiKey: key !== null,
+    activeTeamId: null,
+    teams: [],
+    pendingInvites: 0,
+    creditAlerts: 0,
+    session,
+  };
 }
 
 export async function logoutAccount(): Promise<ActionResult<void>> {
@@ -294,6 +331,10 @@ async function saveEncryptedPlatformKeyHandler(data: unknown): Promise<AuthState
       status: session.status,
     },
     hasApiKey: true,
+    activeTeamId: session.activeTeamId ?? null,
+    teams: [],
+    pendingInvites: 0,
+    creditAlerts: 0,
   };
 }
 
@@ -489,6 +530,10 @@ async function clearEncryptedPlatformKeyHandler(): Promise<AuthState> {
       status: session.status,
     },
     hasApiKey: false,
+    activeTeamId: session.activeTeamId ?? null,
+    teams: [],
+    pendingInvites: 0,
+    creditAlerts: 0,
   };
 }
 

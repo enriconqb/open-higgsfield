@@ -14,6 +14,16 @@ export async function loadGalleryTrash(): Promise<ActionResult<GalleryTrashItem[
   return run(listGalleryTrash);
 }
 
+export async function trashMayPurge(): Promise<ActionResult<boolean>> {
+  return run(async () => {
+    const { requireActiveUser } = await import("@/auth/guard");
+    const { canPurgeTrash, workspaceFor } = await import("@/teams/access");
+    const user = await requireActiveUser();
+    const workspace = await workspaceFor(user);
+    return canPurgeTrash(workspace.role, user.role);
+  });
+}
+
 export async function discardGalleryTrashItems(clientIds: string[]): Promise<ActionResult<void>> {
   return run(() => discardGalleryTrash(clientIds));
 }

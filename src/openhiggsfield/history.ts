@@ -38,6 +38,8 @@ export interface RunRecord {
   /** Present only on rows produced through /api/v1 with a bearer token, so the
       studio can label them apart from browser runs. */
   via?: "api";
+  /** Username of the account that saved the run, shown on shared team assets. */
+  createdBy?: string;
   /** Which API token produced the row, when one did. */
   tokenId?: number | null;
 }
@@ -46,17 +48,17 @@ export const HISTORY_KEY = "history.v1";
 export const LEGACY_HISTORY_KEY = "openhiggsfield.history.v1";
 const MAX_RECORDS = 60;
 
-export function historyKeyFor(userId: number): string {
-  return `${HISTORY_KEY}.${userId}`;
+export function historyKeyFor(userId: number, teamId?: number | null): string {
+  return teamId ? `${HISTORY_KEY}.${userId}.team.${teamId}` : `${HISTORY_KEY}.${userId}`;
 }
 
-export function tombstoneKeyFor(userId: number): string {
-  return `gallery.tombstone.v1.${userId}`;
+export function tombstoneKeyFor(userId: number, teamId?: number | null): string {
+  return teamId ? `gallery.tombstone.v1.${userId}.team.${teamId}` : `gallery.tombstone.v1.${userId}`;
 }
 
-export async function loadTombstones(userId: number, kv: Kv = defaultKv()): Promise<string[]> {
+export async function loadTombstones(userId: number, kv: Kv = defaultKv(), teamId?: number | null): Promise<string[]> {
   try {
-    const stored = await kv.get<unknown>(tombstoneKeyFor(userId));
+    const stored = await kv.get<unknown>(tombstoneKeyFor(userId, teamId));
     if (!Array.isArray(stored)) return [];
     return stored.filter((id): id is string => typeof id === "string" && id.length > 0);
   } catch {
@@ -64,9 +66,14 @@ export async function loadTombstones(userId: number, kv: Kv = defaultKv()): Prom
   }
 }
 
-export async function saveTombstones(userId: number, ids: Iterable<string>, kv: Kv = defaultKv()): Promise<void> {
+export async function saveTombstones(
+  userId: number,
+  ids: Iterable<string>,
+  kv: Kv = defaultKv(),
+  teamId?: number | null,
+): Promise<void> {
   try {
-    await kv.set(tombstoneKeyFor(userId), [...ids]);
+    await kv.set(tombstoneKeyFor(userId, teamId), [...ids]);
   } catch {
     /* private mode or a denied store */
   }

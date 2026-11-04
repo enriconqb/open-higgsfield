@@ -18,6 +18,8 @@ export type PublicUser = {
 export type SessionUser = PublicUser & {
   /** Base64 AES-256 wrapping key derived from password at login. Never stored in MySQL. */
   wrappingKey: string;
+  /** Workspace the studio is acting in. Null is the personal workspace. Checked against membership on use. */
+  activeTeamId?: number | null;
 };
 
 export type UserRow = {

@@ -22,8 +22,19 @@ export async function GET(
   if (!ID.test(id)) return new NextResponse(null, { status: 404 });
 
   const token = new URL(request.url).searchParams.get("t") ?? "";
-  if (!(await studioSession()) && !mediaTokenMatches(id, token)) {
+  const sessionOk = await studioSession();
+  if (!sessionOk && !mediaTokenMatches(id, token)) {
     return new NextResponse(null, { status: 401 });
+  }
+  if (sessionOk) {
+    try {
+      const { uploadVisible } = await import("@/teams/uploads");
+      const { requireActiveUser } = await import("@/auth/guard");
+      const session = await requireActiveUser();
+      if (!(await uploadVisible(id, session.id))) return new NextResponse(null, { status: 404 });
+    } catch {
+      return new NextResponse(null, { status: 404 });
+    }
   }
 
   try {

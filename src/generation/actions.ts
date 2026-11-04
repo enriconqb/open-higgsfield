@@ -64,7 +64,12 @@ export type GenerationSubmit = QueuedGeneration | { error: string };
 export async function submitGeneration(
   plane: GenerationPlane,
 ): Promise<ActionResult<QueuedGeneration>> {
-  return run(async () => submitPlane(await sessionContext(), plane));
+  return run(async () => {
+    const context = await sessionContext();
+    const { reserveTeamSpend } = await import("@/teams/spend");
+    await reserveTeamSpend(context.userId, plane);
+    return submitPlane(context, plane);
+  });
 }
 
 /** Every request in flight, answered in one round trip. Next dispatches server

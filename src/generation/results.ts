@@ -1,7 +1,7 @@
 import type { RowDataPacket } from "mysql2/promise";
 
 import { requireActiveUser } from "@/auth/guard";
-import { getPool, queryRows } from "@/db/client";
+import { getPool, queryOne, queryRows } from "@/db/client";
 import { capHistory, isRunRecord, type RunRecord } from "@/openhiggsfield/history";
 
 import { archiveRunRecord } from "./archive-media";
@@ -14,13 +14,29 @@ type ResultRow = RowDataPacket & {
 
 export async function listGenerationResults(): Promise<RunRecord[]> {
   const user = await requireActiveUser();
+  const { workspaceFor } = await import("@/teams/access");
+  const workspace = await workspaceFor(user);
+  if (workspace.teamId) return listGenerationResultsForTeam(workspace.teamId);
   return listGenerationResultsFor(user.id);
+}
+
+async function listGenerationResultsForTeam(teamId: number): Promise<RunRecord[]> {
+  const rows = await queryRows<ResultRow & { username?: string }>(
+    `SELECT g.payload, u.username
+     FROM generation_results g
+     LEFT JOIN users u ON u.id = g.created_by
+     WHERE g.team_id = ?`,
+    [teamId],
+  );
+  const records = rows.map((row) => stampCreator(parsePayload(row.payload), row.username)).filter(isRunRecord);
+  records.sort((a, b) => b.createdAt - a.createdAt);
+  return capHistory(records);
 }
 
 /** Unauthenticated twin, for scripts and tests that already know the owner. */
 export async function listGenerationResultsFor(userId: number): Promise<RunRecord[]> {
   const rows = await queryRows<ResultRow>(
-    `SELECT payload FROM generation_results WHERE user_id = ?`,
+    `SELECT payload FROM generation_results WHERE user_id = ? AND team_id IS NULL`,
     [userId],
   );
   const records = rows.map((row) => parsePayload(row.payload)).filter(isRunRecord);
@@ -34,54 +50,75 @@ export async function listGenerationResultsFor(userId: number): Promise<RunRecor
     API rows still in the list are upserted, not wiped and rewritten in bulk. */
 export async function replaceGenerationResults(records: RunRecord[]): Promise<RunRecord[]> {
   const user = await requireActiveUser();
-  return replaceGenerationResultsFor(user.id, records);
+  const { workspaceFor } = await import("@/teams/access");
+  const workspace = await workspaceFor(user);
+  return replaceGenerationResultsFor(user.id, records, workspace.teamId);
 }
 
 /** Unauthenticated twin, for scripts and tests that already know the owner. */
-export async function replaceGenerationResultsFor(userId: number, records: RunRecord[]): Promise<RunRecord[]> {
+export async function replaceGenerationResultsFor(
+  userId: number,
+  records: RunRecord[],
+  teamId: number | null = null,
+): Promise<RunRecord[]> {
   const incoming = capHistory(records.filter(isRunRecord));
-  const next = await Promise.all(incoming.map((record) => archiveRunRecord(userId, record)));
+  const next = await Promise.all(
+    incoming.map(async (record) => {
+      const archived = await archiveRunRecord(userId, record);
+      if (teamId && !archived.createdBy) {
+        const owner = await queryOne<{ username: string } & import("mysql2/promise").RowDataPacket>(
+          `SELECT username FROM users WHERE id = ?`,
+          [userId],
+        );
+        return { ...archived, createdBy: owner?.username };
+      }
+      return archived;
+    }),
+  );
   const kept = new Set(next.map((record) => record.id.slice(0, 191)));
+  const scope = teamId == null ? `user_id = ? AND team_id IS NULL` : `user_id = ? AND team_id = ?`;
+  const scopeParams = teamId == null ? [userId] : [userId, teamId];
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
     const [existing] = await connection.query<ResultRow[]>(
-      `SELECT client_id, payload FROM generation_results WHERE user_id = ?`,
-      [userId],
+      `SELECT client_id, payload FROM generation_results WHERE ${scope}`,
+      scopeParams,
     );
     const dropped: string[] = [];
     for (const row of existing) {
       if (!row.client_id || kept.has(row.client_id)) continue;
       dropped.push(row.client_id);
       await connection.query(
-        `INSERT INTO gallery_trash (user_id, client_id, payload, deleted_at, expires_at)
-         VALUES (?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${TRASH_DAYS} DAY))
+        `INSERT INTO gallery_trash (user_id, team_id, created_by, client_id, payload, deleted_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${TRASH_DAYS} DAY))
          ON DUPLICATE KEY UPDATE payload = VALUES(payload)`,
-        [userId, row.client_id, JSON.stringify(parsePayload(row.payload) ?? row.payload)],
+        [userId, teamId, userId, row.client_id, JSON.stringify(parsePayload(row.payload) ?? row.payload)],
       );
     }
     if (dropped.length > 0) {
       const marks = dropped.map(() => "?").join(", ");
       await connection.query(
-        `DELETE FROM generation_results WHERE user_id = ? AND client_id IN (${marks})`,
-        [userId, ...dropped],
+        `DELETE FROM generation_results WHERE ${scope} AND client_id IN (${marks})`,
+        [...scopeParams, ...dropped],
       );
     }
     if (kept.size > 0) {
       const marks = [...kept].map(() => "?").join(", ");
       await connection.query(
-        `DELETE FROM gallery_trash WHERE user_id = ? AND client_id IN (${marks})`,
-        [userId, ...kept],
+        `DELETE FROM gallery_trash WHERE ${scope} AND client_id IN (${marks})`,
+        [...scopeParams, ...kept],
       );
     }
-    await connection.query(`DELETE FROM generation_results WHERE user_id = ? AND client_id NOT LIKE '%#api'`, [
-      userId,
-    ]);
+    await connection.query(
+      `DELETE FROM generation_results WHERE ${scope} AND client_id NOT LIKE '%#api'`,
+      scopeParams,
+    );
     for (const record of next) {
       await connection.query(
-        `INSERT INTO generation_results (user_id, client_id, payload) VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE payload = VALUES(payload), updated_at = CURRENT_TIMESTAMP`,
-        [userId, record.id.slice(0, 191), JSON.stringify(record)],
+        `INSERT INTO generation_results (user_id, team_id, created_by, client_id, payload) VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE payload = VALUES(payload), team_id = VALUES(team_id), created_by = COALESCE(generation_results.created_by, VALUES(created_by)), updated_at = CURRENT_TIMESTAMP`,
+        [userId, teamId, userId, record.id.slice(0, 191), JSON.stringify(record)],
       );
     }
     await connection.commit();
@@ -93,6 +130,13 @@ export async function replaceGenerationResultsFor(userId: number, records: RunRe
   }
   await purgeGalleryTrashFor(userId, { reason: "expired" });
   return next;
+}
+
+function stampCreator(payload: unknown, username: string | undefined): unknown {
+  if (!username || !payload || typeof payload !== "object") return payload;
+  const record = payload as RunRecord;
+  if (record.createdBy) return record;
+  return { ...record, createdBy: username };
 }
 
 function parsePayload(payload: unknown): unknown {

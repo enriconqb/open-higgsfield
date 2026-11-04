@@ -53,6 +53,7 @@ export function unsealSession(token: string | undefined): SessionUser | null {
     ) {
       return null;
     }
+    if (parsed.activeTeamId != null && typeof parsed.activeTeamId !== "number") return null;
     return parsed;
   } catch {
     return null;

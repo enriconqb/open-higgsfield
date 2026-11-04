@@ -29,11 +29,16 @@ type PayloadRow = RowDataPacket & {
 
 export async function listGalleryTrash(): Promise<GalleryTrashItem[]> {
   const user = await requireActiveUser();
-  await purgeGalleryTrashFor(user.id, { reason: "expired" });
+  const { workspaceFor } = await import("@/teams/access");
+  const workspace = await workspaceFor(user);
+  await purgeGalleryTrashFor(user.id, { reason: "expired", teamId: workspace.teamId });
   const rows = await queryRows<TrashRow>(
-    `SELECT client_id, payload, expires_at FROM gallery_trash
-     WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP`,
-    [user.id],
+    workspace.teamId
+      ? `SELECT client_id, payload, expires_at FROM gallery_trash
+         WHERE team_id = ? AND expires_at > CURRENT_TIMESTAMP`
+      : `SELECT client_id, payload, expires_at FROM gallery_trash
+         WHERE user_id = ? AND team_id IS NULL AND expires_at > CURRENT_TIMESTAMP`,
+    [workspace.teamId ?? user.id],
   );
   const items: GalleryTrashItem[] = [];
   for (const row of rows) {
@@ -47,31 +52,39 @@ export async function listGalleryTrash(): Promise<GalleryTrashItem[]> {
 
 export async function discardGalleryTrash(clientIds: string[]): Promise<void> {
   const user = await requireActiveUser();
+  const { canPurgeTrash, workspaceFor } = await import("@/teams/access");
+  const workspace = await workspaceFor(user);
+  if (!canPurgeTrash(workspace.role, user.role)) {
+    throw new Error("Only a team admin can permanently delete team Temp items");
+  }
   const ids = [...new Set(clientIds.map((id) => id.slice(0, 191)).filter(Boolean))];
   if (ids.length === 0) return;
-  await purgeGalleryTrashFor(user.id, { reason: "manual", clientIds: ids });
+  await purgeGalleryTrashFor(user.id, { reason: "manual", clientIds: ids, teamId: workspace.teamId });
 }
 
 /** Deletes trash rows, then local media that no remaining gallery or trash row still uses. */
 export async function purgeGalleryTrashFor(
   userId: number,
-  input: { reason: TrashReason; clientIds?: string[] },
+  input: { reason: TrashReason; clientIds?: string[]; teamId?: number | null },
 ): Promise<void> {
   const connection = await getPool().getConnection();
   let removed: TrashRow[] = [];
   try {
     await connection.beginTransaction();
+    const teamId = input.teamId ?? null;
+    const ownerSql = teamId == null ? `user_id = ? AND team_id IS NULL` : `team_id = ?`;
+    const ownerParams = teamId == null ? [userId] : [teamId];
     if (input.reason === "expired") {
       const [rows] = await connection.query<TrashRow[]>(
         `SELECT client_id, payload, expires_at FROM gallery_trash
-         WHERE user_id = ? AND expires_at <= CURRENT_TIMESTAMP`,
-        [userId],
+         WHERE ${ownerSql} AND expires_at <= CURRENT_TIMESTAMP`,
+        ownerParams,
       );
       removed = rows;
       if (rows.length > 0) {
         await connection.query(
-          `DELETE FROM gallery_trash WHERE user_id = ? AND expires_at <= CURRENT_TIMESTAMP`,
-          [userId],
+          `DELETE FROM gallery_trash WHERE ${ownerSql} AND expires_at <= CURRENT_TIMESTAMP`,
+          ownerParams,
         );
       }
     } else {
@@ -83,14 +96,14 @@ export async function purgeGalleryTrashFor(
       const marks = ids.map(() => "?").join(", ");
       const [rows] = await connection.query<TrashRow[]>(
         `SELECT client_id, payload, expires_at FROM gallery_trash
-         WHERE user_id = ? AND client_id IN (${marks})`,
-        [userId, ...ids],
+         WHERE ${ownerSql} AND client_id IN (${marks})`,
+        [...ownerParams, ...ids],
       );
       removed = rows;
       if (rows.length > 0) {
         await connection.query(
-          `DELETE FROM gallery_trash WHERE user_id = ? AND client_id IN (${marks})`,
-          [userId, ...ids],
+          `DELETE FROM gallery_trash WHERE ${ownerSql} AND client_id IN (${marks})`,
+          [...ownerParams, ...ids],
         );
       }
     }

@@ -214,6 +214,9 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const [storeReady, setStoreReady] = useState(false);
   const [kindReady, setKindReady] = useState(false);
   const [user, setUser] = useState<PublicUser | null>(null);
+  const [activeTeamId, setActiveTeamId] = useState<number | null>(null);
+  const [creditAlerts, setCreditAlerts] = useState(0);
+  const [pendingInvites, setPendingInvites] = useState(0);
   const modelBySurface = useActive((state) => state.modelBySurface);
   const [keysOpen, setKeysOpen] = useState(false);
 
@@ -232,7 +235,11 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const gallerySave = useRef({ running: false, pending: false });
   const tombstones = useRef(new Set<string>());
   const userIdRef = useRef<number | null>(null);
+  const teamIdRef = useRef<number | null>(null);
+  /** Workspace whose gallery has finished loading. Saves wait for this so a switch cannot write the previous gallery into the next workspace. */
+  const loadedTeamRef = useRef<number | null | undefined>(undefined);
   userIdRef.current = user?.id ?? null;
+  teamIdRef.current = activeTeamId;
 
   function sameMediaUrls(left: RunRecord[], right: RunRecord[]): boolean {
     if (left.length !== right.length) return false;
@@ -243,7 +250,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
 function persistLocal(records: RunRecord[]) {
     const id = userIdRef.current;
     if (!id) return;
-    void saveHistory(records, undefined, undefined, historyKeyFor(id));
+    void saveHistory(records, undefined, undefined, historyKeyFor(id, teamIdRef.current));
   }
 
   /* The model picker can cross surfaces, so the scope follows it — unless the
@@ -257,17 +264,21 @@ function persistLocal(records: RunRecord[]) {
      and are not wiped. A signed-in account merges this browser with the
      server copy for the same user. */
   useEffect(() => {
+    loadedTeamRef.current = undefined;
     if (!user) {
       setHistory([]);
       setHistoryLoaded(false);
       setSyncServer(false);
       return;
     }
+    setHistory([]);
+    setHistoryLoaded(false);
     let live = true;
+    const teamId = activeTeamId;
     void (async () => {
-      const key = historyKeyFor(user.id);
+      const key = historyKeyFor(user.id, teamId);
       let local = await loadHistory(undefined, undefined, key).catch(() => [] as RunRecord[]);
-      if (local.length === 0) {
+      if (local.length === 0 && teamId == null) {
         const older = await loadHistory().catch(() => [] as RunRecord[]);
         if (older.length > 0) {
           local = older;
@@ -275,7 +286,7 @@ function persistLocal(records: RunRecord[]) {
           await saveHistory([]);
         }
       }
-      tombstones.current = new Set(await loadTombstones(user.id));
+      tombstones.current = new Set(await loadTombstones(user.id, undefined, teamId));
       const visible = (rows: RunRecord[]) => rows.filter((record) => !tombstones.current.has(record.id));
       let remote: RunRecord[] = [];
       let remoteOk = false;
@@ -285,22 +296,25 @@ function persistLocal(records: RunRecord[]) {
       } catch {
         remoteOk = false;
       }
-      if (!live) return;
-      setHistory((current) => mergeHistory(mergeHistory(visible(remote), visible(local)), visible(current)));
+      if (!live || teamIdRef.current !== teamId) return;
+      loadedTeamRef.current = teamId;
+      setHistory(mergeHistory(visible(remote), visible(local)));
       setSyncServer(remoteOk);
       setHistoryLoaded(true);
     })();
     return () => {
       live = false;
     };
-  }, [user]);
+  }, [user, activeTeamId]);
   useEffect(() => {
-    if (!historyLoaded || !user) return;
-    void saveHistory(history, undefined, undefined, historyKeyFor(user.id));
+    if (!historyLoaded || !user || loadedTeamRef.current !== activeTeamId) return;
+    void saveHistory(history, undefined, undefined, historyKeyFor(user.id, activeTeamId));
     if (!syncServer) return;
     const userId = user.id;
+    const teamId = activeTeamId;
 
     const flush = () => {
+      if (teamIdRef.current !== teamId || loadedTeamRef.current !== teamId) return;
       if (gallerySave.current.running) {
         gallerySave.current.pending = true;
         return;
@@ -311,7 +325,7 @@ function persistLocal(records: RunRecord[]) {
       void saveGenerationResults(snapshot)
         .then(unwrap)
         .then((saved) => {
-          if (!alive.current || userIdRef.current !== userId) return;
+          if (!alive.current || userIdRef.current !== userId || teamIdRef.current !== teamId) return;
           const sent = new Set(snapshot.map((record) => record.id));
           let cleared = false;
           for (const id of [...tombstones.current]) {
@@ -320,7 +334,7 @@ function persistLocal(records: RunRecord[]) {
               cleared = true;
             }
           }
-          if (cleared) void saveTombstones(userId, tombstones.current);
+          if (cleared) void saveTombstones(userId, tombstones.current, undefined, teamIdRef.current);
           const archived = new Map(saved.map((record) => [record.id, record]));
           setHistory((current) => {
             let changed = false;
@@ -350,6 +364,9 @@ function persistLocal(records: RunRecord[]) {
       .then(unwrap)
       .then((state) => {
         setUser(state.user);
+        setActiveTeamId(state.activeTeamId);
+        setCreditAlerts(state.creditAlerts);
+        setPendingInvites(state.pendingInvites);
         setKeyConfigured(state.hasApiKey);
         if (state.user) {
           return platformKeyKind().then(unwrap).then((kind) => {
@@ -622,7 +639,7 @@ function persistLocal(records: RunRecord[]) {
     const ids = new Set(records.map((record) => record.id));
     for (const id of ids) tombstones.current.add(id);
     const userId = userIdRef.current;
-    if (userId) void saveTombstones(userId, tombstones.current);
+    if (userId) void saveTombstones(userId, tombstones.current, undefined, teamIdRef.current);
     setHistory((prev) => prev.filter((entry) => !ids.has(entry.id)));
     setDeleted(records);
   }, []);
@@ -635,7 +652,7 @@ function persistLocal(records: RunRecord[]) {
     if (records.length === 0) return;
     for (const record of records) tombstones.current.delete(record.id);
     const userId = userIdRef.current;
-    if (userId) void saveTombstones(userId, tombstones.current);
+    if (userId) void saveTombstones(userId, tombstones.current, undefined, teamIdRef.current);
     setHistory((prev) => {
       const here = new Set(prev.map((entry) => entry.id));
       const back = records.filter((entry) => !here.has(entry.id));
@@ -845,6 +862,18 @@ function persistLocal(records: RunRecord[]) {
             keyConfigured={keyConfigured}
             onKeys={openKeys}
             user={user}
+            creditAlerts={creditAlerts}
+            pendingInvites={pendingInvites}
+            onTeamChanged={() => {
+              void getAuthState()
+                .then(unwrap)
+                .then((state) => {
+                  setActiveTeamId(state.activeTeamId);
+                  setCreditAlerts(state.creditAlerts);
+                  setPendingInvites(state.pendingInvites);
+                })
+                .catch(() => undefined);
+            }}
             onLogout={() => {
               void logoutAccount().then(unwrap).then(() => {
                 setUser(null);

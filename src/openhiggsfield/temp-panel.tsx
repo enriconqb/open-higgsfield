@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { discardGalleryTrashItems, loadGalleryTrash } from "@/generation/result-actions";
+import { discardGalleryTrashItems, loadGalleryTrash, trashMayPurge } from "@/generation/result-actions";
 import { unwrap } from "@/lib/action-result";
 
 import { CloseIcon, TrashIcon, UndoIcon } from "./icons";
@@ -81,6 +81,7 @@ export function TempPanel({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [items, setItems] = useState<GalleryTrashItem[] | null>(null);
+  const [canPurge, setCanPurge] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -99,7 +100,11 @@ export function TempPanel({
     void (async () => {
       try {
         const list = unwrap(await loadGalleryTrash());
-        if (live) setItems(list);
+        const allowed = unwrap(await trashMayPurge());
+        if (live) {
+          setItems(list);
+          setCanPurge(allowed);
+        }
       } catch (caught) {
         if (live) setError(caught instanceof Error ? caught.message : "Could not load Temp");
       }
@@ -179,16 +184,18 @@ export function TempPanel({
                       >
                         <UndoIcon size={15} />
                       </button>
-                      <button
-                        type="button"
-                        className="ohf-tile-act ohf-tile-act--danger"
-                        aria-label={`Delete ${label} permanently`}
-                        title="Delete permanently"
-                        disabled={busyId === item.record.id}
-                        onClick={() => void discard(item)}
-                      >
-                        <TrashIcon size={15} />
-                      </button>
+                      {canPurge && (
+                        <button
+                          type="button"
+                          className="ohf-tile-act ohf-tile-act--danger"
+                          aria-label={`Delete ${label} permanently`}
+                          title="Delete permanently"
+                          disabled={busyId === item.record.id}
+                          onClick={() => void discard(item)}
+                        >
+                          <TrashIcon size={15} />
+                        </button>
+                      )}
                     </div>
                   </li>
                 );

@@ -50,9 +50,20 @@ export async function recordUsage(input: {
 }): Promise<void> {
   const userId = input.userId ?? (await requireActiveUser()).id;
   const credits = creditsFromUsd(input.costUsd);
+  let teamId: number | null = null;
+  try {
+    const { readSession } = await import("@/auth/session");
+    const { workspaceFor } = await import("@/teams/access");
+    const session = await readSession();
+    if (session && session.id === userId) teamId = (await workspaceFor(session)).teamId;
+  } catch {
+    teamId = null;
+  }
+  const { bindHoldToRequest, finishTeamSpend } = await import("@/teams/spend");
+  const bound = await bindHoldToRequest(userId, input.requestId.slice(0, 128));
   await execute(
-    `INSERT INTO usage_events (user_id, token_id, request_id, model_id, kind, spec, cost_usd, credits, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO usage_events (user_id, team_id, token_id, request_id, model_id, kind, spec, cost_usd, credits, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        status = IF(VALUES(status) = 'pending', status, VALUES(status)),
        cost_usd = COALESCE(VALUES(cost_usd), cost_usd),
@@ -60,6 +71,7 @@ export async function recordUsage(input: {
        token_id = COALESCE(VALUES(token_id), token_id)`,
     [
       userId,
+      teamId,
       input.tokenId ?? null,
       input.requestId.slice(0, 128),
       input.modelId.slice(0, 128),
@@ -70,6 +82,15 @@ export async function recordUsage(input: {
       input.status,
     ],
   );
+  if (bound && input.status !== "pending") {
+    await finishTeamSpend({
+      userId,
+      requestId: input.requestId.slice(0, 128),
+      usd: input.costUsd ?? 0,
+      ok: input.status === "success",
+      teamId: bound.teamId,
+    });
+  }
 }
 
 export function usageStatusFromPlatform(status: string): UsageStatus | null {
@@ -102,4 +123,13 @@ export async function settleUsage(input: {
      WHERE request_id = ? AND user_id = ?`,
     [input.status, costUsd, creditsFromUsd(costUsd), input.requestId, userId],
   );
+  if (input.status === "success" || input.status === "failed") {
+    const { finishTeamSpend } = await import("@/teams/spend");
+    await finishTeamSpend({
+      userId,
+      requestId: input.requestId,
+      usd: costUsd ?? 0,
+      ok: input.status === "success",
+    });
+  }
 }

@@ -90,7 +90,12 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
   const filters = cleanFilters(data, isSuperadmin);
   const where = ["e.created_at >= ?", "e.created_at < DATE_ADD(?, INTERVAL 1 DAY)"];
   const params: Array<string | number> = [`${filters.from} 00:00:00`, filters.to];
-  if (!isSuperadmin) {
+  const { workspaceFor } = await import("@/teams/access");
+  const workspace = await workspaceFor(user).catch(() => null);
+  if (!isSuperadmin && workspace?.teamId && workspace.role === "team_admin") {
+    where.push("e.team_id = ?");
+    params.push(workspace.teamId);
+  } else if (!isSuperadmin) {
     where.push("e.user_id = ?");
     params.push(user.id);
   } else if (filters.username) {

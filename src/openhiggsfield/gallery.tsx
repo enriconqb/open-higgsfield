@@ -292,6 +292,11 @@ const Tile = memo(function Tile({
           API
         </span>
       )}
+      {item.createdBy && (
+        <span className="ohf-tile-api" title={`Created by ${item.createdBy}`}>
+          {item.createdBy}
+        </span>
+      )}
       {/* The run signs itself only while the card is under the cursor, the same
           bargain the action rail makes — an un-hovered grid is nothing but the
           work. What distinguishes two cards of the same model is the words that

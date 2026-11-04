@@ -8,6 +8,7 @@ import { hasStudioAdminAccess } from "@/auth/types";
 
 import { VIEWS, VIEW_LABELS, type GalleryView } from "./data";
 import { ApiTokensPanel } from "./api-tokens-panel";
+import { TeamPanel } from "./team-panel";
 import { AdminPanel } from "./admin-panel";
 import { ModelAdminPanel } from "./model-admin-panel";
 import { TemplatesPanel } from "./templates-panel";
@@ -47,6 +48,9 @@ export function Topbar({
   user,
   onLogout,
   onTemp,
+  creditAlerts = 0,
+  pendingInvites = 0,
+  onTeamChanged,
 }: {
   view: GalleryView;
   onView: (next: GalleryView) => void;
@@ -56,12 +60,15 @@ export function Topbar({
   user: PublicUser | null;
   onLogout: () => void;
   onTemp: () => void;
+  creditAlerts?: number;
+  pendingInvites?: number;
+  onTeamChanged?: () => void;
 }) {
   const tabsRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [studioDialog, setStudioDialog] = useState<"models" | "templates" | "tokens" | "users" | null>(null);
+  const [studioDialog, setStudioDialog] = useState<"models" | "templates" | "tokens" | "users" | "team" | null>(null);
   const closeStudioDialog = useCallback(() => setStudioDialog(null), []);
 
   /* The indicator is measured rather than derived from equal columns, so it
@@ -197,10 +204,32 @@ export function Topbar({
                 onClick={() => setMenuOpen((open) => !open)}
               >
                 <UserIcon />
-                <span className="ohf-key-text">{user.username}</span>
+                <span className="ohf-key-text">
+                  {user.username}
+                  {creditAlerts + pendingInvites > 0 && (
+                    <span className="ohf-alert-badge" title="Team alerts">
+                      {creditAlerts + pendingInvites}
+                    </span>
+                  )}
+                </span>
               </button>
               {menuOpen && (
                 <div className="ohf-user-panel" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="ohf-user-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setStudioDialog("team");
+                    }}
+                  >
+                    <UserIcon size={15} />
+                    Team
+                    {creditAlerts + pendingInvites > 0 && (
+                      <span className="ohf-alert-badge">{creditAlerts + pendingInvites}</span>
+                    )}
+                  </button>
                   <Link href="/profile" role="menuitem" className="ohf-user-item" onClick={() => setMenuOpen(false)}>
                     <UserIcon size={15} />
                     Profile
@@ -304,6 +333,14 @@ export function Topbar({
       {studioDialog === "models" && <ModelAdminPanel onClose={closeStudioDialog} />}
       {studioDialog === "templates" && <TemplatesPanel onClose={closeStudioDialog} />}
       {studioDialog === "tokens" && <ApiTokensPanel onClose={closeStudioDialog} />}
+      {studioDialog === "team" && (
+        <TeamPanel
+          onClose={closeStudioDialog}
+          onChanged={() => {
+            onTeamChanged?.();
+          }}
+        />
+      )}
     </div>
   );
 }

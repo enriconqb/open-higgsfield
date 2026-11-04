@@ -65,6 +65,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     const id = crypto.randomUUID();
     await mkdir(uploadRoot(), { recursive: true });
     await writeFile(uploadFilePath(id), bytes);
+    try {
+      const { registerUpload } = await import("@/teams/uploads");
+      const session = await requireActiveUser();
+      await registerUpload({ id, userId: session.id, filename: file.name, mime: file.type });
+    } catch (caught) {
+      console.error("[uploads] registry skipped", caught instanceof Error ? caught.message : caught);
+    }
     /* The sidecar keeps the original type for video and audio, whose bytes are
        not sniffed; inlineLocalMedia reads it when a reference is sent on. */
     await writeFile(uploadTypePath(id), file.type);
