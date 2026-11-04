@@ -109,9 +109,16 @@ export function TeamPanel({
               <section className="ohf-team-section">
                 <div className="ohf-team-section-head">
                   <div className="ohf-field-label">Workspace</div>
-                  <button type="button" className="ohf-keys-save" disabled={busy} onClick={() => setCreateOpen(true)}>
-                    Create team
-                  </button>
+                  <div className="ohf-team-head-actions">
+                    {desk.canAdmin && activeTeam && (
+                      <button type="button" className="ohf-team-activity-btn" disabled={busy} onClick={() => setActivityOpen(true)}>
+                        Activity
+                      </button>
+                    )}
+                    <button type="button" className="ohf-keys-save" disabled={busy} onClick={() => setCreateOpen(true)}>
+                      Create team
+                    </button>
+                  </div>
                 </div>
                 <div className="ohf-team-switch" role="listbox" aria-label="Workspace">
                   <button
@@ -136,11 +143,6 @@ export function TeamPanel({
                     </button>
                   ))}
                 </div>
-                {activeTeam && (desk.createdBy === desk.viewerId || desk.isSuperadmin) && (
-                  <button type="button" className="ohf-btn-quiet" disabled={busy} onClick={() => setDissolveOpen(true)}>
-                    Dissolve team
-                  </button>
-                )}
               </section>
 
               {desk.invites.length > 0 && (
@@ -327,7 +329,9 @@ export function TeamPanel({
                           <p className="ohf-keys-copy">
                             {member.role === "team_admin" ? "Team admin" : "Member"}
                             {member.hasOwnKey ? " · own API key" : member.hasTeamKey ? " · team key" : " · no key"}
-                            {!member.hasOwnKey ? ` · ${formatUsd(member.spentCredits)} / ${formatUsd(member.limitCredits)}` : ""}
+                            {desk.credit?.mode === "member" && !member.hasOwnKey
+                              ? ` · Usage ${formatUsd(member.spentCredits)} / Limit ${formatUsd(member.limitCredits)}`
+                              : ""}
                           </p>
                         </div>
                         <div className="ohf-team-row-actions">
@@ -336,16 +340,18 @@ export function TeamPanel({
                               <KeyIcon size={14} />
                             </button>
                           )}
-                          {desk.viewerId === desk.apiUserId && !member.hasOwnKey && (
+                          {desk.credit?.mode === "member" && desk.viewerId === desk.apiUserId && !member.hasOwnKey && (
                             <button
                               type="button"
                               className="ohf-team-icon is-credit"
-                              title="Dollar limit"
+                              title="Change balance"
                               disabled={busy}
                               onClick={() => {
-                                const next = window.prompt("Member limit in dollars", String(member.limitCredits));
-                                if (next == null) return;
-                                void run(() => saveMemberLimit(activeTeam.id, member.userId, Number(next)).then(unwrap));
+                                const next = window.prompt("New member limit in dollars", String(member.limitCredits));
+                                if (next == null || !next.trim()) return;
+                                const limit = Number(next);
+                                if (!Number.isFinite(limit) || limit < 0) return;
+                                void run(() => saveMemberLimit(activeTeam.id, member.userId, limit).then(unwrap));
                               }}
                             >
                               <GemIcon size={14} />
@@ -378,15 +384,15 @@ export function TeamPanel({
                 </section>
               )}
 
-              {desk.canAdmin && activeTeam && (
-                <button type="button" className="ohf-btn-quiet ohf-team-activity" onClick={() => setActivityOpen(true)}>
-                  Activity
-                </button>
-              )}
-
             </>
           )}
         </div>
+        {activeTeam && (desk.createdBy === desk.viewerId || desk.isSuperadmin) && (
+          <button type="button" className="ohf-team-dissolve" disabled={busy} onClick={() => setDissolveOpen(true)}>
+            <TrashIcon size={13} />
+            Dissolve
+          </button>
+        )}
       </div>
     </dialog>
       {keyMember && active &&

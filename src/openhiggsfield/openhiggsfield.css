@@ -4435,6 +4435,8 @@ a.ohf-btn-solid {
 .ohf-team-panel {
   width: min(640px, calc(100vw - 32px));
   max-height: min(84vh, 820px);
+  display: flex;
+  flex-direction: column;
 }
 .ohf-team-body {
   display: flex;
@@ -4452,6 +4454,44 @@ a.ohf-btn-solid {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+.ohf-team-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ohf-team-activity-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ohf-team-activity-btn:disabled {
+  opacity: 0.45;
+}
+.ohf-team-dissolve {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin: 4px 16px 12px;
+  padding: 0 10px;
+  border: 1px solid #b91c1c;
+  border-radius: 999px;
+  background: transparent;
+  color: #f87171;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ohf-team-dissolve:disabled {
+  opacity: 0.45;
 }
 .ohf-team-switch {
   display: grid;
