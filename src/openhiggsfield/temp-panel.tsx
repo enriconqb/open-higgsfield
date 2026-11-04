@@ -74,10 +74,14 @@ export function trashCountdown(expiresAt: number, now = Date.now()): string {
 
 export function TempPanel({
   live = false,
+  canManageAll = true,
+  viewerName = "",
   onClose,
   onRestore,
 }: {
   live?: boolean;
+  canManageAll?: boolean;
+  viewerName?: string;
   onClose: () => void;
   onRestore: (records: RunRecord[]) => void;
 }) {
@@ -188,6 +192,7 @@ export function TempPanel({
                     )}
                     <span className="ohf-temp-badge">{trashCountdown(item.expiresAt, now)}</span>
                     <div className="ohf-tile-acts">
+                      {(canManageAll || (Boolean(item.record.createdBy) && item.record.createdBy === viewerName)) && (
                       <button
                         type="button"
                         className="ohf-tile-act"
@@ -198,6 +203,7 @@ export function TempPanel({
                       >
                         <UndoIcon size={15} />
                       </button>
+                      )}
                       {canPurge && (
                         <button
                           type="button"

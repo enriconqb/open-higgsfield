@@ -207,7 +207,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const [kindReady, setKindReady] = useState(false);
   const [user, setUser] = useState<PublicUser | null>(null);
   const [activeTeamId, setActiveTeamId] = useState<number | null>(null);
-  const [teams, setTeams] = useState<{ id: number; name: string }[]>([]);
+  const [teams, setTeams] = useState<{ id: number; name: string; role: "team_admin" | "member" }[]>([]);
   const [creditAlerts, setCreditAlerts] = useState(0);
   const [teamBalance, setTeamBalance] = useState<number | null>(null);
   const [pendingInvites, setPendingInvites] = useState(0);
@@ -816,10 +816,20 @@ function persistLocal(records: RunRecord[]) {
     );
   }, [selected, pickedRecords]);
 
+  const teamRole = teams.find((team) => team.id === activeTeamId)?.role;
+  const managesTeamGallery =
+    activeTeamId == null || teamRole === "team_admin" || hasStudioAdminAccess(user?.role ?? "user");
+  const ownsRun = useCallback(
+    (record: RunRecord) => {
+      if (managesTeamGallery) return true;
+      return Boolean(record.createdBy) && record.createdBy === user?.username;
+    },
+    [managesTeamGallery, user?.username],
+  );
   const deletePicked = useCallback(() => {
-    deleteRuns(pickedRecords);
+    deleteRuns(pickedRecords.filter(ownsRun));
     clearPicked();
-  }, [deleteRuns, pickedRecords, clearPicked]);
+  }, [deleteRuns, ownsRun, pickedRecords, clearPicked]);
 
   /* One run, saved from its card. The provider's CDN link is tried first and
      the archived copy second; only when both refuse is the run unsaved. The
@@ -971,6 +981,7 @@ function persistLocal(records: RunRecord[]) {
               onFavorite={toggleFavorite}
               onDownload={downloadRun}
               onDelete={deleteRun}
+              canDelete={ownsRun}
               onStarter={applyStarter}
               galleryRef={galleryRef}
             />
@@ -1025,12 +1036,15 @@ function persistLocal(records: RunRecord[]) {
               setViewerId(null);
               deleteRun(viewerItem);
             }}
+            canDelete={ownsRun(viewerItem)}
             showStorage={hasStudioAdminAccess(user?.role ?? "user")}
           />
         )}
         {tempOpen && (
           <TempPanel
             live={activeTeamId != null}
+            canManageAll={managesTeamGallery}
+            viewerName={user?.username ?? ""}
             onClose={() => setTempOpen(false)}
             onRestore={restoreRecords}
           />

@@ -125,6 +125,7 @@ const Tile = memo(function Tile({
   onFavorite,
   onDownload,
   onDelete,
+  allowDelete = true,
 }: {
   item: RunRecord;
   index: number;
@@ -139,6 +140,7 @@ const Tile = memo(function Tile({
   onFavorite: (item: RunRecord) => void;
   onDownload: (item: RunRecord) => Promise<void>;
   onDelete: (item: RunRecord) => void;
+  allowDelete?: boolean;
 }) {
   const delay = `${Math.min(index * 0.035, 0.28).toFixed(3)}s`;
   /* The provider's CDN link first, because it still answers while it lasts and
@@ -214,7 +216,7 @@ const Tile = memo(function Tile({
           </button>
         </div>
         {picker}
-        <div className="ohf-tile-acts">{remove}</div>
+        {allowDelete && <div className="ohf-tile-acts">{remove}</div>}
       </div>
     );
   }
@@ -322,7 +324,7 @@ const Tile = memo(function Tile({
           rather than leaving it stranded mid-edge. Delete leads from the far
           end, the slot furthest from the corner the cursor arrives at. */}
       <div className="ohf-tile-acts">
-        {remove}
+        {allowDelete && remove}
         <button
           type="button"
           className="ohf-tile-act"
@@ -384,6 +386,7 @@ export const Gallery = memo(function Gallery({
   onFavorite,
   onDownload,
   onDelete,
+  canDelete,
   onStarter,
   galleryRef,
 }: {
@@ -399,6 +402,7 @@ export const Gallery = memo(function Gallery({
   onFavorite: (item: RunRecord) => void;
   onDownload: (item: RunRecord) => Promise<void>;
   onDelete: (item: RunRecord) => void;
+  canDelete?: (item: RunRecord) => boolean;
   onStarter: (prompt: string) => void;
   galleryRef: RefObject<HTMLDivElement | null>;
 }) {
@@ -434,6 +438,7 @@ export const Gallery = memo(function Gallery({
         onFavorite={onFavorite}
         onDownload={onDownload}
         onDelete={onDelete}
+        canDelete={canDelete}
       />
     </div>
   );
@@ -452,6 +457,7 @@ function VirtualizedGrid({
   onFavorite,
   onDownload,
   onDelete,
+  canDelete,
 }: {
   scrollRef: RefObject<HTMLDivElement | null>;
   selecting: boolean;
@@ -465,6 +471,7 @@ function VirtualizedGrid({
   onFavorite: (item: RunRecord) => void;
   onDownload: (item: RunRecord) => Promise<void>;
   onDelete: (item: RunRecord) => void;
+  canDelete?: (item: RunRecord) => boolean;
 }) {
   const width = useInnerWidth(scrollRef);
   const columns = columnsFor(width);
@@ -520,6 +527,7 @@ function VirtualizedGrid({
                   onFavorite={onFavorite}
                   onDownload={onDownload}
                   onDelete={onDelete}
+                  allowDelete={canDelete ? canDelete(slot.item) : true}
                 />
               ),
             )}

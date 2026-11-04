@@ -75,6 +75,7 @@ export function Viewer({
   onReuse,
   onFavorite,
   onDelete,
+  canDelete = true,
   onPrev,
   onNext,
   showStorage = false,
@@ -84,6 +85,7 @@ export function Viewer({
   onReuse: () => void;
   onFavorite: () => void;
   onDelete: () => void;
+  canDelete?: boolean;
   /* Absent at the ends of the scope, which is how the walk stops. */
   onPrev?: () => void;
   onNext?: () => void;
@@ -451,6 +453,7 @@ export function Viewer({
                   and this is the one press here that discards a run. It leaves
                   through the same exit as every other dismissal, and the undo
                   bar in the composer catches it. */}
+              {canDelete && (
               <button
                 type="button"
                 className="ohf-icon-btn ohf-viewer-trash"
@@ -460,6 +463,7 @@ export function Viewer({
               >
                 <TrashIcon size={15} />
               </button>
+              )}
               {/* The keep lives wherever the run does, so opening one full size
                   does not send the visitor back to the grid to save it. */}
               <button

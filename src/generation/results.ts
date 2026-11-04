@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2/promise";
 
 import { requireActiveUser } from "@/auth/guard";
+import { hasStudioAdminAccess } from "@/auth/types";
 import { getPool, queryOne, queryRows } from "@/db/client";
 import { capHistory, isRunRecord, type RunRecord } from "@/openhiggsfield/history";
 
@@ -89,49 +90,51 @@ export async function replaceGenerationResultsFor(
      not a deletion: it belongs to a job in flight, and the settlement worker
      writes its finished copy under the same id. Dropping it here would move a
      running generation to Temp behind the visitor's back. */
-  const moving = await listActiveJobIds(userId).catch(() => new Set<string>());
+  const moving = teamId == null ? await listActiveJobIds(userId).catch(() => new Set<string>()) : new Set<string>();
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
-    const [existing] = await connection.query<ResultRow[]>(
-      `SELECT client_id, payload FROM generation_results WHERE ${scope}`,
-      scopeParams,
-    );
-    const dropped: string[] = [];
-    for (const row of existing) {
-      if (!row.client_id || kept.has(row.client_id) || moving.has(row.client_id)) continue;
-      dropped.push(row.client_id);
+    /* A team save only refreshes rows the browser still has. Missing rows are
+       not deletions; Temp changes only when a chosen item is deleted or restored. */
+    if (teamId == null) {
+      const [existing] = await connection.query<ResultRow[]>(
+        `SELECT client_id, payload FROM generation_results WHERE ${scope}`,
+        scopeParams,
+      );
+      const dropped: string[] = [];
+      for (const row of existing) {
+        if (!row.client_id || kept.has(row.client_id) || moving.has(row.client_id)) continue;
+        dropped.push(row.client_id);
+        await connection.query(
+          `INSERT INTO gallery_trash (user_id, team_id, created_by, client_id, payload, deleted_at, expires_at)
+           VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${TRASH_DAYS} DAY))
+           ON DUPLICATE KEY UPDATE payload = VALUES(payload)`,
+          [userId, teamId, userId, row.client_id, JSON.stringify(parsePayload(row.payload) ?? row.payload)],
+        );
+      }
+      if (dropped.length > 0) {
+        const marks = dropped.map(() => "?").join(", ");
+        await connection.query(
+          `DELETE FROM generation_results WHERE ${scope} AND client_id IN (${marks})`,
+          [...scopeParams, ...dropped],
+        );
+      }
+      if (kept.size > 0) {
+        const marks = [...kept].map(() => "?").join(", ");
+        await connection.query(
+          `DELETE FROM gallery_trash WHERE ${scope} AND client_id IN (${marks})`,
+          [...scopeParams, ...kept],
+        );
+      }
+      const protectedMarks = [...moving];
+      const keepMoving = protectedMarks.length
+        ? ` AND client_id NOT IN (${protectedMarks.map(() => "?").join(", ")})`
+        : "";
       await connection.query(
-        `INSERT INTO gallery_trash (user_id, team_id, created_by, client_id, payload, deleted_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${TRASH_DAYS} DAY))
-         ON DUPLICATE KEY UPDATE payload = VALUES(payload)`,
-        [userId, teamId, userId, row.client_id, JSON.stringify(parsePayload(row.payload) ?? row.payload)],
+        `DELETE FROM generation_results WHERE ${scope} AND client_id NOT LIKE '%#api'${keepMoving}`,
+        [...scopeParams, ...protectedMarks],
       );
     }
-    if (dropped.length > 0) {
-      const marks = dropped.map(() => "?").join(", ");
-      await connection.query(
-        `DELETE FROM generation_results WHERE ${scope} AND client_id IN (${marks})`,
-        [...scopeParams, ...dropped],
-      );
-    }
-    if (kept.size > 0) {
-      const marks = [...kept].map(() => "?").join(", ");
-      const trashScope = teamId == null ? scope : `team_id = ?`;
-      const trashParams = teamId == null ? scopeParams : [teamId];
-      await connection.query(
-        `DELETE FROM gallery_trash WHERE ${trashScope} AND client_id IN (${marks})`,
-        [...trashParams, ...kept],
-      );
-    }
-    const protectedMarks = [...moving];
-    const keepMoving = protectedMarks.length
-      ? ` AND client_id NOT IN (${protectedMarks.map(() => "?").join(", ")})`
-      : "";
-    await connection.query(
-      `DELETE FROM generation_results WHERE ${scope} AND client_id NOT LIKE '%#api'${keepMoving}`,
-      [...scopeParams, ...protectedMarks],
-    );
     for (const record of publish) {
       await connection.query(
         `INSERT INTO generation_results (user_id, team_id, created_by, client_id, payload) VALUES (?, ?, ?, ?, ?)
@@ -167,6 +170,7 @@ export async function trashTeamResults(clientIds: string[]): Promise<void> {
        WHERE team_id = ? AND client_id IN (${marks})`,
       [workspace.teamId, ...ids],
     );
+    assertOwnRows(user.id, workspace.role, user.role, rows, "delete");
     for (const row of rows) {
       await connection.query(
         `INSERT INTO gallery_trash (user_id, team_id, created_by, client_id, payload, deleted_at, expires_at)
@@ -208,6 +212,7 @@ export async function restoreTeamResults(clientIds: string[]): Promise<void> {
        WHERE team_id = ? AND client_id IN (${marks})`,
       [workspace.teamId, ...ids],
     );
+    assertOwnRows(user.id, workspace.role, user.role, rows, "restore");
     for (const row of rows) {
       await connection.query(
         `INSERT INTO generation_results (user_id, team_id, created_by, client_id, payload)
@@ -245,6 +250,20 @@ async function teamPublishable(records: RunRecord[], userId: number, teamId: num
   );
   const skip = new Set([...trashed, ...foreign].map((row) => row.client_id));
   return records.filter((record) => !skip.has(record.id.slice(0, 191)));
+}
+
+function assertOwnRows(
+  userId: number,
+  teamRole: "team_admin" | "member" | null,
+  platformRole: "superadmin" | "admin" | "user",
+  rows: { user_id: number; created_by: number | null }[],
+  action: "delete" | "restore",
+): void {
+  if (teamRole === "team_admin" || hasStudioAdminAccess(platformRole)) return;
+  const foreign = rows.some((row) => Number(row.created_by ?? row.user_id) !== userId && Number(row.user_id) !== userId);
+  if (foreign) {
+    throw new Error(action === "delete" ? "You can only delete runs you created" : "You can only restore runs you created");
+  }
 }
 
 function uniqueIds(clientIds: string[]): string[] {
