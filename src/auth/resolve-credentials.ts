@@ -51,5 +51,17 @@ export async function encryptedPlatformKeyKind(): Promise<"openrouter" | "higgsf
   const session = await readSession();
   if (!session) return null;
   const row = await getApiKeyRow(session.id);
-  return row?.provider ?? null;
+  if (row?.provider) return row.provider;
+  const { workspaceFor } = await import("@/teams/access");
+  const workspace = await workspaceFor(session);
+  if (!workspace.teamId) return null;
+  const { queryOne } = await import("@/db/client");
+  const owner = await queryOne<{ provider: "openrouter" | "higgsfield" | null } & import("mysql2/promise").RowDataPacket>(
+    `SELECT k.provider
+     FROM teams t
+     LEFT JOIN team_member_keys k ON k.team_id = t.id AND k.user_id = t.api_user_id
+     WHERE t.id = ?`,
+    [workspace.teamId],
+  );
+  return owner?.provider === "openrouter" || owner?.provider === "higgsfield" ? owner.provider : null;
 }

@@ -937,12 +937,13 @@ function persistLocal(records: RunRecord[]) {
             onTeamChanged={() => {
               void getAuthState()
                 .then(unwrap)
-                .then((state) => {
+                .then(async (state) => {
                   setActiveTeamId(state.activeTeamId);
-        setTeams(state.teams);
+                  setTeams(state.teams);
                   setCreditAlerts(state.creditAlerts);
                   setPendingInvites(state.pendingInvites);
                   setTeamBalance(state.teamBalance);
+                  setKeyKind(await platformKeyKind().then(unwrap));
                 })
                 .catch(() => undefined);
             }}
@@ -1063,7 +1064,7 @@ function persistLocal(records: RunRecord[]) {
             }}
             onCleared={() => {
               setKeyConfigured(false);
-              setKeyKind(null);
+              void platformKeyKind().then(unwrap).then(setKeyKind);
             }}
           />
         )}
