@@ -6,7 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Surface } from "@/generation/catalog";
 
 import { swatchFor } from "./artwork";
-import { CROSS_VIEWS, SAMPLES, pickSamples, type GalleryView } from "./data";
+import { CROSS_VIEWS, SAMPLES, pickSamples, settingValueLabel, type GalleryView } from "./data";
 import type { ActiveRun } from "./openhiggsfield-app";
 import {
   ArrowRightIcon,
@@ -57,6 +57,22 @@ const EMPTY: Record<GalleryView, { title: string; hint: string }> = {
    reads as forty identical "Delete run"s. */
 function shortPrompt(prompt: string): string {
   return prompt.length > 48 ? `${prompt.slice(0, 47)}…` : prompt;
+}
+
+function hoverFacts(item: RunRecord): string[] {
+  const settings = item.settings;
+  if (settings) {
+    const parts: string[] = [];
+    for (const key of ["resolution", "duration"] as const) {
+      const value = settings[key];
+      if (value === undefined || value === null || value === "") continue;
+      const label = settingValueLabel(key, value);
+      if (label.trim()) parts.push(label);
+    }
+    if (settings.generateAudio === true || settings.sound === true) parts.push("Audio");
+    if (parts.length > 0) return parts;
+  }
+  return item.meta ? item.meta.split(" · ").filter(Boolean) : [];
 }
 
 const GRID_GAP = 14;
@@ -159,7 +175,7 @@ const Tile = memo(function Tile({
   const [saving, setSaving] = useState(false);
   const saved = item.favorite === true;
   const named = shortPrompt(item.prompt);
-  const facts = item.meta ? item.meta.split(" · ") : [];
+  const facts = hoverFacts(item);
 
   /* Top-left, where a selection mark is looked for, and the one control on the
      card that is not about this run alone. It carries the whole checkbox
@@ -216,6 +232,11 @@ const Tile = memo(function Tile({
           </button>
         </div>
         {picker}
+        {item.createdBy && (
+          <span className="ohf-tile-api" title={`Created by ${item.createdBy}`}>
+            {item.createdBy}
+          </span>
+        )}
         {allowDelete && <div className="ohf-tile-acts">{remove}</div>}
       </div>
     );

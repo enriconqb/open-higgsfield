@@ -2819,6 +2819,39 @@
   color: var(--tx3);
   transition: opacity 0.16s ease;
 }
+.ohf-asset-who {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  max-width: calc(100% - 28px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--plate);
+  color: var(--plate-ink);
+  font-size: 10px;
+  pointer-events: none;
+}
+.ohf-asset-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 6px;
+  padding: 16px 6px 6px;
+  background: linear-gradient(transparent, rgba(4, 7, 6, 0.88));
+  color: #fff;
+  font-size: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+.ohf-asset:hover .ohf-asset-caption {
+  opacity: 1;
+}
 .ohf-asset-kind {
   position: absolute;
   left: 6px;

@@ -44,6 +44,8 @@ interface Asset {
   /** The run's layered-gradient art, so a tile whose media is slow to arrive or
       has aged off the platform's CDN is still a picture rather than a hole. */
   art?: string;
+  resolution?: string;
+  createdBy?: string;
 }
 
 /** Everything a role can be filled from: files this browser sent to Blob, and
@@ -127,6 +129,8 @@ export function AssetPicker({
           kind,
           title: record.prompt,
           art: record.art,
+          ...(resolutionOf(record) ? { resolution: resolutionOf(record) } : {}),
+          ...(record.createdBy ? { createdBy: record.createdBy } : {}),
         });
       });
     }
@@ -421,6 +425,14 @@ export function AssetPicker({
 
 const UNDO_MS = 6000;
 
+function resolutionOf(record: RunRecord): string {
+  const value = record.settings?.resolution;
+  if (typeof value === "string" && value.trim()) return value;
+  const first = record.meta.split(" · ").map((part) => part.trim()).find(Boolean);
+  if (first && /\d/.test(first) && !/s$/.test(first)) return first;
+  return "";
+}
+
 function urlsOf(items: MediaItem[], role: MediaRole): string[] {
   return items.filter((item) => item.role === role).map((item) => item.url);
 }
@@ -500,6 +512,17 @@ const AssetTile = memo(function AssetTile({
           <PlayBadgeIcon size={8} />
         </span>
       )}
+      {asset.createdBy && (
+        <span className="ohf-asset-who" title={`Created by ${asset.createdBy}`}>
+          {asset.createdBy}
+        </span>
+      )}
+      {(asset.resolution || asset.createdBy) && (
+        <span className="ohf-asset-caption">
+          {asset.resolution && <span>{asset.resolution}</span>}
+          {asset.createdBy && <span>{asset.createdBy}</span>}
+        </span>
+      )}
 
       <button
         type="button"
@@ -565,6 +588,13 @@ function PreviewDialog({ asset, onClose }: { asset: Asset; onClose: () => void }
           <div>
             <div className="ohf-keys-title">Preview</div>
             <p className="ohf-keys-copy">{asset.title}</p>
+            {(asset.resolution || asset.createdBy) && (
+              <p className="ohf-keys-copy">
+                {[asset.resolution, asset.createdBy ? `Created by ${asset.createdBy}` : ""]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
           </div>
           <button type="button" className="ohf-icon-btn ohf-icon-btn--ghost" aria-label="Close preview" onClick={onClose}>
             <CloseIcon size={14} />

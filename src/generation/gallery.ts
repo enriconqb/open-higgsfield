@@ -100,6 +100,9 @@ function recordOf(
     ...(badgeOf(row) ? { badge: badgeOf(row) } : {}),
     ...(row.cost_usd === null ? {} : { costUsd: Number(row.cost_usd) }),
     ...(row.error ? { error: String(row.error).slice(0, 500) } : {}),
+    ...(row.settings && typeof row.settings === "object" && !Array.isArray(row.settings)
+      ? { settings: row.settings as Record<string, unknown> }
+      : {}),
   };
   return record;
 }

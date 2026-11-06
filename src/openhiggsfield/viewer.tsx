@@ -43,6 +43,19 @@ function storedOnDisk(item: RunRecord): boolean {
   return [...item.urls, ...(item.remoteUrls ?? [])].some((url) => /\/uploads\/[0-9a-f-]{36}/i.test(url));
 }
 
+function factsFromMeta(meta: string): Array<[string, string]> {
+  return meta
+    .split(" · ")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      if (/^\d+(\.\d+)?s$/.test(part) || /^\d+:\d{2}$/.test(part)) return ["Duration", part];
+      if (/^audio$/i.test(part)) return ["Audio", part];
+      if (/\d/.test(part)) return ["Resolution", part];
+      return ["Output", part];
+    });
+}
+
 function shareFact(item: RunRecord): { model: string; ratio: string; size: string } {
   const settings = item.settings ?? {};
   let size = "";
@@ -217,9 +230,7 @@ export function Viewer({
         settingLabel(key),
         settingValueLabel(key, value),
       ])
-    : item.meta
-      ? [["Output", item.meta]]
-      : [];
+    : factsFromMeta(item.meta);
 
   return (
     <dialog
@@ -347,6 +358,12 @@ export function Viewer({
                   <dt>Model</dt>
                   <dd>{item.modelLabel}</dd>
                 </div>
+                {item.createdBy && (
+                  <div className="ohf-viewer-fact">
+                    <dt>Created by</dt>
+                    <dd>{item.createdBy}</dd>
+                  </div>
+                )}
                 {showStorage && (
                   <div className="ohf-viewer-fact">
                     <dt>Storage</dt>
