@@ -6764,8 +6764,8 @@ a.ohf-key-link {
 
 .ohf-unface-picker-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 16px;
   padding: 8px 16px 16px;
   overflow: auto;
 }
@@ -6778,6 +6778,7 @@ a.ohf-key-link {
   overflow: hidden;
   padding: 0;
   background: var(--s1);
+  cursor: pointer;
 }
 
 .ohf-unface-picker-tile img {
@@ -6788,6 +6789,13 @@ a.ohf-key-link {
 
 .ohf-unface-picker-tile:hover,
 .ohf-unface-picker-add:hover {
+  border-color: var(--accent);
+}
+
+.ohf-unface-picker-tile:focus-visible,
+.ohf-unface-picker-add:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
   border-color: var(--accent);
 }
 
