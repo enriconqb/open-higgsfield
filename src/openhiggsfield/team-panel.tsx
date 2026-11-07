@@ -357,7 +357,9 @@ export function TeamPanel({
                               <GemIcon size={14} />
                             </button>
                           )}
-                          {desk.isSuperadmin && (
+                          {desk.canAdmin &&
+                            member.userId !== desk.viewerId &&
+                            (desk.isSuperadmin || member.userId !== desk.createdBy) && (
                             <button
                               type="button"
                               className="ohf-team-icon"
