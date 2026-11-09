@@ -6,6 +6,7 @@ import { defaultKv } from "./idb";
 import { CompareIcon, CloseIcon, PlusIcon, SearchIcon } from "./icons";
 import { CompareStage, type CompareItem } from "./compare-stage";
 import type { RunRecord } from "./history";
+import { LIBRARY_PAGE, groupLibrary, takeLibrary } from "./library-groups";
 import { sourcesForUrls } from "./media-source";
 import { uploadMedia } from "@/generation/upload";
 import { loadUploads, type UploadRecord } from "./uploads";
@@ -14,6 +15,7 @@ const COMPARE_KEY = "compare.v1";
 const MAX_ITEMS = 20;
 
 type Shelf = "studio" | "generations";
+type ShelfItem = CompareItem & { createdAt: number };
 
 /** The comparison panel: a strip the visitor fills from their own library, their
     uploads, or a file they drop, and a stage that shows the chosen pair — two
@@ -31,6 +33,8 @@ export function Compare({ history, ready }: { history: RunRecord[]; ready: boole
   const [error, setError] = useState<string | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const shelfBodyRef = useRef<HTMLDivElement>(null);
+  const shelfSentinelRef = useRef<HTMLDivElement>(null);
 
   /* The strip outlives a reload the way the timeline does. */
   useEffect(() => {
@@ -62,7 +66,7 @@ export function Compare({ history, ready }: { history: RunRecord[]; ready: boole
 
   /* The shelves: what the studio already made, and what was uploaded here. */
   const shelfItems = useMemo(() => {
-    const list: CompareItem[] = [];
+    const list: ShelfItem[] = [];
     const generations = history
       .filter((record) => record.status === "completed" && record.urls[0])
       .map((record) => {
@@ -71,11 +75,12 @@ export function Compare({ history, ready }: { history: RunRecord[]; ready: boole
           url: record.urls[0]!,
           remoteUrl: record.remoteUrls?.[0],
         });
-        const item: CompareItem = {
+        const item: ShelfItem = {
           id: `g:${record.id}`,
           kind: record.kind,
           title: record.prompt,
           url: sources.primary,
+          createdAt: record.createdAt,
         };
         return item;
       });
@@ -89,13 +94,35 @@ export function Compare({ history, ready }: { history: RunRecord[]; ready: boole
           kind: row.kind,
           title: row.name,
           url: row.url,
+          createdAt: row.createdAt,
         });
       }
     }
     const needle = query.trim().toLowerCase();
-    const filtered = needle ? list.filter((item) => item.title.toLowerCase().includes(needle)) : list;
-    return filtered.slice(0, 60);
+    return needle ? list.filter((item) => item.title.toLowerCase().includes(needle)) : list;
   }, [history, query, shelf, uploads]);
+
+  const shelfYears = useMemo(() => groupLibrary(shelfItems), [shelfItems]);
+  const [shelfLimit, setShelfLimit] = useState(LIBRARY_PAGE);
+  const visibleShelf = useMemo(() => takeLibrary(shelfYears, shelfLimit), [shelfYears, shelfLimit]);
+
+  useEffect(() => {
+    setShelfLimit(LIBRARY_PAGE);
+  }, [shelfItems]);
+
+  useEffect(() => {
+    const root = shelfBodyRef.current;
+    const sentinel = shelfSentinelRef.current;
+    if (!root || !sentinel || !visibleShelf.more) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setShelfLimit((current) => current + LIBRARY_PAGE);
+      },
+      { root, rootMargin: "240px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [visibleShelf.more, shelfYears]);
 
   const byId = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
 
@@ -326,24 +353,37 @@ export function Compare({ history, ready }: { history: RunRecord[]; ready: boole
             ) : shelfItems.length === 0 ? (
               <p className="ohf-cmp-hintline">Nothing here yet.</p>
             ) : (
-              <div className="ohf-cmp-grid">
-                {shelfItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="ohf-cmp-pick"
-                    title={item.title}
-                    onClick={() => add(item)}
-                  >
-                    {item.kind === "video" ? (
-                      <video className="ohf-cmp-thumb-media" src={item.url} muted playsInline preload="metadata" />
-                    ) : (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img className="ohf-cmp-thumb-media" src={item.url} alt="" />
-                    )}
-                    <span className="ohf-cmp-pick-tag">Add</span>
-                  </button>
+              <div ref={shelfBodyRef} className="ohf-cmp-shelf-body ohf-scroll">
+                {visibleShelf.years.map((year) => (
+                  <section key={year.year} className="ohf-unface-picker-year">
+                    <div className="ohf-unface-picker-year-label">{year.year}</div>
+                    {year.groups.map((group) => (
+                      <div key={group.id} className="ohf-unface-picker-group">
+                        <h3>{group.label}</h3>
+                        <div className="ohf-unface-picker-grid">
+                          {group.items.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className="ohf-cmp-pick"
+                              title={item.title}
+                              onClick={() => add(item)}
+                            >
+                              {item.kind === "video" ? (
+                                <video className="ohf-cmp-thumb-media" src={item.url} muted playsInline preload="metadata" />
+                              ) : (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img className="ohf-cmp-thumb-media" src={item.url} alt="" loading="lazy" decoding="async" />
+                              )}
+                              <span className="ohf-cmp-pick-tag">Add</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
                 ))}
+                {visibleShelf.more && <div ref={shelfSentinelRef} className="ohf-cmp-shelf-sentinel" aria-hidden />}
               </div>
             )}
           </div>
