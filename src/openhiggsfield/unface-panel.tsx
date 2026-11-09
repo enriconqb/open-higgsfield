@@ -68,6 +68,22 @@ interface LibraryItem {
   id: string;
   name: string;
   url: string;
+  createdAt: number;
+}
+
+const PICKER_PAGE = 18;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+interface PickerGroup {
+  id: string;
+  label: string;
+  year: number;
+  items: LibraryItem[];
+}
+
+interface PickerYear {
+  year: number;
+  groups: PickerGroup[];
 }
 
 export function UnFace({
@@ -228,13 +244,12 @@ export function UnFace({
         id: record.id,
         name: record.prompt || record.modelLabel,
         url: withBasePath(record.urls[0]),
+        createdAt: record.createdAt,
       });
-      if (items.length >= 40) break;
     }
     for (const row of uploads) {
       if (row.kind !== "image") continue;
-      push({ id: row.id, name: row.name, url: withBasePath(row.url) });
-      if (items.length >= 80) break;
+      push({ id: row.id, name: row.name, url: withBasePath(row.url), createdAt: row.createdAt });
     }
     return items;
   }, [history, uploads]);
@@ -941,11 +956,36 @@ function ImagePicker({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const years = useMemo(() => groupLibrary(items), [items]);
+  const [limit, setLimit] = useState(PICKER_PAGE);
+  const visible = useMemo(() => takeLibrary(years, limit), [years, limit]);
+
+  useEffect(() => {
+    setLimit(PICKER_PAGE);
+  }, [items]);
 
   useEffect(() => {
     ref.current?.showModal();
     panelRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    const root = bodyRef.current;
+    const sentinel = sentinelRef.current;
+    if (!root || !sentinel || !visible.more) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setLimit((current) => current + PICKER_PAGE);
+        }
+      },
+      { root, rootMargin: "240px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [visible.more, years]);
 
   return (
     <dialog
@@ -970,29 +1010,113 @@ function ImagePicker({
             <CloseIcon size={13} />
           </button>
         </div>
-        <div className="ohf-unface-picker-grid">
-          <button type="button" className="ohf-unface-picker-add" onClick={onUpload}>
+        <div ref={bodyRef} className="ohf-unface-picker-body ohf-scroll">
+          <button type="button" className="ohf-unface-picker-add ohf-unface-picker-upload" onClick={onUpload}>
             <PlusIcon />
             Upload
           </button>
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="ohf-unface-picker-tile"
-              title={item.name}
-              onClick={() => onPick(item)}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={item.url} alt={item.name} />
-            </button>
+          {visible.years.map((year) => (
+            <section key={year.year} className="ohf-unface-picker-year">
+              <div className="ohf-unface-picker-year-label">{year.year}</div>
+              {year.groups.map((group) => (
+                <div key={group.id} className="ohf-unface-picker-group">
+                  <h3>{group.label}</h3>
+                  <div className="ohf-unface-picker-grid">
+                    {group.items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="ohf-unface-picker-tile"
+                        title={item.name}
+                        onClick={() => onPick(item)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={item.url} alt={item.name} loading="lazy" decoding="async" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
           ))}
+          {visible.more && <div ref={sentinelRef} className="ohf-unface-picker-sentinel" aria-hidden />}
+          {items.length === 0 && <p className="ohf-unface-picker-empty">No images yet. Upload one to start.</p>}
+          {error && <p className="ohf-unface-error ohf-unface-picker-error">{error}</p>}
         </div>
-        {items.length === 0 && <p className="ohf-unface-picker-empty">No images yet. Upload one to start.</p>}
-        {error && <p className="ohf-unface-error ohf-unface-picker-error">{error}</p>}
       </div>
     </dialog>
   );
+}
+
+function startOfLocalDay(time: number): number {
+  const date = new Date(time);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function groupLibrary(items: LibraryItem[], now = Date.now()): PickerYear[] {
+  const today = startOfLocalDay(now);
+  const rangeFormat = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+  const monthFormat = new Intl.DateTimeFormat(undefined, { month: "long" });
+  const rangeLabel = (from: number, to: number) => `${rangeFormat.format(from)} – ${rangeFormat.format(to)}`;
+  const sorted = [...items].sort((a, b) => b.createdAt - a.createdAt);
+  const groups = new Map<string, PickerGroup>();
+
+  for (const item of sorted) {
+    const day = startOfLocalDay(item.createdAt);
+    const age = Math.max(0, Math.round((today - day) / DAY_MS));
+    const year = new Date(item.createdAt).getFullYear();
+    let id: string;
+    let label: string;
+    if (age < 3) {
+      id = `d3-${year}`;
+      label = rangeLabel(today - 2 * DAY_MS, today);
+    } else if (age < 24) {
+      const week = Math.floor((age - 3) / 7);
+      const newestAge = 3 + week * 7;
+      const oldestAge = newestAge + 6;
+      id = `w${week}-${year}`;
+      label = rangeLabel(today - oldestAge * DAY_MS, today - newestAge * DAY_MS);
+    } else {
+      const date = new Date(item.createdAt);
+      id = `m-${year}-${date.getMonth()}`;
+      label = monthFormat.format(date);
+    }
+    const existing = groups.get(id);
+    if (existing) existing.items.push(item);
+    else groups.set(id, { id, label, year, items: [item] });
+  }
+
+  const years: PickerYear[] = [];
+  for (const group of groups.values()) {
+    const last = years[years.length - 1];
+    if (!last || last.year !== group.year) years.push({ year: group.year, groups: [group] });
+    else last.groups.push(group);
+  }
+  return years;
+}
+
+function takeLibrary(years: PickerYear[], limit: number): { years: PickerYear[]; more: boolean } {
+  let left = limit;
+  let more = false;
+  const out: PickerYear[] = [];
+  for (const year of years) {
+    const groups: PickerGroup[] = [];
+    for (const group of year.groups) {
+      if (left <= 0) {
+        more = true;
+        break;
+      }
+      const slice = group.items.slice(0, left);
+      left -= slice.length;
+      if (slice.length < group.items.length) more = true;
+      groups.push({ ...group, items: slice });
+      if (more) break;
+    }
+    if (groups.length > 0) out.push({ year: year.year, groups });
+    if (more) break;
+  }
+  return { years: out, more };
 }
 
 function Slider({
