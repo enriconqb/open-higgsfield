@@ -310,10 +310,20 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
               setBeforeMeta({
                 id: item.id,
                 seconds: seconds ?? 0,
-                ratio: video.videoWidth ? video.videoWidth / video.videoHeight : 16 / 9,
+                ratio: video.videoWidth > 0 && video.videoHeight > 0 ? video.videoWidth / video.videoHeight : 16 / 9,
               });
             } else {
               setAfterMeta({ id: item.id, seconds: seconds ?? 0 });
+            }
+          }}
+          onLoadedData={(event) => {
+            const video = event.currentTarget;
+            if (video.readyState >= 2 && video.paused && video.currentTime === 0) {
+              try {
+                video.currentTime = 0.001;
+              } catch {
+                /* metadata not ready yet */
+              }
             }
           }}
           onTimeUpdate={(event) => {
@@ -361,7 +371,11 @@ export function CompareStage({ before, after }: { before: CompareItem; after: Co
         >
           <div
             className="ohf-cmp-content"
-            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+            style={
+              zoom > 1 || pan.x !== 0 || pan.y !== 0
+                ? { transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }
+                : undefined
+            }
           >
             {after && <div className="ohf-cmp-layer">{media(after, "after")}</div>}
             <div

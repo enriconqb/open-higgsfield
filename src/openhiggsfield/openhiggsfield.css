@@ -6104,7 +6104,8 @@ a.ohf-key-link {
 .ohf-cmp-stage-wrap {
   position: relative;
   flex: 1 1 auto;
-  min-height: 240px;
+  height: clamp(280px, 46vh, 640px);
+  min-height: 280px;
   container-type: size;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -6114,9 +6115,11 @@ a.ohf-key-link {
 
 .ohf-cmp-stage {
   position: relative;
-  width: min(100%, calc(100cqh * var(--cmp-ratio, 1.7778)));
+  height: 100%;
+  max-height: 100%;
+  width: auto;
+  max-width: 100%;
   aspect-ratio: var(--cmp-ratio, 1.7778);
-  max-height: 100cqh;
   margin-inline: auto;
   overflow: hidden;
   touch-action: none;
@@ -6145,7 +6148,6 @@ a.ohf-key-link {
   position: absolute;
   inset: 0;
   transform-origin: 0 0;
-  will-change: transform;
 }
 
 .ohf-cmp-layer {
