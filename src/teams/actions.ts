@@ -275,7 +275,20 @@ export async function removeMember(teamId: number, userId: number): Promise<Acti
 
 export async function setMemberRole(teamId: number, userId: number, role: "team_admin" | "member"): Promise<ActionResult<void>> {
   return run(async () => {
-    const session = await requireSuperadmin();
+    const session = await requireActiveUser();
+    await requireTeamRole(session, teamId, true);
+    const member = await queryOne<RowDataPacket & { role: string }>(
+      `SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`,
+      [teamId, userId],
+    );
+    if (!member) throw new Error("That account is not on this team");
+    if (role === "member" && session.role !== "superadmin") {
+      const team = await queryOne<RowDataPacket & { created_by: number }>(
+        `SELECT created_by FROM teams WHERE id = ?`,
+        [teamId],
+      );
+      if (team && Number(team.created_by) === userId) throw new Error("The team creator stays a team admin");
+    }
     await execute(`UPDATE team_members SET role = ? WHERE team_id = ? AND user_id = ?`, [role, teamId, userId]);
     if (role === "member") await clearApiOwner(teamId, userId);
     await insertAudit(teamId, session.id, "role", `${userId}:${role}`);

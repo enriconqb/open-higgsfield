@@ -141,10 +141,7 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
   const where = ["e.created_at >= ?", "e.created_at < DATE_ADD(?, INTERVAL 1 DAY)"];
   const params: Array<string | number> = [`${filters.from} 00:00:00`, filters.to];
   const selectedTeams = filters.teamIds.map((id) => known.get(id)!);
-  const showUsers =
-    filters.platform ||
-    selectedTeams.some((team) => team.role === "team_admin") ||
-    (filters.personal ? 1 : 0) + selectedTeams.length > 1;
+  const showUsers = filters.platform || selectedTeams.length > 0;
   if (filters.platform) {
     if (filters.username) {
       where.push("u.username = ?");
@@ -157,13 +154,8 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
       params.push(user.id);
     }
     for (const team of selectedTeams) {
-      if (team.role === "team_admin") {
-        parts.push("e.team_id = ?");
-        params.push(team.id);
-      } else {
-        parts.push("(e.team_id = ? AND e.user_id = ?)");
-        params.push(team.id, user.id);
-      }
+      parts.push("e.team_id = ?");
+      params.push(team.id);
     }
     where.push(`(${parts.join(" OR ")})`);
   }
