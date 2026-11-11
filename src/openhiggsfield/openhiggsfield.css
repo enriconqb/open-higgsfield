@@ -1355,6 +1355,10 @@
   display: block;
   width: 56px;
   height: 56px;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  color: inherit;
   border-radius: 12px;
   overflow: hidden;
   background: var(--s1);

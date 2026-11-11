@@ -9,6 +9,7 @@ import { uploadMedia } from "@/generation/upload";
 
 import { fileSeconds, rememberClipSeconds } from "./clip-length";
 import { ROLE_ACCEPT, ROLE_LABELS, ROLE_TAGS, rolesOf } from "./data";
+import { PreviewDialog } from "./asset-picker";
 import { AudioIcon, CloseIcon, VideoIcon } from "./icons";
 import { kindOfFile, loadUploads, mergeUploads, rememberUpload, saveUploads, type UploadRecord } from "./uploads";
 
@@ -225,46 +226,78 @@ function roleForFile(
   return null;
 }
 
+function previewKind(role: MediaRole): "image" | "video" | "audio" {
+  if (role === "video") return "video";
+  if (role === "audio") return "audio";
+  return "image";
+}
+
 /** Attached inputs, above the prompt — the frames read before the words do. */
 export function MediaStrip({ model }: { model: ModelEntry }) {
   const media = useMedia(model);
+  const [preview, setPreview] = useState<MediaItem | null>(null);
   const items = media.items.filter((item) => model.roles[item.role]);
   if (items.length === 0) return null;
 
   return (
-    <ul className="ohf-strip">
-      {items.map((item) => (
-        <li key={item.id} className="ohf-strip-item">
-          <span className="ohf-strip-tile">
-            {item.role === "audio" || item.role === "video" ? (
-              <span className="ohf-strip-glyph">
-                {item.role === "audio" ? <AudioIcon size={20} /> : <VideoIcon size={20} />}
-              </span>
-            ) : (
-              /* Blob-hosted user upload; next/image would proxy an arbitrary
-                 remote host for a 56px thumb. */
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                className="ohf-strip-thumb"
-                src={item.url}
-                alt=""
-                onError={(event) => {
-                  event.currentTarget.style.visibility = "hidden";
-                }}
-              />
-            )}
-            <span className="ohf-strip-tag">{ROLE_TAGS[item.role]}</span>
-          </span>
-          <button
-            type="button"
-            className="ohf-strip-remove"
-            aria-label={`Remove ${ROLE_LABELS[item.role].toLowerCase()}`}
-            onClick={() => media.remove(item.id)}
-          >
-            <CloseIcon size={10} />
-          </button>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="ohf-strip">
+        {items.map((item) => (
+          <li key={item.id} className="ohf-strip-item">
+            <button
+              type="button"
+              className="ohf-strip-tile"
+              aria-label={`Preview ${ROLE_LABELS[item.role].toLowerCase()}`}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => setPreview(item)}
+            >
+              {item.role === "audio" || item.role === "video" ? (
+                <span className="ohf-strip-glyph">
+                  {item.role === "audio" ? <AudioIcon size={20} /> : <VideoIcon size={20} />}
+                </span>
+              ) : (
+                /* Blob-hosted user upload; next/image would proxy an arbitrary
+                   remote host for a 56px thumb. */
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  className="ohf-strip-thumb"
+                  src={item.url}
+                  alt=""
+                  onError={(event) => {
+                    event.currentTarget.style.visibility = "hidden";
+                  }}
+                />
+              )}
+              <span className="ohf-strip-tag">{ROLE_TAGS[item.role]}</span>
+            </button>
+            <button
+              type="button"
+              className="ohf-strip-remove"
+              aria-label={`Remove ${ROLE_LABELS[item.role].toLowerCase()}`}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                media.remove(item.id);
+              }}
+            >
+              <CloseIcon size={10} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {preview && (
+        <PreviewDialog
+          asset={{
+            url: preview.url,
+            kind: previewKind(preview.role),
+            title: ROLE_LABELS[preview.role],
+          }}
+          onClose={() => setPreview(null)}
+        />
+      )}
+    </>
   );
 }

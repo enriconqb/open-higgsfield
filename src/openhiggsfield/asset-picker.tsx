@@ -617,7 +617,7 @@ function paintFirstFrame(video: HTMLVideoElement) {
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 6;
 
-function PreviewDialog({ asset, onClose }: { asset: Asset; onClose: () => void }) {
+export function PreviewDialog({ asset, onClose }: { asset: Asset; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
