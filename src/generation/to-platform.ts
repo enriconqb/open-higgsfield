@@ -100,7 +100,9 @@ function commonVideo(plane: GenerationPlane): Record<string, unknown> {
   const audio = settings.generateAudio ?? settings.sound;
   return {
     ...(typeof settings.aspectRatio === "string" ? { aspect_ratio: settings.aspectRatio } : {}),
-    ...(typeof settings.resolution === "string" ? { resolution: settings.resolution } : {}),
+    ...(typeof settings.resolution === "string"
+      ? { resolution: settings.resolution.toLowerCase() === "4k" ? "4K" : settings.resolution }
+      : {}),
     ...(Number.isFinite(Number(settings.duration)) ? { duration: Number(settings.duration) } : {}),
     ...(typeof audio === "boolean" ? { generate_audio: audio } : {}),
     ...(typeof settings.seed === "number" ? { seed: settings.seed } : {}),

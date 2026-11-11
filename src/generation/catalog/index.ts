@@ -26,7 +26,15 @@ import { parseSettings } from "./parse-settings";
 import { pixverse6 } from "./pixverse-6";
 import { qwenImage3 } from "./qwen-image-3";
 import { recraft41 } from "./recraft-4.1";
-import { seedance2, seedance2Fast, seedance2Mini } from "./seedance-2";
+import {
+  seedance2,
+  seedance2Edit,
+  seedance2Extend,
+  seedance2Fast,
+  seedance2FastEdit,
+  seedance2FastExtend,
+  seedance2Mini,
+} from "./seedance-2";
 import { seedance25, seedance25Edit, seedance25Extend } from "./seedance-2.5";
 import { OPENROUTER_EXTRAS } from "./openrouter-extra";
 import { listedOnOpenRouter, openRouterSlug, openRouterSlugOrder } from "./openrouter-slugs";
@@ -45,7 +53,11 @@ export const MODELS: readonly ModelEntry[] = [
   seedance25Edit,
   seedance25Extend,
   seedance2,
+  seedance2Edit,
+  seedance2Extend,
   seedance2Fast,
+  seedance2FastEdit,
+  seedance2FastExtend,
   seedance2Mini,
   kling3Turbo,
   kling3Std,

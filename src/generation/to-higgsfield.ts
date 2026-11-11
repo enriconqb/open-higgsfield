@@ -14,7 +14,11 @@ const MAP: Record<string, Mapper> = {
   "kling-3-motion-std": (plane) => mapKlingMotion(plane, "kling-video/v3/motion-control/std"),
   "kling-3-motion-pro": (plane) => mapKlingMotion(plane, "kling-video/v3/motion-control/pro"),
   "seedance-2": (plane) => mapSeedance(plane, "bytedance/seedance-2.0"),
+  "seedance-2-edit": (plane) => mapSeedanceSource(plane, "bytedance/seedance-2.0/video-edit", false),
+  "seedance-2-extend": (plane) => mapSeedanceSource(plane, "bytedance/seedance-2.0/video-extend", true),
   "seedance-2-fast": (plane) => mapSeedance(plane, "bytedance/seedance-2.0/fast"),
+  "seedance-2-fast-edit": (plane) => mapSeedanceSource(plane, "bytedance/seedance-2.0/fast/video-edit", false),
+  "seedance-2-fast-extend": (plane) => mapSeedanceSource(plane, "bytedance/seedance-2.0/fast/video-extend", true),
   "seedance-2-mini": (plane) => mapSeedance(plane, "bytedance/seedance-2.0/mini"),
   "seedance-2.5": (plane) => mapSeedance(plane, "bytedance/seedance-2.5"),
   "seedance-2.5-edit": (plane) => mapSeedanceSource(plane, "bytedance/seedance-2.5/video-edit", false),
@@ -139,9 +143,10 @@ function mapByPaths(plane: GenerationPlane, spec: PlatformPaths): Mapped {
 }
 
 function seedanceBody(plane: GenerationPlane, withDuration: boolean) {
+  const resolution = plane.settings.resolution;
   return {
     prompt: plane.prompt.text,
-    resolution: plane.settings.resolution,
+    resolution: typeof resolution === "string" && resolution.toLowerCase() === "4k" ? "4K" : resolution,
     generate_audio: plane.settings.generateAudio,
     ...(withDuration ? { duration: plane.settings.duration } : {}),
     ...(plane.settings.outputFormat ? { output_format: plane.settings.outputFormat } : {}),

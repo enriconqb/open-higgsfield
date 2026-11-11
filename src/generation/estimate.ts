@@ -76,13 +76,15 @@ function outputPerSecond(
     const tier = tierInKey(key);
     return tier ? [{ tier, rate }] : [];
   });
-  /* A flat per-second table has no resolution in its names, so every tier shares it. */
-  if (!wanted || priced.length === 0) {
+  /* A flat per-second price has no tier in its name. The token table prices each
+     resolution from the pixels actually sent, so that one is used instead. */
+  if (!wanted) {
     const best = ranked[0];
     return best && score(best[0], res) > 0 ? best[1] : undefined;
   }
   const exact = priced.find((item) => item.tier === wanted);
   if (exact) return exact.rate;
+  if (priced.length === 0 || Object.keys(skus).some((key) => key.includes("video_tokens"))) return undefined;
   const wantedSide = SHORT_SIDE[wanted]!;
   const nearest = priced.reduce((best, item) =>
     Math.abs(SHORT_SIDE[item.tier]! - wantedSide) < Math.abs(SHORT_SIDE[best.tier]! - wantedSide) ? item : best,
@@ -141,7 +143,9 @@ function tokenRate(
   const ranked = (pool.length ? pool : entries).slice();
   const res = (resolution ?? "").toLowerCase();
   ranked.sort((a, b) => tokenScore(b[0], res, audio) - tokenScore(a[0], res, audio));
-  return ranked[0]?.[1];
+  const rate = ranked[0]?.[1];
+  /* A quote of a few dollars is the per-million figure from the price card. */
+  return rate !== undefined && rate >= 0.001 ? rate / 1_000_000 : rate;
 }
 
 function tokenScore(key: string, resolution: string, audio: boolean | undefined): number {
