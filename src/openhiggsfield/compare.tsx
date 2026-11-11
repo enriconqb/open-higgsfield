@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { defaultKv } from "./idb";
 import { CompareIcon, CloseIcon, PlusIcon, SearchIcon } from "./icons";
 import { CompareStage, type CompareItem } from "./compare-stage";
-import type { RunRecord } from "./history";
+import { matchesAuthor, type RunRecord } from "./history";
 import { LIBRARY_PAGE, groupLibrary, takeLibrary } from "./library-groups";
 import { sourcesForUrls } from "./media-source";
 import { uploadMedia } from "@/generation/upload";
@@ -21,7 +21,17 @@ type ShelfItem = CompareItem & { createdAt: number };
     uploads, or a file they drop, and a stage that shows the chosen pair — two
     videos playing on the same second under a divider that can be dragged while
     they run. */
-export function Compare({ history, ready }: { history: RunRecord[]; ready: boolean }) {
+export function Compare({
+  history,
+  ready,
+  author = "all",
+  viewerName = null,
+}: {
+  history: RunRecord[];
+  ready: boolean;
+  author?: string;
+  viewerName?: string | null;
+}) {
   const [items, setItems] = useState<CompareItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
@@ -68,7 +78,13 @@ export function Compare({ history, ready }: { history: RunRecord[]; ready: boole
   const shelfItems = useMemo(() => {
     const list: ShelfItem[] = [];
     const generations = history
-      .filter((record) => record.archived !== true && record.status === "completed" && record.urls[0])
+      .filter(
+        (record) =>
+          record.archived !== true &&
+          record.status === "completed" &&
+          record.urls[0] &&
+          matchesAuthor(record, author, viewerName),
+      )
       .map((record) => {
         const sources = sourcesForUrls({
           kind: record.kind,
@@ -100,7 +116,7 @@ export function Compare({ history, ready }: { history: RunRecord[]; ready: boole
     }
     const needle = query.trim().toLowerCase();
     return needle ? list.filter((item) => item.title.toLowerCase().includes(needle)) : list;
-  }, [history, query, shelf, uploads]);
+  }, [author, history, query, shelf, uploads, viewerName]);
 
   const shelfYears = useMemo(() => groupLibrary(shelfItems), [shelfItems]);
   const [shelfLimit, setShelfLimit] = useState(LIBRARY_PAGE);

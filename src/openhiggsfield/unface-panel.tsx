@@ -6,7 +6,7 @@ import { withBasePath } from "@/base-path";
 import { uploadMedia } from "@/generation/upload";
 
 import { artFor } from "./artwork";
-import type { RunRecord } from "./history";
+import { matchesAuthor, type RunRecord } from "./history";
 import { CloseIcon, DownloadIcon, PlusIcon, UploadIcon } from "./icons";
 import { LIBRARY_PAGE, groupLibrary, takeLibrary } from "./library-groups";
 import { loadUploads, rememberUpload, saveUploads, type UploadRecord } from "./uploads";
@@ -75,9 +75,13 @@ interface LibraryItem {
 export function UnFace({
   history,
   onSaved,
+  author = "all",
+  viewerName = null,
 }: {
   history: RunRecord[];
   onSaved: (record: RunRecord) => void;
+  author?: string;
+  viewerName?: string | null;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -226,6 +230,7 @@ export function UnFace({
     };
     for (const record of history) {
       if (record.archived === true || record.status !== "completed" || record.kind !== "image" || !record.urls[0]) continue;
+      if (!matchesAuthor(record, author, viewerName)) continue;
       push({
         id: record.id,
         name: record.prompt || record.modelLabel,
@@ -238,7 +243,7 @@ export function UnFace({
       push({ id: row.id, name: row.name, url: withBasePath(row.url), createdAt: row.createdAt });
     }
     return items;
-  }, [history, uploads]);
+  }, [author, history, uploads, viewerName]);
 
   async function useFile(file: File) {
     if (!file.type.startsWith("image/")) {

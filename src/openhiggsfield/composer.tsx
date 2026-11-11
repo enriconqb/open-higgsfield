@@ -83,6 +83,8 @@ export function Composer({
   history,
   favoriteUserId = null,
   team = false,
+  author = "all",
+  viewerName = null,
   onLoadOlder,
   notice,
   selection,
@@ -101,6 +103,8 @@ export function Composer({
   history: RunRecord[];
   favoriteUserId?: number | null;
   team?: boolean;
+  author?: string;
+  viewerName?: string | null;
   onLoadOlder: () => void;
   /* Transient receipts from the gallery share the composer's banner strip
      rather than adding a floating layer of their own. */
@@ -408,6 +412,8 @@ export function Composer({
             history={history}
             favoriteUserId={favoriteUserId}
             team={team}
+            author={author}
+            viewerName={viewerName}
             onLoadOlder={onLoadOlder}
             staged={tray.staged}
             uploading={tray.uploading}

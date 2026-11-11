@@ -261,6 +261,31 @@ export function withKept(record: RunRecord, userId: number | null, team: boolean
   return { ...record, favoriteUserIds: next };
 }
 
+/** Creator dropdown. "all" keeps every row. A running row that has not been stamped yet still belongs to the signed-in member, so their filter and All keep the loading tile. */
+export function matchesAuthor(record: RunRecord, author: string, viewerName: string | null): boolean {
+  if (author === "all") return true;
+  if (record.createdBy === author) return true;
+  return (
+    record.status === "running" &&
+    !record.createdBy &&
+    viewerName != null &&
+    author === viewerName
+  );
+}
+
+/** Team refresh must not replace this member's favorite mark with another member's shared `favorite` flag. */
+export function mergeTeamFavorite(local: RunRecord | undefined, remote: RunRecord, userId: number | null): RunRecord {
+  const ids = new Set(remote.favoriteUserIds ?? []);
+  if (userId != null && local) {
+    if (local.favoriteUserIds?.includes(userId)) ids.add(userId);
+    else ids.delete(userId);
+  }
+  const favoriteUserIds = [...ids];
+  const next: RunRecord = { ...remote };
+  delete next.favorite;
+  return favoriteUserIds.length > 0 ? { ...next, favoriteUserIds } : next;
+}
+
 export function timeAgo(timestamp: number, now = Date.now()): string {
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
   if (seconds < 60) return "just now";

@@ -502,7 +502,7 @@ export const Gallery = memo(function Gallery({
   if (items.length === 0 && runs.length === 0) {
     return (
       <div {...panel} ref={galleryRef}>
-        {view !== "favorites" && (
+        {view !== "favorites" && view !== "archive" && (
           <AuthorFilter authors={authors} author={author} onAuthor={onAuthor} />
         )}
         <Empty view={view} surface={surface} onStarter={onStarter} key={view} />
@@ -512,7 +512,7 @@ export const Gallery = memo(function Gallery({
 
   return (
     <div {...panel} ref={galleryRef}>
-      {view !== "favorites" && (
+      {view !== "favorites" && view !== "archive" && (
         <AuthorFilter authors={authors} author={author} onAuthor={onAuthor} />
       )}
       <VirtualizedGrid

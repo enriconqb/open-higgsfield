@@ -8,7 +8,7 @@ import { preferCdnForVideo } from "@/generation/media-https";
 
 import { rememberClipSeconds } from "./clip-length";
 import { ROLE_KINDS, ROLE_LABELS, defaultRole, roleNoun, rolesOf, type AssetKind } from "./data";
-import { keptBy, type RunRecord } from "./history";
+import { matchesAuthor, type RunRecord } from "./history";
 import {
   AssetsIcon,
   AudioIcon,
@@ -60,6 +60,8 @@ export function AssetPicker({
   history,
   favoriteUserId = null,
   team = false,
+  author = "all",
+  viewerName = null,
   onLoadOlder,
   staged,
   uploading,
@@ -77,6 +79,8 @@ export function AssetPicker({
   history: RunRecord[];
   favoriteUserId?: number | null;
   team?: boolean;
+  author?: string;
+  viewerName?: string | null;
   onLoadOlder: () => void;
   staged: string | null;
   uploading: boolean;
@@ -142,12 +146,16 @@ export function AssetPicker({
           ...(resolutionOf(record) ? { resolution: resolutionOf(record) } : {}),
           ...(record.createdBy ? { createdBy: record.createdBy } : {}),
         };
+        if (!matchesAuthor(record, author, viewerName)) continue;
         runs.push(asset);
-        if (keptBy(record, favoriteUserId, team)) favorites.push(asset);
+        const kept = team
+          ? favoriteUserId != null && (record.favoriteUserIds?.includes(favoriteUserId) ?? false)
+          : record.favorite === true;
+        if (kept) favorites.push(asset);
       });
     }
     return { runAssets: runs, favoriteAssets: favorites };
-  }, [favoriteUserId, history, kind, team]);
+  }, [author, favoriteUserId, history, kind, team, viewerName]);
 
   const shelf: Source =
     source ?? (uploadAssets.length === 0 && runAssets.length > 0 ? "generations" : "uploads");

@@ -37,7 +37,7 @@ import {
   type GalleryView,
 } from "./data";
 import { Gallery } from "./gallery";
-import { loadHistory, loadTombstones, mergeHistory, replaceRequest, saveHistory, saveTombstones, historyKeyFor, keptBy, withKept, stepRun, type GalleryCursor, type RunRecord } from "./history";
+import { loadHistory, loadTombstones, mergeHistory, replaceRequest, saveHistory, saveTombstones, historyKeyFor, keptBy, withKept, mergeTeamFavorite, matchesAuthor, stepRun, type GalleryCursor, type RunRecord } from "./history";
 import { sourcesFor } from "./media-source";
 import { loadGenerationResults, restoreTeamGallery, saveGenerationResults, trashTeamGallery } from "@/generation/result-actions";
 import { CloseIcon, UndoIcon } from "./icons";
@@ -71,6 +71,7 @@ type RunDraft = {
   settings?: Record<string, unknown>;
   createdAt: number;
   costUsd?: number;
+  createdBy?: string;
 };
 
 function hueOf(seed: string): number {
@@ -95,6 +96,7 @@ function draftOf(record: RunRecord): RunDraft {
     settings: record.settings,
     createdAt: record.createdAt,
     costUsd: record.costUsd,
+    createdBy: record.createdBy,
   };
 }
 
@@ -118,6 +120,7 @@ function runningRows(requestId: string, count: number, draft: RunDraft): RunReco
       createdAt: draft.createdAt,
       settings: draft.settings,
       costUsd: draft.costUsd,
+      ...(draft.createdBy ? { createdBy: draft.createdBy } : {}),
     };
   });
 }
@@ -155,6 +158,7 @@ function terminalRows(requestId: string, draft: RunDraft, status: GenerationStat
       createdAt: draft.createdAt,
       settings: draft.settings,
       costUsd: status.costUsd ?? draft.costUsd,
+      ...(draft.createdBy ? { createdBy: draft.createdBy } : {}),
     };
   });
 }
@@ -232,10 +236,12 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const tombstones = useRef(new Set<string>());
   const paging = useRef(false);
   const userIdRef = useRef<number | null>(null);
+  const usernameRef = useRef<string | null>(null);
   const teamIdRef = useRef<number | null>(null);
   /** Workspace whose gallery has finished loading. Saves wait for this so a switch cannot write the previous gallery into the next workspace. */
   const loadedTeamRef = useRef<number | null | undefined>(undefined);
   userIdRef.current = user?.id ?? null;
+  usernameRef.current = user?.username ?? null;
   teamIdRef.current = activeTeamId;
 
   function sameMediaUrls(left: RunRecord[], right: RunRecord[]): boolean {
@@ -400,7 +406,7 @@ function persistLocal(records: RunRecord[]) {
             const byId = new Map(current.map((record) => [record.id, record]));
             for (const record of remote) {
               if (tombstones.current.has(record.id)) continue;
-              byId.set(record.id, record);
+              byId.set(record.id, mergeTeamFavorite(byId.get(record.id), record, userIdRef.current));
             }
             const next = [...byId.values()].filter((record) => !tombstones.current.has(record.id));
             next.sort((a, b) => b.createdAt - a.createdAt);
@@ -553,7 +559,8 @@ function persistLocal(records: RunRecord[]) {
       groups.set(record.requestId, rows);
     }
     for (const [requestId, rows] of groups) {
-      void resume(requestId, draftOf(rows[0]!));
+      const draft = draftOf(rows[0]!);
+      void resume(requestId, { ...draft, createdBy: draft.createdBy ?? usernameRef.current ?? undefined });
     }
   }, [historyLoaded, resume]);
 
@@ -562,14 +569,14 @@ function persistLocal(records: RunRecord[]) {
     const known = new Set(history.flatMap((record) => (record.createdBy ? [record.createdBy] : [])));
     const authorFilter = author !== "all" && known.has(author) ? author : "all";
     const byAuthor = (records: RunRecord[]) =>
-      authorFilter === "all" ? records : records.filter((record) => record.createdBy === authorFilter);
-    if (view === "archive") return byAuthor(history.filter((record) => record.archived === true));
+      records.filter((record) => matchesAuthor(record, authorFilter, user?.username ?? null));
+    if (view === "archive") return history.filter((record) => record.archived === true);
     if (view === "favorites") {
       return live.filter((record) => keptBy(record, user?.id ?? null, activeTeamId != null));
     }
     if (view === "assets") return byAuthor(live);
     return byAuthor(live.filter((record) => record.surface === view));
-  }, [activeTeamId, author, history, user?.id, view]);
+  }, [activeTeamId, author, history, user?.id, user?.username, view]);
 
   const authors = useMemo(() => {
     const names = new Set<string>();
@@ -673,6 +680,7 @@ function persistLocal(records: RunRecord[]) {
       settings: plane.settings,
       createdAt: startedAt,
       costUsd,
+      createdBy: user.username,
     };
 
     setError(null);
@@ -980,10 +988,13 @@ function persistLocal(records: RunRecord[]) {
   const prevRun = viewerId ? stepRun(viewable, viewerId, -1) : null;
   const nextRun = viewerId ? stepRun(viewable, viewerId, 1) : null;
 
-  const runsHere = useMemo(
-    () => runs.filter((active) => view === "assets" || active.surface === view),
-    [runs, view],
-  );
+  const runsHere = useMemo(() => {
+    const known = authors.includes(author);
+    const authorFilter = author !== "all" && known ? author : "all";
+    const showOwn = authorFilter === "all" || authorFilter === user?.username;
+    if (!showOwn) return [];
+    return runs.filter((active) => view === "assets" || active.surface === view);
+  }, [author, authors, runs, user?.username, view]);
   const busy = runs.length > 0 || history.some((record) => record.status === "running");
 
   return (
@@ -1032,11 +1043,11 @@ function persistLocal(records: RunRecord[]) {
           />
 
           {view === "timeline" ? (
-            <Timeline history={history} ready={historyLoaded} />
+            <Timeline history={history} ready={historyLoaded} author={authors.includes(author) ? author : "all"} viewerName={user?.username ?? null} />
           ) : view === "compare" ? (
-            <Compare history={history} ready={historyLoaded} />
+            <Compare history={history} ready={historyLoaded} author={authors.includes(author) ? author : "all"} viewerName={user?.username ?? null} />
           ) : view === "unface" ? (
-            <UnFace history={history} onSaved={keepUnface} />
+            <UnFace history={history} onSaved={keepUnface} author={authors.includes(author) ? author : "all"} viewerName={user?.username ?? null} />
           ) : (
             <Gallery
               view={view}
@@ -1075,6 +1086,8 @@ function persistLocal(records: RunRecord[]) {
             history={history}
             favoriteUserId={user?.id ?? null}
             team={activeTeamId != null}
+            author={authors.includes(author) ? author : "all"}
+            viewerName={user?.username ?? null}
             onLoadOlder={loadOlder}
             selecting={selected.length > 0}
             selection={

@@ -7,7 +7,7 @@ import { unwrap } from "@/lib/action-result";
 import { createShare } from "@/share/actions";
 
 import { defaultKv } from "./idb";
-import type { RunRecord } from "./history";
+import { matchesAuthor, type RunRecord } from "./history";
 import { CheckIcon, CloseIcon, PlayBadgeIcon, PlayIcon, StopIcon, VolumeIcon, VolumeOffIcon } from "./icons";
 import { sharePageUrl } from "./share-link";
 import { TimelinePlayer } from "./timeline-player";
@@ -28,7 +28,17 @@ type ClipSource = {
   art?: string;
 };
 
-export function Timeline({ history, ready }: { history: RunRecord[]; ready: boolean }) {
+export function Timeline({
+  history,
+  ready,
+  author = "all",
+  viewerName = null,
+}: {
+  history: RunRecord[];
+  ready: boolean;
+  author?: string;
+  viewerName?: string | null;
+}) {
   const [order, setOrder] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [uploadsReady, setUploadsReady] = useState(false);
@@ -69,6 +79,7 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
     const tiles: ClipSource[] = [];
     for (const record of history) {
       if (record.archived === true || record.kind !== "video" || record.status !== "completed" || !record.urls[0]) continue;
+      if (!matchesAuthor(record, author, viewerName)) continue;
       tiles.push({
         key: record.id,
         url: withBasePath(record.urls[0]),
@@ -84,7 +95,7 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
       });
     }
     return tiles;
-  }, [history, uploads]);
+  }, [author, history, uploads, viewerName]);
 
   const byKey = useMemo(() => {
     const map = new Map<string, ClipSource>();
