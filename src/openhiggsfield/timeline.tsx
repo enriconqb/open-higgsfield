@@ -68,7 +68,7 @@ export function Timeline({ history, ready }: { history: RunRecord[]; ready: bool
   const library = useMemo(() => {
     const tiles: ClipSource[] = [];
     for (const record of history) {
-      if (record.kind !== "video" || record.status !== "completed" || !record.urls[0]) continue;
+      if (record.archived === true || record.kind !== "video" || record.status !== "completed" || !record.urls[0]) continue;
       tiles.push({
         key: record.id,
         url: withBasePath(record.urls[0]),

@@ -225,7 +225,7 @@ export function UnFace({
       items.push(item);
     };
     for (const record of history) {
-      if (record.status !== "completed" || record.kind !== "image" || !record.urls[0]) continue;
+      if (record.archived === true || record.status !== "completed" || record.kind !== "image" || !record.urls[0]) continue;
       push({
         id: record.id,
         name: record.prompt || record.modelLabel,

@@ -68,7 +68,7 @@ export function Compare({ history, ready }: { history: RunRecord[]; ready: boole
   const shelfItems = useMemo(() => {
     const list: ShelfItem[] = [];
     const generations = history
-      .filter((record) => record.status === "completed" && record.urls[0])
+      .filter((record) => record.archived !== true && record.status === "completed" && record.urls[0])
       .map((record) => {
         const sources = sourcesForUrls({
           kind: record.kind,
