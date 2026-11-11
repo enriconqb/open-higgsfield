@@ -1,4 +1,6 @@
-import { readFile } from "fs/promises";
+import { open, readFile } from "fs/promises";
+import { Readable } from "node:stream";
+
 import { NextResponse } from "next/server";
 
 import { sniffImageMime, uploadFilePath, uploadTypePath } from "@/generation/local-upload";
@@ -8,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 const PRIVATE = {
   "Content-Disposition": "inline",
-  "Cache-Control": "private, no-store",
+  "Cache-Control": "private, max-age=3600",
   "X-Content-Type-Options": "nosniff",
   "Accept-Ranges": "bytes",
 };
@@ -24,26 +26,23 @@ export async function GET(
   if (!clip) return new NextResponse(null, { status: 404 });
 
   if (clip.source === "upload") {
-    try {
-      const bytes = await readFile(uploadFilePath(clip.id));
-      const sidecar = await readFile(uploadTypePath(clip.id), "utf8").catch(() => "");
-      const type = sniffImageMime(bytes) ?? (sidecar.trim() || fallbackType(clip.kind));
-      return rangedBytes(bytes, type, request.headers.get("range"));
-    } catch {
-      return new NextResponse(null, { status: 404 });
-    }
+    return streamUpload(clip.id, clip.kind, request.headers.get("range"));
   }
 
   const range = request.headers.get("range");
+  const pending = new AbortController();
+  const timer = setTimeout(() => pending.abort(), 20_000);
   let upstream: Response;
   try {
     upstream = await fetch(clip.url, {
       headers: range ? { Range: range } : undefined,
       redirect: "manual",
-      signal: AbortSignal.timeout(20_000),
+      signal: pending.signal,
     });
   } catch {
     return new NextResponse(null, { status: 502 });
+  } finally {
+    clearTimeout(timer);
   }
   if ((!upstream.ok && upstream.status !== 206) || !upstream.body || upstream.status >= 300) {
     return new NextResponse(null, { status: 502 });
@@ -60,30 +59,47 @@ export async function GET(
   return new NextResponse(upstream.body, { status: upstream.status === 206 ? 206 : 200, headers });
 }
 
-function rangedBytes(bytes: Buffer, type: string, header: string | null): NextResponse {
-  const size = bytes.byteLength;
-  const range = parseRange(header, size);
-  if (range === "invalid") {
-    return new NextResponse(null, {
-      status: 416,
-      headers: { ...PRIVATE, "Content-Range": `bytes */${size}` },
+async function streamUpload(id: string, kind: "image" | "video", header: string | null): Promise<NextResponse> {
+  let handle: Awaited<ReturnType<typeof open>> | null = null;
+  try {
+    handle = await open(uploadFilePath(id), "r");
+    const { size } = await handle.stat();
+    if (size <= 0) {
+      await handle.close();
+      return new NextResponse(null, {
+        headers: { ...PRIVATE, "Content-Type": fallbackType(kind), "Content-Length": "0" },
+      });
+    }
+    const head = Buffer.alloc(16);
+    const { bytesRead } = await handle.read(head, 0, head.length, 0);
+    const sidecar = await readFile(uploadTypePath(id), "utf8").catch(() => "");
+    const type = sniffImageMime(head.subarray(0, bytesRead)) ?? (sidecar.trim() || fallbackType(kind));
+    const range = parseRange(header, size);
+    if (range === "invalid") {
+      await handle.close();
+      return new NextResponse(null, {
+        status: 416,
+        headers: { ...PRIVATE, "Content-Range": `bytes */${size}` },
+      });
+    }
+    const start = range?.start ?? 0;
+    const end = range ? range.end : Math.max(0, size - 1);
+    const node = handle.createReadStream({ start, end, autoClose: true });
+    handle = null;
+    const body = Readable.toWeb(node) as ReadableStream<Uint8Array>;
+    return new NextResponse(body, {
+      status: range ? 206 : 200,
+      headers: {
+        ...PRIVATE,
+        "Content-Type": type,
+        "Content-Length": String(end - start + 1),
+        ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
+      },
     });
+  } catch {
+    await handle?.close().catch(() => undefined);
+    return new NextResponse(null, { status: 404 });
   }
-  if (!range) {
-    return new NextResponse(new Uint8Array(bytes), {
-      headers: { ...PRIVATE, "Content-Type": type, "Content-Length": String(size) },
-    });
-  }
-  const slice = bytes.subarray(range.start, range.end + 1);
-  return new NextResponse(new Uint8Array(slice), {
-    status: 206,
-    headers: {
-      ...PRIVATE,
-      "Content-Type": type,
-      "Content-Length": String(slice.byteLength),
-      "Content-Range": `bytes ${range.start}-${range.end}/${size}`,
-    },
-  });
 }
 
 function parseRange(header: string | null, size: number): { start: number; end: number } | "invalid" | null {
