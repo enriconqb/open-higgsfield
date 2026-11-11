@@ -122,7 +122,7 @@ export function AssetPicker({
     const runs: Asset[] = [];
     const favorites: Asset[] = [];
     for (const record of history) {
-      if (record.status !== "completed" || record.kind !== kind) continue;
+      if (record.status !== "completed" || record.kind !== kind || record.archived === true) continue;
       record.urls.forEach((url, index) => {
         /* With the https flag on, the server signs this site's own address for
            the clip and the archived copy never expires, so that one wins. With

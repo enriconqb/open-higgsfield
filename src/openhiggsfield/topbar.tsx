@@ -15,6 +15,7 @@ import { ModelAdminPanel } from "./model-admin-panel";
 import { TemplatesPanel } from "./templates-panel";
 import {
   AssetsIcon,
+  ArchiveIcon,
   ClockIcon,
   CompareIcon,
   FormatIcon,
@@ -35,6 +36,7 @@ const VIEW_ICONS: Record<GalleryView, () => React.ReactNode> = {
   video: () => <VideoIcon />,
   assets: () => <AssetsIcon />,
   favorites: () => <HeartIcon size={15} />,
+  archive: () => <ArchiveIcon size={15} />,
   timeline: () => <TimelineIcon />,
   compare: () => <CompareIcon />,
   unface: () => <SlidersIcon />,
@@ -175,7 +177,7 @@ export function Topbar({
                 /* Favorites is the one scope that goes icon-only on a narrow
                    pill, so its name is stated rather than left to the mark. */
                 aria-label={VIEW_LABELS[id]}
-                title={id === "favorites" ? VIEW_LABELS[id] : undefined}
+                title={id === "favorites" || id === "archive" ? VIEW_LABELS[id] : undefined}
                 onClick={() => onView(id)}
               >
                 {VIEW_ICONS[id]()}

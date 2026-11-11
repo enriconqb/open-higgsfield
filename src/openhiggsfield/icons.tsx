@@ -402,6 +402,14 @@ export function GlobeIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function ArchiveIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M2.2 3.2h11.6v2.2H2.2zM3.2 6.2h9.6v7.2H3.2zM6.2 8.2h3.6" />
+    </svg>
+  );
+}
+
 export function PauseIcon({ size = 18 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>

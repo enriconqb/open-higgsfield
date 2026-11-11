@@ -557,9 +557,11 @@ function persistLocal(records: RunRecord[]) {
   }, [historyLoaded, resume]);
 
   const visible = useMemo(() => {
-    if (view === "assets") return history;
-    if (view === "favorites") return history.filter((record) => record.favorite === true);
-    return history.filter((record) => record.surface === view);
+    const live = history.filter((record) => record.archived !== true);
+    if (view === "archive") return history.filter((record) => record.archived === true);
+    if (view === "assets") return live;
+    if (view === "favorites") return live.filter((record) => record.favorite === true);
+    return live.filter((record) => record.surface === view);
   }, [history, view]);
 
   const keepUnface = useCallback((record: RunRecord) => {
@@ -712,6 +714,12 @@ function persistLocal(records: RunRecord[]) {
       prev.map((entry) =>
         entry.id === record.id ? { ...entry, favorite: !entry.favorite } : entry,
       ),
+    );
+  }, []);
+
+  const setArchived = useCallback((record: RunRecord, archived: boolean) => {
+    setHistory((prev) =>
+      prev.map((entry) => (entry.id === record.id ? { ...entry, archived } : entry)),
     );
   }, []);
 
@@ -1008,6 +1016,7 @@ function persistLocal(records: RunRecord[]) {
               onPick={togglePick}
               onReuse={retry}
               onFavorite={toggleFavorite}
+              onArchive={setArchived}
               onDownload={downloadRun}
               onDelete={deleteRun}
               canDelete={ownsRun}

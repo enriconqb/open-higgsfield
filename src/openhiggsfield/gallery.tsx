@@ -12,6 +12,7 @@ import {
   ArrowRightIcon,
   CheckIcon,
   DownloadIcon,
+  ArchiveIcon,
   HeartIcon,
   PlayBadgeIcon,
   RetryIcon,
@@ -38,6 +39,10 @@ const EMPTY: Record<GalleryView, { title: string; hint: string }> = {
   favorites: {
     title: "Nothing kept yet",
     hint: "Hover a run and press its heart to keep it here. Kept runs stay put when older ones age out of the history.",
+  },
+  archive: {
+    title: "Nothing archived yet",
+    hint: "Hover a run and press Archive. It leaves the gallery and the attachment shelves, and the file stays on disk.",
   },
   timeline: {
     title: "Timeline",
@@ -135,10 +140,12 @@ const Tile = memo(function Tile({
   fresh,
   picked,
   selecting,
+  inArchive,
   onOpen,
   onPick,
   onReuse,
   onFavorite,
+  onArchive,
   onDownload,
   onDelete,
   allowDelete = true,
@@ -150,10 +157,12 @@ const Tile = memo(function Tile({
   /* Once anything is picked the grid is in selection mode: every checkbox
      stands, and the card body toggles rather than opens. */
   selecting: boolean;
+  inArchive: boolean;
   onOpen: (id: string) => void;
   onPick: (id: string, index: number, range: boolean) => void;
   onReuse: (item: RunRecord) => void;
   onFavorite: (item: RunRecord) => void;
+  onArchive: (item: RunRecord) => void;
   onDownload: (item: RunRecord) => Promise<void>;
   onDelete: (item: RunRecord) => void;
   allowDelete?: boolean;
@@ -379,6 +388,15 @@ const Tile = memo(function Tile({
         )}
         <button
           type="button"
+          className="ohf-tile-act"
+          aria-label={`${inArchive ? "Unarchive" : "Archive"} — ${named}`}
+          title={inArchive ? "Unarchive" : "Archive"}
+          onClick={() => onArchive(item)}
+        >
+          <ArchiveIcon size={15} />
+        </button>
+        <button
+          type="button"
           className="ohf-tile-act ohf-tile-act--save"
           data-on={saved}
           data-beat={beat || undefined}
@@ -409,6 +427,7 @@ export const Gallery = memo(function Gallery({
   onPick,
   onReuse,
   onFavorite,
+  onArchive,
   onDownload,
   onDelete,
   canDelete,
@@ -426,6 +445,7 @@ export const Gallery = memo(function Gallery({
   onPick: (id: string, index: number, range: boolean) => void;
   onReuse: (item: RunRecord) => void;
   onFavorite: (item: RunRecord) => void;
+  onArchive: (item: RunRecord, archived: boolean) => void;
   onDownload: (item: RunRecord) => Promise<void>;
   onDelete: (item: RunRecord) => void;
   canDelete?: (item: RunRecord) => boolean;
@@ -466,6 +486,8 @@ export const Gallery = memo(function Gallery({
         onPick={onPick}
         onReuse={onReuse}
         onFavorite={onFavorite}
+        onArchive={(item) => onArchive(item, view !== "archive")}
+        inArchive={view === "archive"}
         onDownload={onDownload}
         onDelete={onDelete}
         canDelete={canDelete}
@@ -486,6 +508,8 @@ function VirtualizedGrid({
   onPick,
   onReuse,
   onFavorite,
+  onArchive,
+  inArchive,
   onDownload,
   onDelete,
   canDelete,
@@ -501,6 +525,8 @@ function VirtualizedGrid({
   onPick: (id: string, index: number, range: boolean) => void;
   onReuse: (item: RunRecord) => void;
   onFavorite: (item: RunRecord) => void;
+  onArchive: (item: RunRecord) => void;
+  inArchive: boolean;
   onDownload: (item: RunRecord) => Promise<void>;
   onDelete: (item: RunRecord) => void;
   canDelete?: (item: RunRecord) => boolean;
@@ -564,6 +590,8 @@ function VirtualizedGrid({
                   onPick={onPick}
                   onReuse={onReuse}
                   onFavorite={onFavorite}
+                  onArchive={onArchive}
+                  inArchive={inArchive}
                   onDownload={onDownload}
                   onDelete={onDelete}
                   allowDelete={canDelete ? canDelete(slot.item) : true}

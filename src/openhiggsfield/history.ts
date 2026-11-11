@@ -30,6 +30,8 @@ export interface RunRecord {
   createdAt: number;
   /** Kept deliberately: shows in the Favorites scope and outlives the cap. */
   favorite?: boolean;
+  /** Hidden from the gallery and the attachment shelves. The files stay on disk. */
+  archived?: boolean;
   /** Resolved catalog settings this run was submitted with, so reuse can
       restore the dials and not just the words. Absent on pre-existing records. */
   settings?: Record<string, unknown>;
@@ -233,6 +235,7 @@ export function isRunRecord(value: unknown): value is RunRecord {
     typeof record.createdAt === "number" &&
     (record.requestId === undefined || typeof record.requestId === "string") &&
     (record.favorite === undefined || typeof record.favorite === "boolean") &&
+    (record.archived === undefined || typeof record.archived === "boolean") &&
     (record.settings === undefined ||
       (typeof record.settings === "object" && record.settings !== null)) &&
     (record.costUsd === undefined || typeof record.costUsd === "number") &&
