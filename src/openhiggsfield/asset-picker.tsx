@@ -15,19 +15,21 @@ import {
   CheckIcon,
   CloseIcon,
   EyeIcon,
+  HeartIcon,
   PlayBadgeIcon,
   TrashIcon,
   UploadIcon,
 } from "./icons";
 import type { UploadRecord } from "./uploads";
 
-type Source = "uploads" | "generations";
+type Source = "uploads" | "generations" | "favorites";
 
-const SOURCES: readonly Source[] = ["uploads", "generations"];
+const SOURCES: readonly Source[] = ["uploads", "generations", "favorites"];
 
 const SOURCE_LABELS: Record<Source, string> = {
   uploads: "Uploads",
   generations: "Generations",
+  favorites: "Favorites",
 };
 
 interface Asset {
@@ -112,9 +114,11 @@ export function AssetPicker({
     [uploads, kind],
   );
 
-  /* One record can carry several media, and each is its own attachable frame. */
-  const runAssets = useMemo(() => {
-    const out: Asset[] = [];
+  /* One record can carry several media, and each is its own attachable frame.
+     Favorites is the same shelf cut to runs the visitor kept. */
+  const { runAssets, favoriteAssets } = useMemo(() => {
+    const runs: Asset[] = [];
+    const favorites: Asset[] = [];
     for (const record of history) {
       if (record.status !== "completed" || record.kind !== kind) continue;
       record.urls.forEach((url, index) => {
@@ -123,7 +127,7 @@ export function AssetPicker({
            the flag off, the provider's CDN link is the only form it accepts. */
         const remote = record.remoteUrls?.[index];
         const cdn = kind === "video" ? preferCdnForVideo({ remoteUrl: remote }) : null;
-        out.push({
+        const asset: Asset = {
           url: cdn ?? url,
           ...(cdn ? { previewUrl: url } : {}),
           kind,
@@ -131,15 +135,18 @@ export function AssetPicker({
           art: record.art,
           ...(resolutionOf(record) ? { resolution: resolutionOf(record) } : {}),
           ...(record.createdBy ? { createdBy: record.createdBy } : {}),
-        });
+        };
+        runs.push(asset);
+        if (record.favorite === true) favorites.push(asset);
       });
     }
-    return out;
+    return { runAssets: runs, favoriteAssets: favorites };
   }, [history, kind]);
 
   const shelf: Source =
     source ?? (uploadAssets.length === 0 && runAssets.length > 0 ? "generations" : "uploads");
-  const assets = shelf === "uploads" ? uploadAssets : runAssets;
+  const assets =
+    shelf === "uploads" ? uploadAssets : shelf === "favorites" ? favoriteAssets : runAssets;
 
   // The dialog takes focus on the control that scopes it, not on the grid.
   useEffect(() => {
@@ -272,7 +279,12 @@ export function AssetPicker({
         >
           {SOURCES.map((id) => {
             const active = id === shelf;
-            const count = id === "uploads" ? uploadAssets.length : runAssets.length;
+            const count =
+              id === "uploads"
+                ? uploadAssets.length
+                : id === "favorites"
+                  ? favoriteAssets.length
+                  : runAssets.length;
             return (
               <button
                 key={id}
@@ -346,7 +358,13 @@ export function AssetPicker({
         {assets.length === 0 ? (
           <div className="ohf-picker-empty">
             <span className="ohf-picker-empty-ic">
-              {shelf === "uploads" ? <UploadIcon size={15} /> : <AssetsIcon size={15} />}
+              {shelf === "uploads" ? (
+                <UploadIcon size={15} />
+              ) : shelf === "favorites" ? (
+                <HeartIcon size={15} />
+              ) : (
+                <AssetsIcon size={15} />
+              )}
             </span>
             <span className="ohf-picker-empty-title">{empty.title}</span>
             <span className="ohf-picker-empty-hint">{empty.hint}</span>
@@ -442,6 +460,12 @@ function emptyCopy(source: Source, kind: AssetKind): { title: string; hint: stri
     return {
       title: "Nothing uploaded yet",
       hint: "Files you send from this device stay on this shelf for the next run too.",
+    };
+  }
+  if (source === "favorites") {
+    return {
+      title: `No favorite ${kind} yet`,
+      hint: "Press the heart on a finished run in the gallery and it shows up on this shelf.",
     };
   }
   if (kind === "audio") {
