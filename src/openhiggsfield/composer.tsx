@@ -81,6 +81,8 @@ export function Composer({
   error,
   focusNonce,
   history,
+  favoriteUserId = null,
+  team = false,
   onLoadOlder,
   notice,
   selection,
@@ -97,6 +99,8 @@ export function Composer({
   /* Finished runs are attachable inputs, so the asset picker reads the same
      log the gallery renders. */
   history: RunRecord[];
+  favoriteUserId?: number | null;
+  team?: boolean;
   onLoadOlder: () => void;
   /* Transient receipts from the gallery share the composer's banner strip
      rather than adding a floating layer of their own. */
@@ -402,6 +406,8 @@ export function Composer({
             items={tray.items}
             uploads={tray.uploads}
             history={history}
+            favoriteUserId={favoriteUserId}
+            team={team}
             onLoadOlder={onLoadOlder}
             staged={tray.staged}
             uploading={tray.uploading}

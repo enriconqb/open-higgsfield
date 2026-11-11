@@ -8,7 +8,7 @@ import { preferCdnForVideo } from "@/generation/media-https";
 
 import { rememberClipSeconds } from "./clip-length";
 import { ROLE_KINDS, ROLE_LABELS, defaultRole, roleNoun, rolesOf, type AssetKind } from "./data";
-import type { RunRecord } from "./history";
+import { keptBy, type RunRecord } from "./history";
 import {
   AssetsIcon,
   AudioIcon,
@@ -58,6 +58,8 @@ export function AssetPicker({
   items,
   uploads,
   history,
+  favoriteUserId = null,
+  team = false,
   onLoadOlder,
   staged,
   uploading,
@@ -73,6 +75,8 @@ export function AssetPicker({
   items: MediaItem[];
   uploads: UploadRecord[];
   history: RunRecord[];
+  favoriteUserId?: number | null;
+  team?: boolean;
   onLoadOlder: () => void;
   staged: string | null;
   uploading: boolean;
@@ -139,11 +143,11 @@ export function AssetPicker({
           ...(record.createdBy ? { createdBy: record.createdBy } : {}),
         };
         runs.push(asset);
-        if (record.favorite === true) favorites.push(asset);
+        if (keptBy(record, favoriteUserId, team)) favorites.push(asset);
       });
     }
     return { runAssets: runs, favoriteAssets: favorites };
-  }, [history, kind]);
+  }, [favoriteUserId, history, kind, team]);
 
   const shelf: Source =
     source ?? (uploadAssets.length === 0 && runAssets.length > 0 ? "generations" : "uploads");

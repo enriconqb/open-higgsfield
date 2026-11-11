@@ -37,7 +37,7 @@ import {
   type GalleryView,
 } from "./data";
 import { Gallery } from "./gallery";
-import { loadHistory, loadTombstones, mergeHistory, replaceRequest, saveHistory, saveTombstones, historyKeyFor, stepRun, type GalleryCursor, type RunRecord } from "./history";
+import { loadHistory, loadTombstones, mergeHistory, replaceRequest, saveHistory, saveTombstones, historyKeyFor, keptBy, withKept, stepRun, type GalleryCursor, type RunRecord } from "./history";
 import { sourcesFor } from "./media-source";
 import { loadGenerationResults, restoreTeamGallery, saveGenerationResults, trashTeamGallery } from "@/generation/result-actions";
 import { CloseIcon, UndoIcon } from "./icons";
@@ -190,6 +190,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const [freshIds, setFreshIds] = useState<string[]>([]);
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [view, setView] = useState<GalleryView>(surface);
+  const [author, setAuthor] = useState("all");
   const [focusNonce, setFocusNonce] = useState(0);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [galleryCursor, setGalleryCursor] = useState<GalleryCursor | null>(null);
@@ -558,11 +559,39 @@ function persistLocal(records: RunRecord[]) {
 
   const visible = useMemo(() => {
     const live = history.filter((record) => record.archived !== true);
-    if (view === "archive") return history.filter((record) => record.archived === true);
-    if (view === "assets") return live;
-    if (view === "favorites") return live.filter((record) => record.favorite === true);
-    return live.filter((record) => record.surface === view);
-  }, [history, view]);
+    const known = new Set(history.flatMap((record) => (record.createdBy ? [record.createdBy] : [])));
+    const authorFilter = author !== "all" && known.has(author) ? author : "all";
+    const byAuthor = (records: RunRecord[]) =>
+      authorFilter === "all" ? records : records.filter((record) => record.createdBy === authorFilter);
+    if (view === "archive") return byAuthor(history.filter((record) => record.archived === true));
+    if (view === "favorites") {
+      return live.filter((record) => keptBy(record, user?.id ?? null, activeTeamId != null));
+    }
+    if (view === "assets") return byAuthor(live);
+    return byAuthor(live.filter((record) => record.surface === view));
+  }, [activeTeamId, author, history, user?.id, view]);
+
+  const authors = useMemo(() => {
+    const names = new Set<string>();
+    for (const record of history) {
+      if (record.createdBy) names.add(record.createdBy);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [history]);
+
+  useEffect(() => {
+    if (!user) return;
+    const stored = window.localStorage.getItem(`ohf.gallery.author.${user.id}`);
+    setAuthor(stored && stored.length > 0 ? stored : "all");
+  }, [user?.id]);
+
+  const pickAuthor = useCallback(
+    (next: string) => {
+      setAuthor(next);
+      if (user) window.localStorage.setItem(`ohf.gallery.author.${user.id}`, next);
+    },
+    [user],
+  );
 
   const keepUnface = useCallback((record: RunRecord) => {
     setHistory((prev) => {
@@ -710,9 +739,11 @@ function persistLocal(records: RunRecord[]) {
   );
 
   const toggleFavorite = useCallback((record: RunRecord) => {
+    const team = teamIdRef.current != null;
+    const userId = userIdRef.current;
     setHistory((prev) =>
       prev.map((entry) =>
-        entry.id === record.id ? { ...entry, favorite: !entry.favorite } : entry,
+        entry.id === record.id ? withKept(entry, userId, team, !keptBy(entry, userId, team)) : entry,
       ),
     );
   }, []);
@@ -846,9 +877,11 @@ function persistLocal(records: RunRecord[]) {
      press releases them, which is what a pressed control has to mean. */
   const favoritePicked = useCallback(() => {
     const ids = new Set(selected);
-    const keep = !pickedRecords.every((record) => record.favorite === true);
+    const team = teamIdRef.current != null;
+    const userId = userIdRef.current;
+    const keep = !pickedRecords.every((record) => keptBy(record, userId, team));
     setHistory((prev) =>
-      prev.map((entry) => (ids.has(entry.id) ? { ...entry, favorite: keep } : entry)),
+      prev.map((entry) => (ids.has(entry.id) ? withKept(entry, userId, team, keep) : entry)),
     );
   }, [selected, pickedRecords]);
 
@@ -1022,6 +1055,11 @@ function persistLocal(records: RunRecord[]) {
               canDelete={ownsRun}
               onStarter={applyStarter}
               onNearEnd={loadOlder}
+              authors={authors}
+              author={authors.includes(author) ? author : "all"}
+              onAuthor={pickAuthor}
+              userId={user?.id ?? null}
+              team={activeTeamId != null}
               galleryRef={galleryRef}
             />
           )}
@@ -1035,6 +1073,8 @@ function persistLocal(records: RunRecord[]) {
             error={error}
             focusNonce={focusNonce}
             history={history}
+            favoriteUserId={user?.id ?? null}
+            team={activeTeamId != null}
             onLoadOlder={loadOlder}
             selecting={selected.length > 0}
             selection={
@@ -1045,6 +1085,7 @@ function persistLocal(records: RunRecord[]) {
                 onFavorite={favoritePicked}
                 onDelete={deletePicked}
                 onClose={clearPicked}
+                isKept={(record) => keptBy(record, user?.id ?? null, activeTeamId != null)}
               />
             }
             onError={setError}
@@ -1070,6 +1111,7 @@ function persistLocal(records: RunRecord[]) {
             onClose={() => setViewerId(null)}
             onReuse={() => retry(viewerItem)}
             onFavorite={() => toggleFavorite(viewerItem)}
+            kept={keptBy(viewerItem, user?.id ?? null, activeTeamId != null)}
             /* The viewer is released along with the run, so undoing the
                delete restores it to the grid and not back over the studio. */
             onDelete={() => {

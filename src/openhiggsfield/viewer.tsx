@@ -87,6 +87,7 @@ export function Viewer({
   onClose,
   onReuse,
   onFavorite,
+  kept,
   onDelete,
   canDelete = true,
   onPrev,
@@ -97,6 +98,7 @@ export function Viewer({
   onClose: () => void;
   onReuse: () => void;
   onFavorite: () => void;
+  kept?: boolean;
   onDelete: () => void;
   canDelete?: boolean;
   /* Absent at the ends of the scope, which is how the walk stops. */
@@ -486,13 +488,13 @@ export function Viewer({
               <button
                 type="button"
                 className="ohf-icon-btn ohf-viewer-keep"
-                data-on={item.favorite === true}
-                aria-pressed={item.favorite === true}
-                aria-label={item.favorite ? "Remove from favorites" : "Save to favorites"}
-                title={item.favorite ? "Remove from favorites" : "Save to favorites"}
+                data-on={kept ?? item.favorite === true}
+                aria-pressed={kept ?? item.favorite === true}
+                aria-label={(kept ?? item.favorite) ? "Remove from favorites" : "Save to favorites"}
+                title={(kept ?? item.favorite) ? "Remove from favorites" : "Save to favorites"}
                 onClick={onFavorite}
               >
-                <HeartIcon size={15} filled={item.favorite === true} />
+                <HeartIcon size={15} filled={kept ?? item.favorite === true} />
               </button>
             </div>
           </footer>

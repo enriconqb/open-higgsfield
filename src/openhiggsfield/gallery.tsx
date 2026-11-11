@@ -19,7 +19,7 @@ import {
   TrashIcon,
   WarningIcon,
 } from "./icons";
-import { timeAgo, type RunRecord } from "./history";
+import { timeAgo, keptBy, type RunRecord } from "./history";
 import { sourcesFor } from "./media-source";
 import { ModelIcon } from "./model-icon";
 
@@ -140,6 +140,8 @@ const Tile = memo(function Tile({
   fresh,
   picked,
   selecting,
+  userId,
+  team,
   inArchive,
   onOpen,
   onPick,
@@ -157,6 +159,8 @@ const Tile = memo(function Tile({
   /* Once anything is picked the grid is in selection mode: every checkbox
      stands, and the card body toggles rather than opens. */
   selecting: boolean;
+  userId: number | null;
+  team: boolean;
   inArchive: boolean;
   onOpen: (id: string) => void;
   onPick: (id: string, index: number, range: boolean) => void;
@@ -182,7 +186,7 @@ const Tile = memo(function Tile({
   /* A video is megabytes read over the wire before the browser is handed
      anything, so the press has to say it landed. */
   const [saving, setSaving] = useState(false);
-  const saved = item.favorite === true;
+  const saved = keptBy(item, userId, team);
   const named = shortPrompt(item.prompt);
   const facts = hoverFacts(item);
 
@@ -454,6 +458,11 @@ export const Gallery = memo(function Gallery({
   canDelete,
   onStarter,
   onNearEnd,
+  authors,
+  author,
+  onAuthor,
+  userId,
+  team,
   galleryRef,
 }: {
   view: GalleryView;
@@ -472,6 +481,11 @@ export const Gallery = memo(function Gallery({
   canDelete?: (item: RunRecord) => boolean;
   onStarter: (prompt: string) => void;
   onNearEnd: () => void;
+  authors: string[];
+  author: string;
+  onAuthor: (next: string) => void;
+  userId: number | null;
+  team: boolean;
   galleryRef: RefObject<HTMLDivElement | null>;
 }) {
   const selecting = picked.size > 0;
@@ -488,6 +502,9 @@ export const Gallery = memo(function Gallery({
   if (items.length === 0 && runs.length === 0) {
     return (
       <div {...panel} ref={galleryRef}>
+        {view !== "favorites" && (
+          <AuthorFilter authors={authors} author={author} onAuthor={onAuthor} />
+        )}
         <Empty view={view} surface={surface} onStarter={onStarter} key={view} />
       </div>
     );
@@ -495,6 +512,9 @@ export const Gallery = memo(function Gallery({
 
   return (
     <div {...panel} ref={galleryRef}>
+      {view !== "favorites" && (
+        <AuthorFilter authors={authors} author={author} onAuthor={onAuthor} />
+      )}
       <VirtualizedGrid
         key={view}
         scrollRef={galleryRef}
@@ -513,6 +533,8 @@ export const Gallery = memo(function Gallery({
         onDelete={onDelete}
         canDelete={canDelete}
         onNearEnd={onNearEnd}
+        userId={userId}
+        team={team}
       />
     </div>
   );
@@ -535,6 +557,8 @@ function VirtualizedGrid({
   onDelete,
   canDelete,
   onNearEnd,
+  userId,
+  team,
 }: {
   scrollRef: RefObject<HTMLDivElement | null>;
   selecting: boolean;
@@ -552,6 +576,8 @@ function VirtualizedGrid({
   onDelete: (item: RunRecord) => void;
   canDelete?: (item: RunRecord) => boolean;
   onNearEnd: () => void;
+  userId: number | null;
+  team: boolean;
 }) {
   const width = useInnerWidth(scrollRef);
   const columns = columnsFor(width);
@@ -607,6 +633,8 @@ function VirtualizedGrid({
                   fresh={freshIds.includes(slot.item.id)}
                   picked={picked.has(slot.item.id)}
                   selecting={selecting}
+                  userId={userId}
+                  team={team}
                   onOpen={onOpen}
                   onPick={onPick}
                   onReuse={onReuse}
@@ -623,6 +651,30 @@ function VirtualizedGrid({
         );
       })}
     </div>
+  );
+}
+
+function AuthorFilter({
+  authors,
+  author,
+  onAuthor,
+}: {
+  authors: string[];
+  author: string;
+  onAuthor: (next: string) => void;
+}) {
+  return (
+    <label className="ohf-author">
+      <span>Creator</span>
+      <select value={author} onChange={(event) => onAuthor(event.target.value)} aria-label="Filter by creator">
+        <option value="all">All</option>
+        {authors.map((name) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

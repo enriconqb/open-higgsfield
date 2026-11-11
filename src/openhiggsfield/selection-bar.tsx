@@ -30,6 +30,7 @@ export function SelectionBar({
   onFavorite,
   onDelete,
   onClose,
+  isKept,
 }: {
   records: RunRecord[];
   saving: SaveProgress | null;
@@ -37,6 +38,7 @@ export function SelectionBar({
   onFavorite: () => void;
   onDelete: () => void;
   onClose: () => void;
+  isKept?: (record: RunRecord) => boolean;
 }) {
   const on = records.length > 0;
   /* The exiting bar keeps saying what it was acting on. */
@@ -46,7 +48,7 @@ export function SelectionBar({
 
   const count = shown.length;
   const saveable = shown.filter((record) => record.urls[0]).length;
-  const allKept = shown.every((record) => record.favorite === true);
+  const allKept = shown.every((record) => (isKept ? isKept(record) : record.favorite === true));
   const noun = count === 1 ? "run" : "runs";
 
   const downloadLabel = saving

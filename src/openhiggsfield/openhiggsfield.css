@@ -552,6 +552,22 @@
   );
   mask-image: linear-gradient(to bottom, transparent 0, #000 var(--ohf-fade));
 }
+.ohf-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--ohf-muted, #a1a1aa);
+}
+.ohf-author select {
+  min-width: 160px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: transparent;
+  color: inherit;
+}
 .ohf-grid-window {
   position: relative;
   width: 100%;

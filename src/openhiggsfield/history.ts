@@ -30,6 +30,8 @@ export interface RunRecord {
   createdAt: number;
   /** Kept deliberately: shows in the Favorites scope and outlives the cap. */
   favorite?: boolean;
+  /** Team favorites are per member. Personal workspaces keep using `favorite`. */
+  favoriteUserIds?: number[];
   /** Hidden from the gallery and the attachment shelves. The files stay on disk. */
   archived?: boolean;
   /** Resolved catalog settings this run was submitted with, so reuse can
@@ -235,6 +237,8 @@ export function isRunRecord(value: unknown): value is RunRecord {
     typeof record.createdAt === "number" &&
     (record.requestId === undefined || typeof record.requestId === "string") &&
     (record.favorite === undefined || typeof record.favorite === "boolean") &&
+    (record.favoriteUserIds === undefined ||
+      (Array.isArray(record.favoriteUserIds) && record.favoriteUserIds.every((id) => typeof id === "number"))) &&
     (record.archived === undefined || typeof record.archived === "boolean") &&
     (record.settings === undefined ||
       (typeof record.settings === "object" && record.settings !== null)) &&
@@ -242,6 +246,19 @@ export function isRunRecord(value: unknown): value is RunRecord {
     (record.via === undefined || record.via === "api") &&
     (record.tokenId === undefined || record.tokenId === null || typeof record.tokenId === "number")
   );
+}
+
+export function keptBy(record: RunRecord, userId: number | null, team: boolean): boolean {
+  if (!team) return record.favorite === true;
+  return userId != null && (record.favoriteUserIds?.includes(userId) ?? false);
+}
+
+export function withKept(record: RunRecord, userId: number | null, team: boolean, keep: boolean): RunRecord {
+  if (!team) return { ...record, favorite: keep };
+  if (userId == null) return record;
+  const ids = record.favoriteUserIds ?? [];
+  const next = keep ? (ids.includes(userId) ? ids : [...ids, userId]) : ids.filter((id) => id !== userId);
+  return { ...record, favoriteUserIds: next };
 }
 
 export function timeAgo(timestamp: number, now = Date.now()): string {
