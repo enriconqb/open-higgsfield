@@ -182,10 +182,25 @@ const Tile = memo(function Tile({
   /* A video is megabytes read over the wire before the browser is handed
      anything, so the press has to say it landed. */
   const [saving, setSaving] = useState(false);
-  const [sharp, setSharp] = useState(false);
   const saved = item.favorite === true;
   const named = shortPrompt(item.prompt);
   const facts = hoverFacts(item);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || item.kind !== "video") return;
+    const showFrame = () => {
+      if (video.currentTime > 0) return;
+      const span = Number.isFinite(video.duration) && video.duration > 0 ? Math.min(0.05, video.duration / 2) : 0.05;
+      try {
+        video.currentTime = span;
+      } catch {
+        /* The browser has not opened the clip for seeking yet. */
+      }
+    };
+    video.addEventListener("loadeddata", showFrame);
+    return () => video.removeEventListener("loadeddata", showFrame);
+  }, [poster, item.kind]);
 
   /* Top-left, where a selection mark is looked for, and the one control on the
      card that is not about this run alone. It carries the whole checkbox
@@ -261,11 +276,23 @@ const Tile = memo(function Tile({
       data-picked={picked}
       data-saving={saving || undefined}
       style={{ "--d": delay } as CSSProperties}
-      onMouseEnter={() => setSharp(true)}
-      onMouseLeave={() => setSharp(false)}
+      onMouseEnter={() => {
+        void videoRef.current?.play().catch(() => {});
+      }}
+      onMouseLeave={() => {
+        const video = videoRef.current;
+        if (!video) return;
+        video.pause();
+        const span = Number.isFinite(video.duration) && video.duration > 0 ? Math.min(0.05, video.duration / 2) : 0.05;
+        try {
+          video.currentTime = span;
+        } catch {
+          /* Seeking back to the first frame can fail if the clip never opened. */
+        }
+      }}
     >
       <span className="ohf-tile-media ohf-tile-hold" style={{ background: item.art }} aria-hidden />
-      {sharp && poster &&
+      {poster &&
         (item.kind === "video" ? (
           <video
             ref={videoRef}
@@ -274,8 +301,7 @@ const Tile = memo(function Tile({
             muted
             loop
             playsInline
-            autoPlay
-            preload="none"
+            preload="metadata"
             onError={() => setOnFallback(true)}
           />
         ) : (
@@ -291,11 +317,6 @@ const Tile = memo(function Tile({
             onError={() => setOnFallback(true)}
           />
         ))}
-      {item.kind === "video" && !sharp && (
-        <span className="ohf-tile-hold" aria-hidden>
-          <PlayBadgeIcon />
-        </span>
-      )}
 
       {/* While runs are picked the card is part of a selection, so its body
           extends the selection instead of leaving the grid for the viewer —
