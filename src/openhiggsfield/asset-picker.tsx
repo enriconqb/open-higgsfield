@@ -600,11 +600,15 @@ function paintFirstFrame(video: HTMLVideoElement) {
   }
 }
 
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 6;
+
 function PreviewDialog({ asset, onClose }: { asset: Asset; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
   }, []);
+  const image = asset.kind !== "video" && asset.kind !== "audio";
   return (
     <dialog ref={ref} className="ohf" aria-label={`Preview ${asset.title}`} onClose={onClose} onCancel={onClose}>
       <div className="ohf-dialog-panel ohf-asset-preview">
@@ -619,23 +623,110 @@ function PreviewDialog({ asset, onClose }: { asset: Asset; onClose: () => void }
                   .join(" · ")}
               </p>
             )}
+            {image && <p className="ohf-keys-copy">Scroll to zoom</p>}
           </div>
           <button type="button" className="ohf-icon-btn ohf-icon-btn--ghost" aria-label="Close preview" onClick={onClose}>
             <CloseIcon size={14} />
           </button>
         </div>
-        <div className="ohf-asset-preview-stage">
-          {asset.kind === "video" ? (
-            <video src={withBasePath(asset.previewUrl ?? asset.url)} controls playsInline />
-          ) : asset.kind === "audio" ? (
-            <audio src={withBasePath(asset.previewUrl ?? asset.url)} controls />
-          ) : (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={withBasePath(asset.previewUrl ?? asset.url)} alt={asset.title} />
-          )}
-        </div>
+        {image ? (
+          <ZoomStage src={withBasePath(asset.previewUrl ?? asset.url)} alt={asset.title} />
+        ) : (
+          <div className="ohf-asset-preview-stage">
+            {asset.kind === "video" ? (
+              <video src={withBasePath(asset.previewUrl ?? asset.url)} controls playsInline />
+            ) : (
+              <audio src={withBasePath(asset.previewUrl ?? asset.url)} controls />
+            )}
+          </div>
+        )}
       </div>
     </dialog>
+  );
+}
+
+/** Scroll zooms toward the pointer. Drag pans once the picture is larger than
+    the stage, and a double click puts it back at 1×. */
+function ZoomStage({ src, alt }: { src: string; alt: string }) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef({ scale: ZOOM_MIN, x: 0, y: 0 });
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const [view, setView] = useState(viewRef.current);
+  const [grabbing, setGrabbing] = useState(false);
+
+  function apply(next: { scale: number; x: number; y: number }) {
+    const scale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next.scale));
+    const settled = scale === ZOOM_MIN ? { scale, x: 0, y: 0 } : { scale, x: next.x, y: next.y };
+    viewRef.current = settled;
+    setView(settled);
+  }
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = stage.getBoundingClientRect();
+      const current = viewRef.current;
+      const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const scale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current.scale * factor));
+      if (scale === current.scale) return;
+      if (scale === ZOOM_MIN) {
+        apply({ scale, x: 0, y: 0 });
+        return;
+      }
+      const ratio = scale / current.scale;
+      const px = event.clientX - rect.left - rect.width / 2;
+      const py = event.clientY - rect.top - rect.height / 2;
+      apply({
+        scale,
+        x: px - (px - current.x) * ratio,
+        y: py - (py - current.y) * ratio,
+      });
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
+  }, []);
+
+  return (
+    <div
+      ref={stageRef}
+      className="ohf-asset-preview-stage ohf-asset-preview-stage--zoom"
+      data-zoomed={view.scale > ZOOM_MIN}
+      data-grabbing={grabbing}
+      onDoubleClick={() => apply({ scale: ZOOM_MIN, x: 0, y: 0 })}
+      onPointerDown={(event) => {
+        if (viewRef.current.scale <= ZOOM_MIN) return;
+        drag.current = { x: event.clientX, y: event.clientY, ox: viewRef.current.x, oy: viewRef.current.y };
+        setGrabbing(true);
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const from = drag.current;
+        if (!from) return;
+        apply({
+          scale: viewRef.current.scale,
+          x: from.ox + (event.clientX - from.x),
+          y: from.oy + (event.clientY - from.y),
+        });
+      }}
+      onPointerUp={() => {
+        drag.current = null;
+        setGrabbing(false);
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        setGrabbing(false);
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        draggable={false}
+        style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
+      />
+    </div>
   );
 }
 

@@ -2945,6 +2945,23 @@
   border-radius: 12px;
   background: var(--s1);
 }
+.ohf-asset-preview-stage--zoom {
+  overflow: hidden;
+  min-height: min(42vh, 360px);
+  cursor: zoom-in;
+  touch-action: none;
+}
+.ohf-asset-preview-stage--zoom[data-zoomed="true"] {
+  cursor: grab;
+}
+.ohf-asset-preview-stage--zoom[data-grabbing="true"] {
+  cursor: grabbing;
+}
+.ohf-asset-preview-stage--zoom img {
+  transform-origin: center center;
+  user-select: none;
+  pointer-events: none;
+}
 .ohf-asset-confirm {
   width: min(380px, calc(100vw - 32px));
 }
