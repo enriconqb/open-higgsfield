@@ -97,7 +97,7 @@ export async function saveHistory(
   legacy: LegacyStore | undefined = browserLegacy(),
   key: string = HISTORY_KEY,
 ): Promise<void> {
-  const next = capHistory(records.filter(isRunRecord));
+  const next = orderHistory(records.filter(isRunRecord));
   try {
     await kv.set(key, next);
   } catch {
@@ -119,14 +119,14 @@ export function mergeHistory(stored: RunRecord[], live: RunRecord[]): RunRecord[
     const prev = byId.get(row.id);
     if (!prev || newerRecord(row, prev)) byId.set(row.id, row);
   }
-  return capHistory([...byId.values()].sort((a, b) => b.createdAt - a.createdAt));
+  return orderHistory([...byId.values()]);
 }
 
 async function readIdb(kv: Kv, key: string): Promise<RunRecord[]> {
   try {
     const stored = await kv.get<unknown>(key);
     if (!Array.isArray(stored)) return [];
-    return capHistory(stored.filter(isRunRecord));
+    return orderHistory(stored.filter(isRunRecord));
   } catch {
     return [];
   }
@@ -139,14 +139,44 @@ function readLegacy(legacy: LegacyStore | undefined): RunRecord[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return capHistory(parsed.filter(isRunRecord));
+    return orderHistory(parsed.filter(isRunRecord));
   } catch {
     return [];
   }
 }
 
-/* The cap trims the run log, not the visitor's shelf: a favorite is a
-   deliberate keep, so only unmarked runs age out of the window. */
+function orderHistory(records: RunRecord[]): RunRecord[] {
+  return [...records].sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+}
+
+export type GalleryCursor = { createdAt: number; id: string };
+
+export const GALLERY_PAGE_SIZE = 24;
+
+/** Newest first. The cursor is the last row already shown, so the next page starts after it. */
+export function pageRuns(
+  records: RunRecord[],
+  cursor: GalleryCursor | null,
+  limit = GALLERY_PAGE_SIZE,
+): { records: RunRecord[]; nextCursor: GalleryCursor | null } {
+  const sorted = orderHistory(records);
+  let start = 0;
+  if (cursor) {
+    const index = sorted.findIndex(
+      (record) =>
+        record.createdAt < cursor.createdAt ||
+        (record.createdAt === cursor.createdAt && record.id < cursor.id),
+    );
+    start = index < 0 ? sorted.length : index;
+  }
+  const slice = sorted.slice(start, start + limit);
+  const last = slice[slice.length - 1];
+  const more = start + slice.length < sorted.length;
+  return { records: slice, nextCursor: more && last ? { createdAt: last.createdAt, id: last.id } : null };
+}
+
+/* Kept for a caller that still wants a window. The gallery no longer uses it:
+   a row past the window was being treated as a deletion. */
 export function capHistory(records: RunRecord[], max = MAX_RECORDS): RunRecord[] {
   if (records.length <= max) return records;
   let kept = 0;
@@ -169,11 +199,7 @@ export function replaceRequest(
   if (!records.some((record) => record.status === "running" && requestIdOf(record) === requestId)) {
     return records;
   }
-  return capHistory(
-    [...next, ...records.filter((record) => requestIdOf(record) !== requestId)].sort(
-      (a, b) => b.createdAt - a.createdAt,
-    ),
-  );
+  return orderHistory([...next, ...records.filter((record) => requestIdOf(record) !== requestId)]);
 }
 
 function hasLocalMedia(record: RunRecord): boolean {

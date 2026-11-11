@@ -3,7 +3,7 @@ import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import { requireActiveUser } from "@/auth/guard";
 import { hasStudioAdminAccess } from "@/auth/types";
 import { getPool, queryOne, queryRows } from "@/db/client";
-import { capHistory, isRunRecord, type RunRecord } from "@/openhiggsfield/history";
+import { isRunRecord, pageRuns, type GalleryCursor, type RunRecord } from "@/openhiggsfield/history";
 
 import { archiveRunRecord } from "./archive-media";
 import { listActiveJobIds } from "./api-jobs";
@@ -15,7 +15,9 @@ type ResultRow = RowDataPacket & {
   payload: unknown;
 };
 
-export async function listGenerationResults(): Promise<RunRecord[]> {
+export type GalleryPage = { records: RunRecord[]; nextCursor: GalleryCursor | null };
+
+export async function listGenerationResults(cursor: GalleryCursor | null = null): Promise<GalleryPage> {
   const user = await requireActiveUser();
   /* Opening the studio is a good moment to finish whatever the server is still
      following, so a run that completed while nobody watched is already here
@@ -23,8 +25,10 @@ export async function listGenerationResults(): Promise<RunRecord[]> {
   kickSettle(user.id);
   const { workspaceFor } = await import("@/teams/access");
   const workspace = await workspaceFor(user);
-  if (workspace.teamId) return listGenerationResultsForTeam(workspace.teamId);
-  return listGenerationResultsFor(user.id);
+  const records = workspace.teamId
+    ? await listGenerationResultsForTeam(workspace.teamId)
+    : await listGenerationResultsFor(user.id);
+  return pageRuns(records, cursor);
 }
 
 async function listGenerationResultsForTeam(teamId: number): Promise<RunRecord[]> {
@@ -36,8 +40,8 @@ async function listGenerationResultsForTeam(teamId: number): Promise<RunRecord[]
     [teamId],
   );
   const records = rows.map((row) => stampCreator(parsePayload(row.payload), row.username)).filter(isRunRecord);
-  records.sort((a, b) => b.createdAt - a.createdAt);
-  return capHistory(records);
+  records.sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  return records;
 }
 
 /** Unauthenticated twin, for scripts and tests that already know the owner. */
@@ -47,19 +51,22 @@ export async function listGenerationResultsFor(userId: number): Promise<RunRecor
     [userId],
   );
   const records = rows.map((row) => parsePayload(row.payload)).filter(isRunRecord);
-  records.sort((a, b) => b.createdAt - a.createdAt);
-  return capHistory(records);
+  records.sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  return records;
 }
 
 /** Replaces this account's gallery rows with the given list, including removals.
     The studio only calls this after it has loaded the server list, so an API row
     (`#api`) missing from that list was deleted by the user and moves to Temp.
     API rows still in the list are upserted, not wiped and rewritten in bulk. */
-export async function replaceGenerationResults(records: RunRecord[]): Promise<RunRecord[]> {
+export async function replaceGenerationResults(
+  records: RunRecord[],
+  removedIds?: string[],
+): Promise<RunRecord[]> {
   const user = await requireActiveUser();
   const { workspaceFor } = await import("@/teams/access");
   const workspace = await workspaceFor(user);
-  return replaceGenerationResultsFor(user.id, records, workspace.teamId);
+  return replaceGenerationResultsFor(user.id, records, workspace.teamId, removedIds);
 }
 
 /** Unauthenticated twin, for scripts and tests that already know the owner. */
@@ -67,8 +74,9 @@ export async function replaceGenerationResultsFor(
   userId: number,
   records: RunRecord[],
   teamId: number | null = null,
+  removedIds?: string[],
 ): Promise<RunRecord[]> {
-  const incoming = capHistory(records.filter(isRunRecord));
+  const incoming = records.filter(isRunRecord);
   const next = await Promise.all(
     incoming.map(async (record) => {
       const archived = await archiveRunRecord(userId, record);
@@ -101,9 +109,14 @@ export async function replaceGenerationResultsFor(
         `SELECT client_id, payload FROM generation_results WHERE ${scope}`,
         scopeParams,
       );
+      /* A partial studio save names the deletions. Anything it has not loaded
+         yet stays in the gallery. A full replace (no removed list) still treats
+         absence as a deletion, which the tests use to clear an account. */
+      const named = removedIds?.map((id) => id.slice(0, 191)).filter(Boolean);
       const dropped: string[] = [];
       for (const row of existing) {
         if (!row.client_id || kept.has(row.client_id) || moving.has(row.client_id)) continue;
+        if (named && !named.includes(row.client_id)) continue;
         dropped.push(row.client_id);
         await connection.query(
           `INSERT INTO gallery_trash (user_id, team_id, created_by, client_id, payload, deleted_at, expires_at)
@@ -126,14 +139,16 @@ export async function replaceGenerationResultsFor(
           [...scopeParams, ...kept],
         );
       }
-      const protectedMarks = [...moving];
-      const keepMoving = protectedMarks.length
-        ? ` AND client_id NOT IN (${protectedMarks.map(() => "?").join(", ")})`
-        : "";
-      await connection.query(
-        `DELETE FROM generation_results WHERE ${scope} AND client_id NOT LIKE '%#api'${keepMoving}`,
-        [...scopeParams, ...protectedMarks],
-      );
+      if (!named) {
+        const protectedMarks = [...moving];
+        const keepMoving = protectedMarks.length
+          ? ` AND client_id NOT IN (${protectedMarks.map(() => "?").join(", ")})`
+          : "";
+        await connection.query(
+          `DELETE FROM generation_results WHERE ${scope} AND client_id NOT LIKE '%#api'${keepMoving}`,
+          [...scopeParams, ...protectedMarks],
+        );
+      }
     }
     const ready = teamId == null ? publish : await withoutTeamTrash(connection, teamId, publish);
     for (const record of ready) {

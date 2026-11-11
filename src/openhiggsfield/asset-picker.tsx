@@ -58,6 +58,7 @@ export function AssetPicker({
   items,
   uploads,
   history,
+  onLoadOlder,
   staged,
   uploading,
   onUpload,
@@ -72,6 +73,7 @@ export function AssetPicker({
   items: MediaItem[];
   uploads: UploadRecord[];
   history: RunRecord[];
+  onLoadOlder: () => void;
   staged: string | null;
   uploading: boolean;
   onUpload: (role: MediaRole) => void;
@@ -338,7 +340,15 @@ export function AssetPicker({
         </div>
       )}
 
-      <div className="ohf-assets-body ohf-scroll">
+      <div
+        className="ohf-assets-body ohf-scroll"
+        onScroll={(event) => {
+          if (shelf !== "generations" && shelf !== "favorites") return;
+          const node = event.currentTarget;
+          if (node.scrollTop + node.clientHeight < node.scrollHeight - 80) return;
+          onLoadOlder();
+        }}
+      >
         {undo && (
           <div className="ohf-undo ohf-asset-undo" role="status">
             <span className="ohf-undo-drain" style={{ animationDuration: `${UNDO_MS}ms` }} aria-hidden />

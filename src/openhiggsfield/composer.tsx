@@ -81,6 +81,7 @@ export function Composer({
   error,
   focusNonce,
   history,
+  onLoadOlder,
   notice,
   selection,
   selecting,
@@ -96,6 +97,7 @@ export function Composer({
   /* Finished runs are attachable inputs, so the asset picker reads the same
      log the gallery renders. */
   history: RunRecord[];
+  onLoadOlder: () => void;
   /* Transient receipts from the gallery share the composer's banner strip
      rather than adding a floating layer of their own. */
   notice?: ReactNode;
@@ -400,6 +402,7 @@ export function Composer({
             items={tray.items}
             uploads={tray.uploads}
             history={history}
+            onLoadOlder={onLoadOlder}
             staged={tray.staged}
             uploading={tray.uploading}
             onUpload={tray.begin}

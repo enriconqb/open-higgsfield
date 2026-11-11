@@ -613,6 +613,13 @@
   object-position: center;
   animation: ohf-fade 0.4s ease;
 }
+.ohf-tile-hold {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
 
 /* The whole card opens. It is a transparent plate rather than a wrapper, so
    the caption keeps painting through it and the actions stack above it. */

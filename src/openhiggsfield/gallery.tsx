@@ -173,6 +173,7 @@ const Tile = memo(function Tile({
   /* A video is megabytes read over the wire before the browser is handed
      anything, so the press has to say it landed. */
   const [saving, setSaving] = useState(false);
+  const [sharp, setSharp] = useState(false);
   const saved = item.favorite === true;
   const named = shortPrompt(item.prompt);
   const facts = hoverFacts(item);
@@ -251,15 +252,11 @@ const Tile = memo(function Tile({
       data-picked={picked}
       data-saving={saving || undefined}
       style={{ "--d": delay } as CSSProperties}
-      onMouseEnter={() => void videoRef.current?.play().catch(() => {})}
-      onMouseLeave={() => {
-        const video = videoRef.current;
-        if (!video) return;
-        video.pause();
-        video.currentTime = 0;
-      }}
+      onMouseEnter={() => setSharp(true)}
+      onMouseLeave={() => setSharp(false)}
     >
-      {poster &&
+      <span className="ohf-tile-media ohf-tile-hold" style={{ background: item.art }} aria-hidden />
+      {sharp && poster &&
         (item.kind === "video" ? (
           <video
             ref={videoRef}
@@ -268,7 +265,8 @@ const Tile = memo(function Tile({
             muted
             loop
             playsInline
-            preload="metadata"
+            autoPlay
+            preload="none"
             onError={() => setOnFallback(true)}
           />
         ) : (
@@ -280,9 +278,15 @@ const Tile = memo(function Tile({
             src={poster}
             alt={item.prompt}
             loading="lazy"
+            decoding="async"
             onError={() => setOnFallback(true)}
           />
         ))}
+      {item.kind === "video" && !sharp && (
+        <span className="ohf-tile-hold" aria-hidden>
+          <PlayBadgeIcon />
+        </span>
+      )}
 
       {/* While runs are picked the card is part of a selection, so its body
           extends the selection instead of leaving the grid for the viewer —
@@ -409,6 +413,7 @@ export const Gallery = memo(function Gallery({
   onDelete,
   canDelete,
   onStarter,
+  onNearEnd,
   galleryRef,
 }: {
   view: GalleryView;
@@ -425,9 +430,13 @@ export const Gallery = memo(function Gallery({
   onDelete: (item: RunRecord) => void;
   canDelete?: (item: RunRecord) => boolean;
   onStarter: (prompt: string) => void;
+  onNearEnd: () => void;
   galleryRef: RefObject<HTMLDivElement | null>;
 }) {
   const selecting = picked.size > 0;
+  useEffect(() => {
+    if (items.length === 0 && runs.length === 0) onNearEnd();
+  }, [items.length, runs.length, onNearEnd]);
   const panel = {
     id: "ohf-panel",
     role: "tabpanel",
@@ -460,6 +469,7 @@ export const Gallery = memo(function Gallery({
         onDownload={onDownload}
         onDelete={onDelete}
         canDelete={canDelete}
+        onNearEnd={onNearEnd}
       />
     </div>
   );
@@ -479,6 +489,7 @@ function VirtualizedGrid({
   onDownload,
   onDelete,
   canDelete,
+  onNearEnd,
 }: {
   scrollRef: RefObject<HTMLDivElement | null>;
   selecting: boolean;
@@ -493,6 +504,7 @@ function VirtualizedGrid({
   onDownload: (item: RunRecord) => Promise<void>;
   onDelete: (item: RunRecord) => void;
   canDelete?: (item: RunRecord) => boolean;
+  onNearEnd: () => void;
 }) {
   const width = useInnerWidth(scrollRef);
   const columns = columnsFor(width);
@@ -513,6 +525,12 @@ function VirtualizedGrid({
   useEffect(() => {
     virtualizer.measure();
   }, [width, columns, slots, virtualizer]);
+
+  const virtualRows = virtualizer.getVirtualItems();
+  const lastRow = virtualRows[virtualRows.length - 1]?.index ?? -1;
+  useEffect(() => {
+    if (lastRow >= rows - 2) onNearEnd();
+  }, [lastRow, rows, onNearEnd]);
 
   return (
     <div className="ohf-grid-window" style={{ height: virtualizer.getTotalSize() }}>

@@ -37,7 +37,7 @@ import {
   type GalleryView,
 } from "./data";
 import { Gallery } from "./gallery";
-import { loadHistory, loadTombstones, mergeHistory, replaceRequest, saveHistory, saveTombstones, historyKeyFor, stepRun, type RunRecord } from "./history";
+import { loadHistory, loadTombstones, mergeHistory, replaceRequest, saveHistory, saveTombstones, historyKeyFor, stepRun, type GalleryCursor, type RunRecord } from "./history";
 import { sourcesFor } from "./media-source";
 import { loadGenerationResults, restoreTeamGallery, saveGenerationResults, trashTeamGallery } from "@/generation/result-actions";
 import { CloseIcon, UndoIcon } from "./icons";
@@ -192,6 +192,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   const [view, setView] = useState<GalleryView>(surface);
   const [focusNonce, setFocusNonce] = useState(0);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [galleryCursor, setGalleryCursor] = useState<GalleryCursor | null>(null);
   const [syncServer, setSyncServer] = useState(false);
   /* Deleting drops the only copy of a run — the platform's result URLs are not
      re-derivable — so the records are held aside until the bar times out. */
@@ -228,6 +229,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
      be the one that lands last, or the removed run is written back. */
   const gallerySave = useRef({ running: false, pending: false });
   const tombstones = useRef(new Set<string>());
+  const paging = useRef(false);
   const userIdRef = useRef<number | null>(null);
   const teamIdRef = useRef<number | null>(null);
   /** Workspace whose gallery has finished loading. Saves wait for this so a switch cannot write the previous gallery into the next workspace. */
@@ -261,6 +263,7 @@ function persistLocal(records: RunRecord[]) {
     loadedTeamRef.current = undefined;
     if (!user) {
       setHistory([]);
+      setGalleryCursor(null);
       setHistoryLoaded(false);
       setSyncServer(false);
       return;
@@ -274,21 +277,22 @@ function persistLocal(records: RunRecord[]) {
       const local = await loadHistory(undefined, undefined, key).catch(() => [] as RunRecord[]);
       tombstones.current = new Set(await loadTombstones(user.id, undefined, teamId));
       const visible = (rows: RunRecord[]) => rows.filter((record) => !tombstones.current.has(record.id));
-      let remote: RunRecord[] = [];
+      let remote = { records: [] as RunRecord[], nextCursor: null as GalleryCursor | null };
       let remoteOk = false;
       try {
-        remote = unwrap(await loadGenerationResults());
+        remote = unwrap(await loadGenerationResults(null));
         remoteOk = true;
       } catch {
         remoteOk = false;
       }
       if (!live || teamIdRef.current !== teamId) return;
-      const remoteVisible = visible(remote);
+      const remoteVisible = visible(remote.records);
       const localVisible = visible(local);
       const keptLocal = remoteOk
         ? localVisible.filter((record) => record.status === "running" && !remoteVisible.some((row) => row.id === record.id))
         : localVisible;
       loadedTeamRef.current = teamId;
+      setGalleryCursor(remoteOk ? remote.nextCursor : null);
       setHistory(mergeHistory(remoteVisible, keptLocal));
       setSyncServer(remoteOk);
       setHistoryLoaded(true);
@@ -297,6 +301,32 @@ function persistLocal(records: RunRecord[]) {
       live = false;
     };
   }, [user, activeTeamId]);
+
+  const loadOlder = useCallback(() => {
+    const cursor = galleryCursor;
+    if (!cursor || !user || paging.current) return;
+    paging.current = true;
+    const teamId = activeTeamId;
+    void loadGenerationResults(cursor)
+      .then(unwrap)
+      .then((page) => {
+        if (teamIdRef.current !== teamId) return;
+        setGalleryCursor(page.nextCursor);
+        setHistory((current) => {
+          const have = new Set(current.map((record) => record.id));
+          const added = page.records.filter(
+            (record) => !have.has(record.id) && !tombstones.current.has(record.id),
+          );
+          if (added.length === 0) return current;
+          return [...current, ...added].sort((a, b) => b.createdAt - a.createdAt);
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        paging.current = false;
+      });
+  }, [activeTeamId, galleryCursor, user]);
+
   useEffect(() => {
     if (!historyLoaded || !user || loadedTeamRef.current !== activeTeamId) return;
     void saveHistory(history, undefined, undefined, historyKeyFor(user.id, activeTeamId));
@@ -313,7 +343,8 @@ function persistLocal(records: RunRecord[]) {
       gallerySave.current.running = true;
       gallerySave.current.pending = false;
       const snapshot = historyRef.current.filter((record) => !tombstones.current.has(record.id));
-      void saveGenerationResults(snapshot)
+      const removed = [...tombstones.current];
+      void saveGenerationResults(snapshot, removed)
         .then(unwrap)
         .then((saved) => {
           if (!alive.current || userIdRef.current !== userId || teamIdRef.current !== teamId) return;
@@ -358,26 +389,21 @@ function persistLocal(records: RunRecord[]) {
     const teamId = activeTeamId;
     let queued = false;
     const pull = () => {
-      void loadGenerationResults()
+      void loadGenerationResults(null)
         .then(unwrap)
-        .then((remote) => {
+        .then((page) => {
           if (!live || teamIdRef.current !== teamId) return;
+          const remote = page.records;
           window.dispatchEvent(new Event("ohf-gallery-refresh"));
           setHistory((current) => {
-            const remoteIds = new Set(remote.map((record) => record.id));
-            const kept = current.filter((record) => {
-              if (tombstones.current.has(record.id)) return false;
-              if (record.status === "running" && !remoteIds.has(record.id)) return true;
-              return remoteIds.has(record.id);
-            });
-            const have = new Set(kept.map((record) => record.id));
-            const added = remote.filter((record) => !have.has(record.id) && !tombstones.current.has(record.id));
-            const same =
-              added.length === 0 &&
-              kept.length === current.length &&
-              kept.every((record) => current.some((row) => row.id === record.id));
-            if (same) return current;
-            return [...added, ...kept].sort((a, b) => b.createdAt - a.createdAt);
+            const byId = new Map(current.map((record) => [record.id, record]));
+            for (const record of remote) {
+              if (tombstones.current.has(record.id)) continue;
+              byId.set(record.id, record);
+            }
+            const next = [...byId.values()].filter((record) => !tombstones.current.has(record.id));
+            next.sort((a, b) => b.createdAt - a.createdAt);
+            return next;
           });
         })
         .catch(() => undefined);
@@ -986,6 +1012,7 @@ function persistLocal(records: RunRecord[]) {
               onDelete={deleteRun}
               canDelete={ownsRun}
               onStarter={applyStarter}
+              onNearEnd={loadOlder}
               galleryRef={galleryRef}
             />
           )}
@@ -999,6 +1026,7 @@ function persistLocal(records: RunRecord[]) {
             error={error}
             focusNonce={focusNonce}
             history={history}
+            onLoadOlder={loadOlder}
             selecting={selected.length > 0}
             selection={
               <SelectionBar
