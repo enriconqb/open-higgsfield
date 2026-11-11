@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const HANDOFF_S = 0.08;
+const AHEAD_S = 1.5;
 
 /** Two stacked videos. The next clip is primed while the current one plays,
     and it starts just before the end so the last frame stays up until the
@@ -71,6 +72,47 @@ export function TimelinePlayer({
     }
   }
 
+  function covers(video: HTMLVideoElement, from: number, to: number): boolean {
+    const end = Math.max(from, to);
+    for (let i = 0; i < video.buffered.length; i++) {
+      if (video.buffered.start(i) <= from + 0.05 && video.buffered.end(i) >= end - 0.05) return true;
+    }
+    return false;
+  }
+
+  /* Play only from data already in the element. A full buffer starts at once.
+     A short lead of about 1.5s is enough while the rest is still arriving. */
+  function readyToPlay(video: HTMLVideoElement): boolean {
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const at = Math.max(0, video.currentTime);
+    if (duration > 0 && covers(video, at, Math.max(at, duration - 0.05))) return true;
+    const horizon = duration > 0 ? Math.min(at + AHEAD_S, Math.max(at, duration - 0.05)) : at;
+    if (horizon <= at + 0.05) return video.readyState >= 2;
+    return covers(video, at, horizon);
+  }
+
+  function playWhenReady(video: HTMLVideoElement) {
+    const stop = () => {
+      video.removeEventListener("progress", attempt);
+      video.removeEventListener("canplay", attempt);
+    };
+    const attempt = () => {
+      if (!playingRef.current) {
+        stop();
+        video.pause();
+        return;
+      }
+      if (!readyToPlay(video)) return;
+      stop();
+      void video.play().catch(() => {});
+    };
+    attempt();
+    if (playingRef.current && video.paused) {
+      video.addEventListener("progress", attempt);
+      video.addEventListener("canplay", attempt);
+    }
+  }
+
   function applyVolume(video: HTMLVideoElement) {
     const level = Math.min(1, Math.max(0, volumeRef.current));
     video.volume = level;
@@ -133,7 +175,7 @@ export function TimelinePlayer({
     const finish = () => {
       if (cancelled) return;
       seekPending.current = false;
-      if (playingRef.current && urls[index]) void first.play().catch(() => {});
+      if (playingRef.current && urls[index]) playWhenReady(first);
       else first.pause();
     };
     const seekTo = () => {
@@ -179,7 +221,7 @@ export function TimelinePlayer({
   useEffect(() => {
     const current = slot(activeRef.current);
     if (!current || !urls[0] || seekPending.current) return;
-    if (playing) void current.play().catch(() => {});
+    if (playing) playWhenReady(current);
     else {
       current.pause();
       slot(activeRef.current === 0 ? 1 : 0)?.pause();
@@ -223,7 +265,7 @@ export function TimelinePlayer({
       } catch {
         /* still seeking */
       }
-      void current.play().catch(() => {});
+      playWhenReady(current);
       onProgressRef.current(indexRef.current, 0, current.duration || 0);
       return;
     }
@@ -237,6 +279,17 @@ export function TimelinePlayer({
         next.currentTime = 0;
       } catch {
         /* still seeking */
+      }
+      if (!readyToPlay(next)) {
+        const once = () => {
+          if (!readyToPlay(next)) return;
+          next.removeEventListener("progress", once);
+          next.removeEventListener("canplay", once);
+          start();
+        };
+        next.addEventListener("progress", once);
+        next.addEventListener("canplay", once);
+        return;
       }
       void next.play().catch(() => {
         handoffRef.current = false;
@@ -278,6 +331,20 @@ export function TimelinePlayer({
     prime(previous, urlAfter(indexRef.current));
   }
 
+  function onWaiting(which: 0 | 1) {
+    if (activeRef.current !== which || !playingRef.current) return;
+    const video = slot(which);
+    if (!video) return;
+    const resume = () => {
+      if (!readyToPlay(video)) return;
+      video.removeEventListener("progress", resume);
+      video.removeEventListener("canplay", resume);
+      if (playingRef.current && activeRef.current === which) void video.play().catch(() => {});
+    };
+    video.addEventListener("progress", resume);
+    video.addEventListener("canplay", resume);
+  }
+
   function onEnded(which: 0 | 1) {
     if (activeRef.current !== which) return;
     if (handoffRef.current) return;
@@ -297,6 +364,7 @@ export function TimelinePlayer({
         onContextMenu={lockDownload ? (event) => event.preventDefault() : undefined}
         onTimeUpdate={() => onTime(0)}
         onPlaying={() => onPlaying(0)}
+        onWaiting={() => onWaiting(0)}
         onEnded={() => onEnded(0)}
       />
       <video
@@ -310,6 +378,7 @@ export function TimelinePlayer({
         onContextMenu={lockDownload ? (event) => event.preventDefault() : undefined}
         onTimeUpdate={() => onTime(1)}
         onPlaying={() => onPlaying(1)}
+        onWaiting={() => onWaiting(1)}
         onEnded={() => onEnded(1)}
       />
     </div>
