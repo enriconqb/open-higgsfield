@@ -131,6 +131,7 @@ export function AssetPicker({
     const favorites: Asset[] = [];
     for (const record of history) {
       if (record.status !== "completed" || record.kind !== kind || record.archived === true) continue;
+      if (!matchesAuthor(record, author, viewerName)) continue;
       record.urls.forEach((url, index) => {
         /* With the https flag on, the server signs this site's own address for
            the clip and the archived copy never expires, so that one wins. With
@@ -146,7 +147,6 @@ export function AssetPicker({
           ...(resolutionOf(record) ? { resolution: resolutionOf(record) } : {}),
           ...(record.createdBy ? { createdBy: record.createdBy } : {}),
         };
-        if (!matchesAuthor(record, author, viewerName)) continue;
         runs.push(asset);
         const kept = team
           ? favoriteUserId != null && (record.favoriteUserIds?.includes(favoriteUserId) ?? false)
