@@ -12,6 +12,7 @@ import { unwrap } from "@/lib/action-result";
 import { createShare } from "@/share/actions";
 
 import { ModelIcon } from "./model-icon";
+import { ZoomStage } from "./zoom-stage";
 import {
   CheckIcon,
   CloseIcon,
@@ -300,13 +301,13 @@ export function Viewer({
                   onError={() => setOnFallback(true)}
                 />
               ) : (
-                /* Platform CDN host is not known at build time. */
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  ref={measure}
-                  className="ohf-viewer-media"
+                <ZoomStage
+                  className="ohf-viewer-zoom"
+                  imgClassName="ohf-viewer-media"
                   src={url}
                   alt={item.prompt}
+                  resetKey={`${item.id}:${url}`}
+                  imgRef={measure}
                   onLoad={(event) => measure(event.currentTarget)}
                   onError={() => setOnFallback(true)}
                 />

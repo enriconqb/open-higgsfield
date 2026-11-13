@@ -3456,6 +3456,28 @@
   object-fit: contain;
   animation: ohf-fade 0.3s ease;
 }
+.ohf-viewer-zoom {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-in;
+  touch-action: none;
+}
+.ohf-viewer-zoom[data-zoomed="true"] {
+  cursor: grab;
+}
+.ohf-viewer-zoom[data-grabbing="true"] {
+  cursor: grabbing;
+}
+.ohf-viewer-zoom .ohf-viewer-media {
+  transform-origin: center center;
+  user-select: none;
+  pointer-events: none;
+}
 
 .ohf-viewer-side {
   width: 340px;
