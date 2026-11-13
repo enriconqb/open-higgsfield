@@ -13,11 +13,12 @@ import { rehostDataMedia } from "@/generation/upload";
 import { MissingCredentialsError } from "@/generation/credentials";
 import type { KeyProvider } from "@/generation/credentials";
 import { MODELS, getModel, modelsFor } from "@/generation/catalog";
-import type { Surface } from "@/generation/catalog";
+import type { GenerationPlane, MediaItem, MediaRole, Surface } from "@/generation/catalog";
 import { assemblePlane } from "@/generation/plane";
 import type { GenerationStatus } from "@/generation/platform";
 import { POLL_DEADLINE_MS, WatchAbandonedError, stopWatching, watchRequest } from "@/generation/poll";
 import { useActive } from "@/generation/stores/active";
+import { useImageMedia, useVideoMedia } from "@/generation/stores/media";
 import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
 import { useSettings } from "@/generation/stores/settings";
 
@@ -69,6 +70,7 @@ type RunDraft = {
   meta: string;
   badge?: string;
   settings?: Record<string, unknown>;
+  media?: MediaItem[];
   createdAt: number;
   costUsd?: number;
   createdBy?: string;
@@ -94,6 +96,7 @@ function draftOf(record: RunRecord): RunDraft {
     meta: record.meta,
     badge: record.badge,
     settings: record.settings,
+    media: record.media,
     createdAt: record.createdAt,
     costUsd: record.costUsd,
     createdBy: record.createdBy,
@@ -119,6 +122,7 @@ function runningRows(requestId: string, count: number, draft: RunDraft): RunReco
       art: artFor(draft.surface, hueOf(id), id),
       createdAt: draft.createdAt,
       settings: draft.settings,
+      ...(draft.media?.length ? { media: draft.media } : {}),
       costUsd: draft.costUsd,
       ...(draft.createdBy ? { createdBy: draft.createdBy } : {}),
     };
@@ -157,10 +161,39 @@ function terminalRows(requestId: string, draft: RunDraft, status: GenerationStat
       art: artFor(draft.surface, hueOf(id), id),
       createdAt: draft.createdAt,
       settings: draft.settings,
+      ...(draft.media?.length ? { media: draft.media } : {}),
       costUsd: status.costUsd ?? draft.costUsd,
       ...(draft.createdBy ? { createdBy: draft.createdBy } : {}),
     };
   });
+}
+
+/** Short hosted URLs only. Data and blob URLs are too large or too short-lived to keep. */
+function durableMedia(plane: GenerationPlane): MediaItem[] {
+  const items: MediaItem[] = [];
+  for (const list of Object.values(plane.media)) {
+    if (!list) continue;
+    for (const item of list) {
+      if (!item.url || item.url.startsWith("blob:") || item.url.startsWith("data:")) continue;
+      items.push({ id: item.id, url: item.url, role: item.role });
+    }
+  }
+  return items;
+}
+
+function mediaForModel(roles: Partial<Record<MediaRole, number>>, media: MediaItem[]): MediaItem[] {
+  const counts: Partial<Record<MediaRole, number>> = {};
+  const kept: MediaItem[] = [];
+  for (const item of media) {
+    const max = roles[item.role];
+    if (!max) continue;
+    if (item.url.startsWith("blob:") || item.url.startsWith("data:")) continue;
+    const used = counts[item.role] ?? 0;
+    if (used >= max) continue;
+    counts[item.role] = used + 1;
+    kept.push(item);
+  }
+  return kept;
 }
 
 function failureText(status: GenerationStatus): string {
@@ -691,6 +724,7 @@ function persistLocal(records: RunRecord[]) {
     const runOne = async (slot: { skeletons: string[] }) => {
       try {
         const hosted = await rehostDataMedia(plane);
+        draft.media = durableMedia(hosted);
         const queued = unwrap(await submitGeneration(hosted));
         if (queued.immediate) {
           const rows = terminalRows(queued.requestId, draft, queued.immediate);
@@ -730,13 +764,18 @@ function persistLocal(records: RunRecord[]) {
   }, [activeTeamId, keyConfigured, resume, user]);
 
   /* Reuse restores the whole plane the run was made from — model, its dials,
-     then the words. A reuse that dropped the ratio and resolution would
-     re-render a different picture from the same prompt. */
+     the attached inputs, then the words. A reuse that dropped the ratio and
+     resolution would re-render a different picture from the same prompt. */
   const retry = useCallback(
     (record: RunRecord) => {
       if (MODELS.some((entry) => entry.id === record.modelId)) {
         setModel(record.modelId);
         if (record.settings) setSettings(record.modelId, record.settings);
+        if (record.media) {
+          const model = getModel(record.modelId);
+          const store = model.surface === "image" ? useImageMedia : useVideoMedia;
+          store.getState().replace(mediaForModel(model.roles, record.media));
+        }
       }
       (record.surface === "image" ? useImagePrompt : useVideoPrompt).getState().setText(record.prompt);
       setViewerId(null);

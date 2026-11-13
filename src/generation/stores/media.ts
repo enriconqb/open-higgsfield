@@ -8,6 +8,8 @@ type MediaState = {
   items: MediaItem[];
   add: (item: MediaItem) => void;
   remove: (id: string) => void;
+  /** Swap the whole tray. Reuse uses this so the plane matches the saved run. */
+  replace: (items: MediaItem[]) => void;
 };
 
 function createMediaStore(name: string) {
@@ -17,6 +19,7 @@ function createMediaStore(name: string) {
         items: [],
         add: (item) => set((state) => ({ items: [...state.items, item] })),
         remove: (id) => set((state) => ({ items: state.items.filter((item) => item.id !== id) })),
+        replace: (items) => set({ items }),
       }),
       {
         name,

@@ -1,5 +1,5 @@
 import { browserLegacy, defaultKv, type Kv, type LegacyStore } from "./idb";
-import type { Surface } from "@/generation/catalog";
+import type { MediaItem, MediaRole, Surface } from "@/generation/catalog";
 
 export type RunStatus = "running" | "completed" | "failed";
 
@@ -37,6 +37,9 @@ export interface RunRecord {
   /** Resolved catalog settings this run was submitted with, so reuse can
       restore the dials and not just the words. Absent on pre-existing records. */
   settings?: Record<string, unknown>;
+  /** Inputs attached when the run was submitted, so reuse can put them back
+      on the tray. Absent on records made before this field existed. */
+  media?: MediaItem[];
   /** USD charged or estimated for this result. Absent on older records. */
   costUsd?: number;
   /** Present only on rows produced through /api/v1 with a bearer token, so the
@@ -220,6 +223,19 @@ function newerRecord(row: RunRecord, prev: RunRecord): boolean {
   return row.createdAt >= prev.createdAt;
 }
 
+const MEDIA_ROLES: readonly MediaRole[] = ["start", "end", "reference", "video", "audio"];
+
+function isMediaItem(value: unknown): value is MediaItem {
+  if (value === null || typeof value !== "object") return false;
+  const item = value as Partial<MediaItem>;
+  return (
+    typeof item.id === "string" &&
+    typeof item.url === "string" &&
+    typeof item.role === "string" &&
+    MEDIA_ROLES.includes(item.role)
+  );
+}
+
 export function isRunRecord(value: unknown): value is RunRecord {
   if (value === null || typeof value !== "object") return false;
   const record = value as Partial<RunRecord>;
@@ -241,7 +257,8 @@ export function isRunRecord(value: unknown): value is RunRecord {
       (Array.isArray(record.favoriteUserIds) && record.favoriteUserIds.every((id) => typeof id === "number"))) &&
     (record.archived === undefined || typeof record.archived === "boolean") &&
     (record.settings === undefined ||
-      (typeof record.settings === "object" && record.settings !== null)) &&
+      (typeof record.settings === "object" && record.settings !== null && !Array.isArray(record.settings))) &&
+    (record.media === undefined || (Array.isArray(record.media) && record.media.every(isMediaItem))) &&
     (record.costUsd === undefined || typeof record.costUsd === "number") &&
     (record.via === undefined || record.via === "api") &&
     (record.tokenId === undefined || record.tokenId === null || typeof record.tokenId === "number")
