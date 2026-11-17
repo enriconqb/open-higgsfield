@@ -43,6 +43,16 @@ export function Compare({
   const [kindFilter, setKindFilter] = useState<"all" | "image" | "video">("all");
   const [member, setMember] = useState("all");
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [cols, setCols] = useState<"1" | "2">("2");
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("ohf.library.cols.compare");
+    if (stored === "1" || stored === "2") setCols(stored);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("ohf.library.cols.compare", cols);
+  }, [cols]);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -227,8 +237,18 @@ export function Compare({
       aria-labelledby="ohf-tab-compare"
       data-library={libraryOpen ? "open" : "closed"}
     >
-      <aside className="ohf-media-side" aria-label="Library">
-        <h2 className="ohf-cmp-label">Library</h2>
+      <aside className="ohf-media-side" aria-label="Library" data-cols={cols}>
+        <div className="ohf-media-side-head">
+          <h2 className="ohf-cmp-label">Library</h2>
+          <div className="ohf-media-filters" role="group" aria-label="Library columns">
+            <button type="button" className="ohf-cmp-chip" data-on={cols === "1" || undefined} onClick={() => setCols("1")}>
+              1
+            </button>
+            <button type="button" className="ohf-cmp-chip" data-on={cols === "2" || undefined} onClick={() => setCols("2")}>
+              2
+            </button>
+          </div>
+        </div>
         <div className="ohf-media-filters" role="group" aria-label="Filter by kind">
           {(["all", "video", "image"] as const).map((value) => (
             <button

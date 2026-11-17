@@ -58,6 +58,16 @@ export function Timeline({
   const [heldVolume, setHeldVolume] = useState(1);
   const [member, setMember] = useState("all");
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [cols, setCols] = useState<"1" | "2">("2");
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("ohf.library.cols.timeline");
+    if (stored === "1" || stored === "2") setCols(stored);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("ohf.library.cols.timeline", cols);
+  }, [cols]);
 
   useEffect(() => {
     let live = true;
@@ -188,8 +198,18 @@ export function Timeline({
       aria-labelledby="ohf-tab-timeline"
       data-library={libraryOpen ? "open" : "closed"}
     >
-      <aside className="ohf-media-side" aria-label="Library">
-        <h2 className="ohf-tl-label">Library</h2>
+      <aside className="ohf-media-side" aria-label="Library" data-cols={cols}>
+        <div className="ohf-media-side-head">
+          <h2 className="ohf-tl-label">Library</h2>
+          <div className="ohf-media-filters" role="group" aria-label="Library columns">
+            <button type="button" className="ohf-cmp-chip" data-on={cols === "1" || undefined} onClick={() => setCols("1")}>
+              1
+            </button>
+            <button type="button" className="ohf-cmp-chip" data-on={cols === "2" || undefined} onClick={() => setCols("2")}>
+              2
+            </button>
+          </div>
+        </div>
         {team && authors.length > 1 && (
           <div className="ohf-media-filters" role="group" aria-label="Filter by member">
             <button type="button" className="ohf-cmp-chip" data-on={member === "all" || undefined} onClick={() => setMember("all")}>

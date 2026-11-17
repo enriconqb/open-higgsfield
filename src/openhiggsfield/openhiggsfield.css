@@ -5681,10 +5681,32 @@ a.ohf-key-link {
   overflow: hidden;
 }
 
+.ohf-media-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ohf-media-side-head .ohf-tl-label,
+.ohf-media-side-head .ohf-cmp-label {
+  margin: 0;
+}
+
 .ohf-media-side-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.ohf-media-side[data-cols="1"] .ohf-tl-grid,
+.ohf-media-side[data-cols="1"] .ohf-unface-picker-grid {
+  grid-template-columns: 1fr;
+}
+
+.ohf-media-side[data-cols="2"] .ohf-tl-grid,
+.ohf-media-side[data-cols="2"] .ohf-unface-picker-grid {
+  grid-template-columns: 1fr 1fr;
 }
 
 .ohf-media-main {
