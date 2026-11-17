@@ -24,12 +24,14 @@ type ShelfItem = CompareItem & { createdAt: number };
 export function Compare({
   history,
   ready,
-  author = "all",
+  authors = [],
+  team = false,
   viewerName = null,
 }: {
   history: RunRecord[];
   ready: boolean;
-  author?: string;
+  authors?: string[];
+  team?: boolean;
   viewerName?: string | null;
 }) {
   const [items, setItems] = useState<CompareItem[]>([]);
@@ -37,7 +39,10 @@ export function Compare({
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
   const [uploadsReady, setUploadsReady] = useState(false);
   const [pair, setPair] = useState<{ before: string; after: string | null } | null>(null);
-  const [shelf, setShelf] = useState<Shelf | null>("generations");
+  const [shelf, setShelf] = useState<Shelf>("generations");
+  const [kindFilter, setKindFilter] = useState<"all" | "image" | "video">("all");
+  const [member, setMember] = useState("all");
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +88,7 @@ export function Compare({
           record.archived !== true &&
           record.status === "completed" &&
           record.urls[0] &&
-          matchesAuthor(record, author, viewerName),
+          matchesAuthor(record, member, viewerName),
       )
       .map((record) => {
         const sources = sourcesForUrls({
@@ -115,8 +120,9 @@ export function Compare({
       }
     }
     const needle = query.trim().toLowerCase();
-    return needle ? list.filter((item) => item.title.toLowerCase().includes(needle)) : list;
-  }, [author, history, query, shelf, uploads, viewerName]);
+    const searched = needle ? list.filter((item) => item.title.toLowerCase().includes(needle)) : list;
+    return kindFilter === "all" ? searched : searched.filter((item) => item.kind === kindFilter);
+  }, [history, kindFilter, member, query, shelf, uploads, viewerName]);
 
   const shelfYears = useMemo(() => groupLibrary(shelfItems), [shelfItems]);
   const [shelfLimit, setShelfLimit] = useState(LIBRARY_PAGE);
@@ -214,7 +220,119 @@ export function Compare({
   }
 
   return (
-    <section className="ohf-cmp ohf-scroll" id="ohf-panel" role="tabpanel" aria-labelledby="ohf-tab-compare">
+    <section
+      className="ohf-cmp"
+      id="ohf-panel"
+      role="tabpanel"
+      aria-labelledby="ohf-tab-compare"
+      data-library={libraryOpen ? "open" : "closed"}
+    >
+      <aside className="ohf-media-side" aria-label="Library">
+        <h2 className="ohf-cmp-label">Library</h2>
+        <div className="ohf-media-filters" role="group" aria-label="Filter by kind">
+          {(["all", "video", "image"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className="ohf-cmp-chip"
+              data-on={kindFilter === value || undefined}
+              onClick={() => setKindFilter(value)}
+            >
+              {value === "all" ? "All" : value === "video" ? "Video" : "Image"}
+            </button>
+          ))}
+        </div>
+        {team && authors.length > 1 && (
+          <div className="ohf-media-filters" role="group" aria-label="Filter by member">
+            <button type="button" className="ohf-cmp-chip" data-on={member === "all" || undefined} onClick={() => setMember("all")}>
+              All
+            </button>
+            {authors.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className="ohf-cmp-chip"
+                data-on={member === name || undefined}
+                onClick={() => setMember(name)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="ohf-media-filters">
+          <button
+            type="button"
+            className="ohf-cmp-chip"
+            data-on={shelf === "generations" || undefined}
+            onClick={() => setShelf("generations")}
+          >
+            Runs
+          </button>
+          <button
+            type="button"
+            className="ohf-cmp-chip"
+            data-on={shelf === "studio" || undefined}
+            onClick={() => setShelf("studio")}
+          >
+            Uploads
+          </button>
+        </div>
+        <label className="ohf-cmp-search">
+          <SearchIcon size={12} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter"
+            aria-label="Filter the library"
+          />
+        </label>
+        <div className="ohf-cmp-shelf">
+          {!ready || !uploadsReady ? (
+            <p className="ohf-cmp-hintline">Reading your library…</p>
+          ) : shelfItems.length === 0 ? (
+            <p className="ohf-cmp-hintline">Nothing here yet.</p>
+          ) : (
+            <div ref={shelfBodyRef} className="ohf-cmp-shelf-body ohf-scroll">
+              {visibleShelf.years.map((year) => (
+                <section key={year.year} className="ohf-unface-picker-year">
+                  <div className="ohf-unface-picker-year-label">{year.year}</div>
+                  {year.groups.map((group) => (
+                    <div key={group.id} className="ohf-unface-picker-group">
+                      <h3>{group.label}</h3>
+                      <div className="ohf-unface-picker-grid">
+                        {group.items.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="ohf-cmp-pick"
+                            title={item.title}
+                            onClick={() => add(item)}
+                          >
+                            {item.kind === "video" ? (
+                              <video className="ohf-cmp-thumb-media" src={item.url} muted playsInline preload="metadata" />
+                            ) : (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img className="ohf-cmp-thumb-media" src={item.url} alt="" loading="lazy" decoding="async" />
+                            )}
+                            <span className="ohf-cmp-pick-tag">Add</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              ))}
+              {visibleShelf.more && <div ref={shelfSentinelRef} className="ohf-cmp-shelf-sentinel" aria-hidden />}
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <div className="ohf-media-main">
+      <button type="button" className="ohf-media-toggle ohf-cmp-chip" onClick={() => setLibraryOpen((open) => !open)}>
+        {libraryOpen ? "Hide library" : "Library"}
+      </button>
       {items.length > 0 && before ? (
         <CompareStage before={before} after={after} />
       ) : (
@@ -222,8 +340,7 @@ export function Compare({
           <CompareIcon size={22} />
           <p className="ohf-cmp-blank-title">Nothing to compare yet</p>
           <p className="ohf-cmp-blank-hint">
-            Add two items — from your generated runs, your uploads, or a file from this device — then drag
-            the divider. Two videos play on the same second.
+            Add two items from the library, or a file from this device, then drag the divider. Two videos play on the same second.
           </p>
         </div>
       )}
@@ -239,22 +356,6 @@ export function Compare({
               disabled={busy}
             >
               <PlusIcon size={12} /> {busy ? "Adding…" : "Add file"}
-            </button>
-            <button
-              type="button"
-              className="ohf-cmp-chip"
-              data-on={shelf === "generations" || undefined}
-              onClick={() => setShelf((current) => (current === "generations" ? null : "generations"))}
-            >
-              Runs
-            </button>
-            <button
-              type="button"
-              className="ohf-cmp-chip"
-              data-on={shelf === "studio" || undefined}
-              onClick={() => setShelf((current) => (current === "studio" ? null : "studio"))}
-            >
-              Uploads
             </button>
             {items.length > 0 && (
               <button type="button" className="ohf-cmp-chip" onClick={clearAll} title="Empty the strip">
@@ -344,66 +445,7 @@ export function Compare({
             ))}
           </ul>
         )}
-
-        {shelf && (
-          <div className="ohf-cmp-shelf">
-            <div className="ohf-cmp-shelf-head">
-              <span className="ohf-cmp-note">
-                {shelf === "generations" ? "Finished runs" : "Uploaded here"}
-              </span>
-              <label className="ohf-cmp-search">
-                <SearchIcon size={12} />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Filter"
-                  aria-label="Filter the shelf"
-                />
-              </label>
-              <button type="button" className="ohf-cmp-chip" onClick={() => setShelf(null)}>
-                Close
-              </button>
-            </div>
-            {!ready || !uploadsReady ? (
-              <p className="ohf-cmp-hintline">Reading your library…</p>
-            ) : shelfItems.length === 0 ? (
-              <p className="ohf-cmp-hintline">Nothing here yet.</p>
-            ) : (
-              <div ref={shelfBodyRef} className="ohf-cmp-shelf-body ohf-scroll">
-                {visibleShelf.years.map((year) => (
-                  <section key={year.year} className="ohf-unface-picker-year">
-                    <div className="ohf-unface-picker-year-label">{year.year}</div>
-                    {year.groups.map((group) => (
-                      <div key={group.id} className="ohf-unface-picker-group">
-                        <h3>{group.label}</h3>
-                        <div className="ohf-unface-picker-grid">
-                          {group.items.map((item) => (
-                            <button
-                              key={item.id}
-                              type="button"
-                              className="ohf-cmp-pick"
-                              title={item.title}
-                              onClick={() => add(item)}
-                            >
-                              {item.kind === "video" ? (
-                                <video className="ohf-cmp-thumb-media" src={item.url} muted playsInline preload="metadata" />
-                              ) : (
-                                /* eslint-disable-next-line @next/next/no-img-element */
-                                <img className="ohf-cmp-thumb-media" src={item.url} alt="" loading="lazy" decoding="async" />
-                              )}
-                              <span className="ohf-cmp-pick-tag">Add</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </section>
-                ))}
-                {visibleShelf.more && <div ref={shelfSentinelRef} className="ohf-cmp-shelf-sentinel" aria-hidden />}
-              </div>
-            )}
-          </div>
-        )}
+      </div>
       </div>
     </section>
   );

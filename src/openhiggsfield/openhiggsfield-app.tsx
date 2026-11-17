@@ -1082,9 +1082,9 @@ function persistLocal(records: RunRecord[]) {
           />
 
           {view === "timeline" ? (
-            <Timeline history={history} ready={historyLoaded} author={authors.includes(author) ? author : "all"} viewerName={user?.username ?? null} />
+            <Timeline history={history} ready={historyLoaded} authors={authors} team={activeTeamId != null} viewerName={user?.username ?? null} />
           ) : view === "compare" ? (
-            <Compare history={history} ready={historyLoaded} author={authors.includes(author) ? author : "all"} viewerName={user?.username ?? null} />
+            <Compare history={history} ready={historyLoaded} authors={authors} team={activeTeamId != null} viewerName={user?.username ?? null} />
           ) : view === "unface" ? (
             <UnFace history={history} onSaved={keepUnface} author={authors.includes(author) ? author : "all"} viewerName={user?.username ?? null} />
           ) : (

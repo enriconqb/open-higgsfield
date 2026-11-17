@@ -31,12 +31,14 @@ type ClipSource = {
 export function Timeline({
   history,
   ready,
-  author = "all",
+  authors = [],
+  team = false,
   viewerName = null,
 }: {
   history: RunRecord[];
   ready: boolean;
-  author?: string;
+  authors?: string[];
+  team?: boolean;
   viewerName?: string | null;
 }) {
   const [order, setOrder] = useState<string[]>([]);
@@ -54,6 +56,8 @@ export function Timeline({
   const [shared, setShared] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [volume, setVolume] = useState(1);
   const [heldVolume, setHeldVolume] = useState(1);
+  const [member, setMember] = useState("all");
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -79,7 +83,7 @@ export function Timeline({
     const tiles: ClipSource[] = [];
     for (const record of history) {
       if (record.archived === true || record.kind !== "video" || record.status !== "completed" || !record.urls[0]) continue;
-      if (!matchesAuthor(record, author, viewerName)) continue;
+      if (!matchesAuthor(record, member, viewerName)) continue;
       tiles.push({
         key: record.id,
         url: withBasePath(record.urls[0]),
@@ -95,7 +99,7 @@ export function Timeline({
       });
     }
     return tiles;
-  }, [author, history, uploads, viewerName]);
+  }, [history, member, uploads, viewerName]);
 
   const byKey = useMemo(() => {
     const map = new Map<string, ClipSource>();
@@ -177,7 +181,49 @@ export function Timeline({
   }
 
   return (
-    <section className="ohf-timeline ohf-scroll" id="ohf-panel" role="tabpanel" aria-labelledby="ohf-tab-timeline">
+    <section
+      className="ohf-timeline"
+      id="ohf-panel"
+      role="tabpanel"
+      aria-labelledby="ohf-tab-timeline"
+      data-library={libraryOpen ? "open" : "closed"}
+    >
+      <aside className="ohf-media-side" aria-label="Library">
+        <h2 className="ohf-tl-label">Library</h2>
+        {team && authors.length > 1 && (
+          <div className="ohf-media-filters" role="group" aria-label="Filter by member">
+            <button type="button" className="ohf-cmp-chip" data-on={member === "all" || undefined} onClick={() => setMember("all")}>
+              All
+            </button>
+            {authors.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className="ohf-cmp-chip"
+                data-on={member === name || undefined}
+                onClick={() => setMember(name)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="ohf-media-side-body ohf-scroll">
+          {library.length === 0 ? (
+            <p className="ohf-tl-hint">Finished generations and uploaded videos show up here.</p>
+          ) : (
+            <div className="ohf-tl-grid">
+              {library.map((tile) => (
+                <TimelineTile key={tile.key} tile={tile} picked={picked.has(tile.key)} onToggle={() => toggle(tile.key)} />
+              ))}
+            </div>
+          )}
+        </div>
+      </aside>
+      <div className="ohf-media-main">
+      <button type="button" className="ohf-media-toggle ohf-cmp-chip" onClick={() => setLibraryOpen((open) => !open)}>
+        {libraryOpen ? "Hide library" : "Library"}
+      </button>
       <div className="ohf-tl-stage-wrap">
         {clips.length > 0 ? (
           <>
@@ -297,7 +343,7 @@ export function Timeline({
             </div>
           </>
         ) : (
-          <p className="ohf-tl-empty">Tap videos below to build one sequence.</p>
+          <p className="ohf-tl-empty">Pick videos from the library to build one sequence.</p>
         )}
       </div>
 
@@ -351,17 +397,6 @@ export function Timeline({
         )}
       </div>
 
-      <div className="ohf-tl-videos">
-        <h2 className="ohf-tl-label">Videos</h2>
-        {library.length === 0 ? (
-          <p className="ohf-tl-hint">Finished generations and uploaded videos show up here.</p>
-        ) : (
-          <div className="ohf-tl-grid">
-            {library.map((tile) => (
-              <TimelineTile key={tile.key} tile={tile} picked={picked.has(tile.key)} onToggle={() => toggle(tile.key)} />
-            ))}
-          </div>
-        )}
       </div>
     </section>
   );
