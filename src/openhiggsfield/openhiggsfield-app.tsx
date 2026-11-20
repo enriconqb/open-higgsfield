@@ -12,14 +12,14 @@ import { platformKeyKind, submitGeneration } from "@/generation/actions";
 import { rehostDataMedia } from "@/generation/upload";
 import { MissingCredentialsError } from "@/generation/credentials";
 import type { KeyProvider } from "@/generation/credentials";
-import { MODELS, getModel, modelsFor } from "@/generation/catalog";
-import type { GenerationPlane, MediaItem, MediaRole, Surface } from "@/generation/catalog";
+import { getModel, modelsFor } from "@/generation/catalog";
+import type { GenerationPlane, MediaItem, Surface } from "@/generation/catalog";
 import { assemblePlane } from "@/generation/plane";
 import type { GenerationStatus } from "@/generation/platform";
 import { POLL_DEADLINE_MS, WatchAbandonedError, stopWatching, watchRequest } from "@/generation/poll";
 import { useActive } from "@/generation/stores/active";
 import { useImageMedia, useVideoMedia } from "@/generation/stores/media";
-import type { PromptMention } from "@/generation/mentions";
+import { rebindPromptMentions, resolvePromptMentions, reuseAttachments, sameMentionList, type PromptMention } from "@/generation/mentions";
 import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
 import { useSettings } from "@/generation/stores/settings";
 
@@ -188,21 +188,6 @@ function durableMedia(plane: GenerationPlane): MediaItem[] {
     }
   }
   return items;
-}
-
-function mediaForModel(roles: Partial<Record<MediaRole, number>>, media: MediaItem[]): MediaItem[] {
-  const counts: Partial<Record<MediaRole, number>> = {};
-  const kept: MediaItem[] = [];
-  for (const item of media) {
-    const max = roles[item.role];
-    if (!max) continue;
-    if (item.url.startsWith("blob:") || item.url.startsWith("data:")) continue;
-    const used = counts[item.role] ?? 0;
-    if (used >= max) continue;
-    counts[item.role] = used + 1;
-    kept.push(item);
-  }
-  return kept;
 }
 
 function failureText(status: GenerationStatus): string {
@@ -680,6 +665,30 @@ function persistLocal(records: RunRecord[]) {
       setError("Add your platform key to generate.");
       return;
     }
+    const surfaceNow = useActive.getState().surface;
+    const promptStore = surfaceNow === "image" ? useImagePrompt : useVideoPrompt;
+    const mediaItems = (surfaceNow === "image" ? useImageMedia : useVideoMedia).getState().items;
+    const sourceBefore = promptStore.getState();
+    const rebound = rebindPromptMentions(sourceBefore.text, sourceBefore.mentions ?? [], mediaItems);
+    if (rebound.text !== sourceBefore.text || !sameMentionList(sourceBefore.mentions ?? [], rebound.mentions)) {
+      promptStore.getState().restore(rebound.text, rebound.mentions);
+    }
+    const entryForMentions = getModel(useActive.getState().model);
+    const preview = resolvePromptMentions({
+      text: rebound.text,
+      catalog: rebound.mentions,
+      roles: entryForMentions.roles,
+      existing: mediaItems,
+    });
+    const missingLabels = [...new Set(preview.chips.filter((chip) => chip.status === "missing").map((chip) => chip.label))];
+    if (missingLabels.length > 0) {
+      setError(
+        missingLabels.length === 1
+          ? `Attachment ${missingLabels[0]} tidak ditemukan.`
+          : `Attachment ${missingLabels.join(", ")} tidak ditemukan.`,
+      );
+      return;
+    }
     const plane = assemblePlane();
     if (!plane.prompt.text.trim()) return;
     const source = (useActive.getState().surface === "image" ? useImagePrompt : useVideoPrompt).getState();
@@ -781,14 +790,17 @@ function persistLocal(records: RunRecord[]) {
      resolution would re-render a different picture from the same prompt. */
   const retry = useCallback(
     (record: RunRecord) => {
-      if (MODELS.some((entry) => entry.id === record.modelId)) {
+      let model: ReturnType<typeof getModel> | null = null;
+      try {
+        model = getModel(record.modelId);
+      } catch {
+        model = null;
+      }
+      if (model) {
         setModel(record.modelId);
         if (record.settings) setSettings(record.modelId, record.settings);
-        if (record.media) {
-          const model = getModel(record.modelId);
-          const store = model.surface === "image" ? useImageMedia : useVideoMedia;
-          store.getState().replace(mediaForModel(model.roles, record.media));
-        }
+        const store = model.surface === "image" ? useImageMedia : useVideoMedia;
+        store.getState().replace(reuseAttachments(model.roles, record.media ?? [], record.mentions ?? []));
       }
       (record.surface === "image" ? useImagePrompt : useVideoPrompt)
         .getState()

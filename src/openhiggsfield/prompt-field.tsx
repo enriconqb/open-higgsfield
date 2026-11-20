@@ -46,7 +46,7 @@ export const PromptField = forwardRef<HTMLDivElement, {
     const el = root();
     if (!el) return;
     if (painted.current !== text) {
-      paint(el, text, mentions);
+      paint(el, text, mentions, () => publish());
       painted.current = text;
     }
     if (caretPin && placed.current !== caretPin.nonce) {
@@ -122,7 +122,7 @@ function visibleSpaces(value: string): string {
   return value.replace(/^ +| +$/g, (spaces) => "\u00a0".repeat(spaces.length));
 }
 
-function paint(root: HTMLDivElement, text: string, mentions: PromptMention[]) {
+function paint(root: HTMLDivElement, text: string, mentions: PromptMention[], onDrop: () => void) {
   const byId = new Map(mentions.map((mention) => [mention.id, mention]));
   const tokens = parseMentionTokens(text);
   const fragment = document.createDocumentFragment();
@@ -145,10 +145,35 @@ function paint(root: HTMLDivElement, text: string, mentions: PromptMention[]) {
     } else {
       preview.alt = "";
     }
+    const labelText = `@${mention?.label ?? token.label}`;
+    const thumb = document.createElement("span");
+    thumb.className = "ohf-mention-thumb";
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "ohf-mention-x";
+    dismiss.setAttribute("aria-label", `Remove ${labelText}`);
+    dismiss.innerHTML =
+      '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+    let dropped = false;
+    const drop = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (dropped) return;
+      dropped = true;
+      badge.remove();
+      onDrop();
+    };
+    dismiss.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    dismiss.addEventListener("pointerup", drop);
+    dismiss.addEventListener("click", drop);
+    thumb.append(preview, dismiss);
     const label = document.createElement("span");
     label.className = "ohf-mention-label";
-    label.textContent = `@${mention?.label ?? token.label}`;
-    badge.append(preview, label);
+    label.textContent = labelText;
+    badge.append(thumb, label);
     fragment.append(badge);
   }
   fragment.append(document.createTextNode(visibleSpaces(text.slice(cursor))));

@@ -13,7 +13,7 @@ import type { ModelEntry, Surface } from "@/generation/catalog";
 import { unwrap } from "@/lib/action-result";
 import type { KeyProvider } from "@/generation/credentials";
 import { MAX_BATCH, useActive } from "@/generation/stores/active";
-import { mentionQueryAt, mentionToken, resolvePromptMentions, type PromptMention } from "@/generation/mentions";
+import { mentionQueryAt, mentionToken, rebindPromptMentions, resolvePromptMentions, sameMentionList, type PromptMention } from "@/generation/mentions";
 import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
 import { useSettings } from "@/generation/stores/settings";
 
@@ -215,6 +215,12 @@ export function Composer({
   const [caretPin, setCaretPin] = useState<{ offset: number; nonce: number } | null>(null);
   /* A run in flight is not a lock: it holds its own tile in the grid, so the
      only thing that can stop a press is having nothing to say. */
+  useEffect(() => {
+    const next = rebindPromptMentions(prompt.text, prompt.mentions ?? [], tray.items);
+    if (next.text === prompt.text && sameMentionList(prompt.mentions ?? [], next.mentions)) return;
+    prompt.restore(next.text, next.mentions);
+  }, [prompt, tray.items]);
+
   const mentionPreview = resolvePromptMentions({
     text: prompt.text,
     catalog: prompt.mentions ?? [],

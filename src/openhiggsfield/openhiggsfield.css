@@ -1766,13 +1766,36 @@
 .ohf-mentions {
   display: contents;
 }
+.ohf-mention-thumb {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
 .ohf-mention-preview {
   width: 22px;
   height: 22px;
   object-fit: cover;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.06);
-  flex-shrink: 0;
+  display: block;
+}
+.ohf-prompt .ohf-mention-x {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  cursor: pointer;
+}
+.ohf-prompt .ohf-mention:hover .ohf-mention-x,
+.ohf-prompt .ohf-mention-x:focus-visible {
+  display: flex;
 }
 .ohf-mention,
 .ohf-mention-option {

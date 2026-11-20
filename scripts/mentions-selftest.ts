@@ -3,7 +3,7 @@
  *
  *   pnpm exec tsx scripts/mentions-selftest.ts
  */
-import { mentionToken, parseMentionTokens, resolvePromptMentions, type PromptMention } from "@/generation/mentions";
+import { mentionToken, parseMentionTokens, rebindPromptMentions, resolvePromptMentions, reuseAttachments, type PromptMention } from "@/generation/mentions";
 
 let checks = 0;
 let failures = 0;
@@ -86,6 +86,63 @@ const named = resolvePromptMentions({
 check("a stored mention is named for the model", named.text.startsWith("@image1 @image2"));
 check("a stored mention does not leak its id", !named.text.includes("up-1") && !named.text.includes("up-2"));
 check("a tray file named in the prompt is not attached again", named.additions.length === 1 && named.additions[0]?.url.endsWith("other.png"));
+
+const image1 = mentionToken({ id: "old-image", kind: "image", label: "image1" });
+const video1 = mentionToken({ id: "old-video", kind: "video", label: "video1" });
+const rebound = rebindPromptMentions(`gambar ini adalah ${image1} tapi sesuai dengan ${video1}`, [
+  { id: "old-image", kind: "image", label: "image1", url: "https://cdn.example/old.png" },
+  { id: "old-video", kind: "video", label: "video1", url: "https://cdn.example/old.mp4" },
+], [
+  { id: "new-image", url: "https://cdn.example/new.png", role: "reference" },
+  { id: "new-video", url: "https://cdn.example/new.mp4", role: "video" },
+]);
+const reboundResolved = resolvePromptMentions({
+  text: rebound.text,
+  catalog: rebound.mentions,
+  roles: { reference: 2, video: 1 },
+  existing: [
+    { id: "new-image", url: "https://cdn.example/new.png", role: "reference" },
+    { id: "new-video", url: "https://cdn.example/new.mp4", role: "video" },
+  ],
+});
+check("a replaced slot keeps the image1 label", rebound.text.includes(mentionToken({ id: "new-image", kind: "image", label: "image1" })));
+check("a replaced slot keeps the video1 label", rebound.text.includes(mentionToken({ id: "new-video", kind: "video", label: "video1" })));
+check("a replaced slot does not keep the old file id", !rebound.text.includes("old-image") && !rebound.text.includes("old-video"));
+check("a file already on the tray is not attached a second time", reboundResolved.additions.length === 0);
+check("rebound chips are not missing", reboundResolved.chips.every((chip) => chip.status !== "missing"));
+
+const dropped = rebindPromptMentions(`ikuti ${video1}`, [
+  { id: "old-video", kind: "video", label: "video1", url: "https://cdn.example/old.mp4" },
+], [{ id: "new-image", url: "https://cdn.example/new.png", role: "reference" }]);
+const droppedResolved = resolvePromptMentions({
+  text: dropped.text,
+  catalog: dropped.mentions,
+  roles: { reference: 2, video: 1 },
+  existing: [{ id: "new-image", url: "https://cdn.example/new.png", role: "reference" }],
+});
+check("a removed video slot stays written as video1", dropped.text.includes("video1"));
+check("a removed video slot is missing", droppedResolved.chips.some((chip) => chip.status === "missing" && chip.label === "video1"));
+check("a missing video adds no media", droppedResolved.additions.length === 0);
+
+const reused = reuseAttachments(
+  { reference: 3 },
+  [
+    { id: "other", url: "https://cdn.example/other.png", role: "reference" },
+    { id: "extra", url: "https://cdn.example/extra.png", role: "reference" },
+  ],
+  [{ id: "portrait", kind: "image", label: "image1", url: "https://cdn.example/portrait.png" }],
+);
+check("reuse puts the tagged file in the image1 slot", reused[0]?.url === "https://cdn.example/portrait.png");
+check("reuse keeps an untagged saved file", reused.some((item) => item.url.endsWith("extra.png")));
+check("reuse does not keep the file the tag replaced", !reused.some((item) => item.url.endsWith("other.png")));
+
+const onlyMention = reuseAttachments(
+  { reference: 2 },
+  [],
+  [{ id: "portrait", kind: "image", label: "image1", url: "https://cdn.example/portrait.png" }],
+);
+check("a mention with no saved media is the first attachment", onlyMention.length === 1 && onlyMention[0]?.url.endsWith("portrait.png") && onlyMention[0]?.role === "reference");
+check("a run with nothing attached clears the tray", reuseAttachments({ reference: 2 }, [], []).length === 0);
 
 console.log(`\n${checks - failures}/${checks} passed`);
 if (failures > 0) process.exit(1);

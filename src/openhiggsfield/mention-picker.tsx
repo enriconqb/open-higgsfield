@@ -1,9 +1,7 @@
 "use client";
 
 import type { MediaItem } from "@/generation/catalog";
-import type { MentionChip, PromptMention } from "@/generation/mentions";
-
-import { ROLE_KINDS } from "./data";
+import { mentionSlots, type MentionChip, type PromptMention } from "@/generation/mentions";
 import { CloseIcon } from "./icons";
 
 const CHIP_REASON: Record<MentionChip["status"], string> = {
@@ -87,13 +85,7 @@ function MentionPreview({ kind, url, label }: { kind: PromptMention["kind"]; url
 
 export function mentionChoices(items: MediaItem[], query: string): PromptMention[] {
   const needle = query.trim().toLowerCase().replace(/^@/, "");
-  const counts: Partial<Record<PromptMention["kind"], number>> = {};
-  return items
-    .map((item) => {
-      const kind = ROLE_KINDS[item.role];
-      counts[kind] = (counts[kind] ?? 0) + 1;
-      return { id: item.id, kind, label: `${kind}${counts[kind]}`, url: item.url };
-    })
+  return mentionSlots(items)
     .filter((choice) => needle.length === 0 || choice.label.toLowerCase().includes(needle))
     .slice(0, 8);
 }
