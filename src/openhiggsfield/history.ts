@@ -40,6 +40,11 @@ export interface RunRecord {
   /** Inputs attached when the run was submitted, so reuse can put them back
       on the tray. Absent on records made before this field existed. */
   media?: MediaItem[];
+  /** The composer sentence with mention tokens still in place. The visible
+      `prompt` is the text the model received. Absent on older records. */
+  promptRaw?: string;
+  /** Mentions named by `promptRaw`, so reuse can draw the badges again. */
+  mentions?: { id: string; kind: "image" | "video" | "audio"; label: string; url: string }[];
   /** USD charged or estimated for this result. Absent on older records. */
   costUsd?: number;
   /** Present only on rows produced through /api/v1 with a bearer token, so the
@@ -124,7 +129,8 @@ export function mergeHistory(stored: RunRecord[], live: RunRecord[]): RunRecord[
   const byId = new Map<string, RunRecord>();
   for (const row of [...stored, ...live]) {
     const prev = byId.get(row.id);
-    if (!prev || newerRecord(row, prev)) byId.set(row.id, row);
+    if (!prev) byId.set(row.id, row);
+    else if (newerRecord(row, prev)) byId.set(row.id, keepTags(row, prev));
   }
   return orderHistory([...byId.values()]);
 }
@@ -213,6 +219,14 @@ function hasLocalMedia(record: RunRecord): boolean {
   return record.urls.some((url) => /\/(?:api\/)?uploads\/[0-9a-f-]{36}/i.test(url));
 }
 
+function keepTags(winner: RunRecord, other: RunRecord): RunRecord {
+  return {
+    ...winner,
+    ...(winner.promptRaw === undefined && other.promptRaw !== undefined ? { promptRaw: other.promptRaw } : {}),
+    ...(winner.mentions === undefined && other.mentions !== undefined ? { mentions: other.mentions } : {}),
+  };
+}
+
 function newerRecord(row: RunRecord, prev: RunRecord): boolean {
   const rowDone = row.status !== "running";
   const prevDone = prev.status !== "running";
@@ -224,6 +238,17 @@ function newerRecord(row: RunRecord, prev: RunRecord): boolean {
 }
 
 const MEDIA_ROLES: readonly MediaRole[] = ["start", "end", "reference", "video", "audio"];
+
+function isMention(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  const mention = value as { id?: unknown; kind?: unknown; label?: unknown; url?: unknown };
+  return (
+    typeof mention.id === "string" &&
+    (mention.kind === "image" || mention.kind === "video" || mention.kind === "audio") &&
+    typeof mention.label === "string" &&
+    typeof mention.url === "string"
+  );
+}
 
 function isMediaItem(value: unknown): value is MediaItem {
   if (value === null || typeof value !== "object") return false;
@@ -259,6 +284,8 @@ export function isRunRecord(value: unknown): value is RunRecord {
     (record.settings === undefined ||
       (typeof record.settings === "object" && record.settings !== null && !Array.isArray(record.settings))) &&
     (record.media === undefined || (Array.isArray(record.media) && record.media.every(isMediaItem))) &&
+    (record.promptRaw === undefined || typeof record.promptRaw === "string") &&
+    (record.mentions === undefined || (Array.isArray(record.mentions) && record.mentions.every(isMention))) &&
     (record.costUsd === undefined || typeof record.costUsd === "number") &&
     (record.via === undefined || record.via === "api") &&
     (record.tokenId === undefined || record.tokenId === null || typeof record.tokenId === "number")

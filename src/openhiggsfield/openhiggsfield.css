@@ -1717,6 +1717,8 @@
   min-height: 40px;
   max-height: 40px !important;
   overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   background: transparent;
   border: none;
   padding: 9px 8px 8px 4px;
@@ -1732,8 +1734,108 @@
 .ohf-prompt:focus-visible {
   outline: none;
 }
-.ohf-prompt::placeholder {
+.ohf-prompt-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.ohf-prompt-placeholder {
+  position: absolute;
+  left: 4px;
+  top: 9px;
+  right: 8px;
   color: var(--tx3);
+  pointer-events: none;
+  user-select: none;
+}
+.ohf-prompt-col {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ohf-prompt-col .ohf-prompt-wrap {
+  flex: 1 1 160px;
+}
+.ohf-prompt-col .ohf-prompt {
+  width: 100%;
+}
+.ohf-mentions {
+  display: contents;
+}
+.ohf-mention-preview {
+  width: 22px;
+  height: 22px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+.ohf-mention,
+.ohf-mention-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--tx);
+  font-size: 12px;
+  line-height: 1;
+}
+.ohf-mention {
+  padding: 3px 4px 3px 8px;
+}
+.ohf-mention[data-off="true"] {
+  opacity: 0.45;
+}
+.ohf-mention-kind {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tx3);
+  font-size: 10px;
+}
+.ohf-mention-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+.ohf-mention-x {
+  display: flex;
+  border: none;
+  background: transparent;
+  color: var(--tx2);
+  padding: 2px;
+  border-radius: 999px;
+}
+.ohf-mention-menu {
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 4px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--panel, #141414);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+.ohf-mention-option {
+  border-radius: 8px;
+  padding: 8px;
+  text-align: left;
+  background: transparent;
+}
+.ohf-mention-option[data-on="true"] {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* One rail carries the model, whatever the catalog declares, and the batch;

@@ -19,6 +19,7 @@ import type { GenerationStatus } from "@/generation/platform";
 import { POLL_DEADLINE_MS, WatchAbandonedError, stopWatching, watchRequest } from "@/generation/poll";
 import { useActive } from "@/generation/stores/active";
 import { useImageMedia, useVideoMedia } from "@/generation/stores/media";
+import type { PromptMention } from "@/generation/mentions";
 import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
 import { useSettings } from "@/generation/stores/settings";
 
@@ -71,6 +72,8 @@ type RunDraft = {
   badge?: string;
   settings?: Record<string, unknown>;
   media?: MediaItem[];
+  promptRaw?: string;
+  mentions?: PromptMention[];
   createdAt: number;
   costUsd?: number;
   createdBy?: string;
@@ -97,6 +100,8 @@ function draftOf(record: RunRecord): RunDraft {
     badge: record.badge,
     settings: record.settings,
     media: record.media,
+    promptRaw: record.promptRaw,
+    mentions: record.mentions,
     createdAt: record.createdAt,
     costUsd: record.costUsd,
     createdBy: record.createdBy,
@@ -123,6 +128,8 @@ function runningRows(requestId: string, count: number, draft: RunDraft): RunReco
       createdAt: draft.createdAt,
       settings: draft.settings,
       ...(draft.media?.length ? { media: draft.media } : {}),
+      ...(draft.promptRaw !== undefined ? { promptRaw: draft.promptRaw } : {}),
+      ...(draft.mentions?.length ? { mentions: draft.mentions } : {}),
       costUsd: draft.costUsd,
       ...(draft.createdBy ? { createdBy: draft.createdBy } : {}),
     };
@@ -162,6 +169,8 @@ function terminalRows(requestId: string, draft: RunDraft, status: GenerationStat
       createdAt: draft.createdAt,
       settings: draft.settings,
       ...(draft.media?.length ? { media: draft.media } : {}),
+      ...(draft.promptRaw !== undefined ? { promptRaw: draft.promptRaw } : {}),
+      ...(draft.mentions?.length ? { mentions: draft.mentions } : {}),
       costUsd: status.costUsd ?? draft.costUsd,
       ...(draft.createdBy ? { createdBy: draft.createdBy } : {}),
     };
@@ -673,6 +682,8 @@ function persistLocal(records: RunRecord[]) {
     }
     const plane = assemblePlane();
     if (!plane.prompt.text.trim()) return;
+    const source = (useActive.getState().surface === "image" ? useImagePrompt : useVideoPrompt).getState();
+    const mentions = source.mentions.filter((mention) => !mention.url.startsWith("blob:"));
 
     const entry = getModel(plane.model);
     const ratio = ratioToCss(
@@ -707,6 +718,8 @@ function persistLocal(records: RunRecord[]) {
       modelId: entry.id,
       modelLabel: entry.label,
       prompt: plane.prompt.text.trim(),
+      promptRaw: source.text,
+      ...(mentions.length ? { mentions } : {}),
       ratio,
       meta,
       badge,
@@ -777,7 +790,9 @@ function persistLocal(records: RunRecord[]) {
           store.getState().replace(mediaForModel(model.roles, record.media));
         }
       }
-      (record.surface === "image" ? useImagePrompt : useVideoPrompt).getState().setText(record.prompt);
+      (record.surface === "image" ? useImagePrompt : useVideoPrompt)
+        .getState()
+        .restore(record.promptRaw ?? record.prompt, record.mentions ?? []);
       setViewerId(null);
       setError(null);
       setFocusNonce((n) => n + 1);
@@ -995,7 +1010,7 @@ function persistLocal(records: RunRecord[]) {
      caret; pressing Generate stays their call. */
   const applyStarter = useCallback(
     (text: string) => {
-      (surface === "image" ? useImagePrompt : useVideoPrompt).getState().setText(text);
+      (surface === "image" ? useImagePrompt : useVideoPrompt).getState().restore(text, []);
       setError(null);
       setFocusNonce((n) => n + 1);
     },

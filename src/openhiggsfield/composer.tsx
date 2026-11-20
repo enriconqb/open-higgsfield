@@ -13,6 +13,7 @@ import type { ModelEntry, Surface } from "@/generation/catalog";
 import { unwrap } from "@/lib/action-result";
 import type { KeyProvider } from "@/generation/credentials";
 import { MAX_BATCH, useActive } from "@/generation/stores/active";
+import { mentionQueryAt, mentionToken, resolvePromptMentions, type PromptMention } from "@/generation/mentions";
 import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
 import { useSettings } from "@/generation/stores/settings";
 
@@ -23,6 +24,8 @@ import { PROMPT_PLACEHOLDERS, countSetting } from "./data";
 import type { RunRecord } from "./history";
 import { ArrowUpIcon, CaretDownIcon, CloseIcon, MinusIcon, PlusIcon, WarningIcon } from "./icons";
 import { MediaStrip, useMediaTray } from "./media-tray";
+import { MentionMenu, mentionChoices } from "./mention-picker";
+import { PromptField } from "./prompt-field";
 import { ModelIcon, modelIconSrc } from "./model-icon";
 import { ModelPicker } from "./model-picker";
 import { PromptTemplatesButton } from "./prompt-templates-button";
@@ -201,15 +204,25 @@ export function Composer({
   }, [clipUrl, defaultDuration, maxDuration, minDuration, model.id, settings, storedDuration]);
 
   const [overlay, setOverlay] = useState<string | null>(null);
+  const [mentionAt, setMentionAt] = useState<{ start: number; query: string } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const [dropping, setDropping] = useState(false);
   const [anchor, setAnchor] = useState({ x: 0, y: 0 });
   const [shortcut, setShortcut] = useState<string | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const promptRef = useRef<HTMLDivElement>(null);
+  const [caretPin, setCaretPin] = useState<{ offset: number; nonce: number } | null>(null);
   /* A run in flight is not a lock: it holds its own tile in the grid, so the
      only thing that can stop a press is having nothing to say. */
-  const disabled = prompt.text.trim().length === 0;
+  const mentionPreview = resolvePromptMentions({
+    text: prompt.text,
+    catalog: prompt.mentions ?? [],
+    roles: tuned.roles,
+    existing: tray.items,
+  });
+  const mentionOptions = mentionAt ? mentionChoices(tray.items, mentionAt.query) : [];
+  const disabled = mentionPreview.text.trim().length === 0;
 
   /* One batch control, two mechanisms. A model that declares its own
      results-per-request gets that setting written; the rest are submitted once
@@ -366,6 +379,23 @@ export function Composer({
     setOverlay(next);
   }
 
+  function caretAfterQuery(value: string, at: { start: number; query: string }) {
+    const typed = `@${at.query}`;
+    return value.slice(at.start, at.start + typed.length) === typed ? at.start + typed.length : at.start;
+  }
+
+  function insertMention(choice: PromptMention) {
+    const caret = mentionAt ? caretAfterQuery(prompt.text, mentionAt) : prompt.text.length;
+    const start = mentionAt?.start ?? caret;
+    const token = mentionToken(choice);
+    const rest = prompt.text.slice(caret);
+    const gap = /^\s/.test(rest) ? "" : " ";
+    const next = prompt.text.slice(0, start) + token + gap + rest;
+    prompt.commit(next, choice);
+    setMentionAt(null);
+    setCaretPin({ offset: start + token.length + gap.length, nonce: Date.now() });
+  }
+
   const attachLabel = tray.allFull ? "Change the inputs" : "Add an input";
   const settingKey = overlay?.startsWith(SETTING) ? overlay.slice(SETTING.length) : null;
   const generateLabel = batchValue > 1 ? `Generate ${batchValue} results` : "Generate";
@@ -502,23 +532,56 @@ export function Composer({
                   puts the open control away. Pointer and focus both, because a
                   button click does not move focus on every platform — the field
                   can still hold it while a popover stands open. */}
-              <textarea
+              <div className="ohf-prompt-col">
+              <PromptField
                 ref={promptRef}
-                className="ohf-prompt"
-                rows={1}
-                value={prompt.text}
+                text={prompt.text}
+                mentions={prompt.mentions ?? []}
                 placeholder={PROMPT_PLACEHOLDERS[surface]}
-                aria-label="Prompt"
+                caretPin={caretPin}
+                expanded={mentionAt !== null}
+                onText={(value) => prompt.setText(value)}
+                onForget={(id) => prompt.forget(id)}
+                onCaret={(value, caret) => {
+                  setMentionAt(mentionQueryAt(value, caret));
+                }}
                 onPointerDown={() => setOverlay(null)}
-                onFocus={() => setOverlay(null)}
-                onChange={(event) => prompt.setText(event.target.value)}
                 onKeyDown={(event) => {
+                  if (mentionAt && mentionOptions.length > 0 && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+                    event.preventDefault();
+                    const step = event.key === "ArrowDown" ? 1 : -1;
+                    setMentionIndex((index) => (index + step + mentionOptions.length) % mentionOptions.length);
+                    return;
+                  }
+                  if (mentionAt && event.key === "Escape") {
+                    event.preventDefault();
+                    setMentionAt(null);
+                    return;
+                  }
+                  if (mentionAt && event.key === "Enter" && !event.metaKey && !event.ctrlKey) {
+                    event.preventDefault();
+                    const choice = mentionOptions[Math.min(mentionIndex, mentionOptions.length - 1)];
+                    if (choice) insertMention(choice);
+                    return;
+                  }
+                  if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) {
+                    event.preventDefault();
+                    document.execCommand("insertText", false, "\n");
+                  }
                   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
                     event.preventDefault();
                     if (!disabled) onGenerate(estimate ?? undefined);
                   }
                 }}
               />
+              {mentionAt && (
+                <MentionMenu
+                  choices={mentionOptions}
+                  active={Math.min(mentionIndex, Math.max(0, mentionOptions.length - 1))}
+                  onPick={insertMention}
+                />
+              )}
+              </div>
               <PromptTemplatesButton promptText={prompt.text} onApply={(body) => prompt.setText(body)} />
             </div>
 
