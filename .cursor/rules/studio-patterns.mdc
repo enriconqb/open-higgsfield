@@ -1,0 +1,12 @@
+---
+description: Studio, catalog, and generate boundaries the typechecker cannot enforce
+alwaysApply: true
+---
+
+Generate goes through `src/generation` and server actions. Client code under `src/openhiggsfield` does not call OpenRouter or `/api/v1/videos` or `/api/v1/images`.
+
+New models belong in `src/generation/catalog/`. Do not hardcode a parallel model list in the UI.
+
+Do not add workaround comments. Fix the pattern, then run `pnpm typecheck` and `pnpm verify:studio`.
+
+Cloud agents, Slack, and Sentry are not connected. Do not start them from a chat. `pnpm verify:studio` is the gate.

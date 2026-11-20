@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --port 3000",
+    "typecheck": "tsc --noEmit",
+    "verify:studio": "node .cursor/skills/verify-studio/cli.mjs",
     "build": "next build",
     "start": "next start",
     "brand": "node scripts/build-brand-assets.mjs",
