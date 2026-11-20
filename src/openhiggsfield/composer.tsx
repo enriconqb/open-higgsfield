@@ -269,7 +269,7 @@ export function Composer({
     ? estimateUsd(quote, {
         resolution: typeof values.resolution === "string" ? values.resolution : undefined,
         aspectRatio: typeof values.aspectRatio === "string" ? values.aspectRatio : undefined,
-        duration: typeof values.duration === "number" ? values.duration : undefined,
+        duration: Number.isFinite(Number(values.duration)) ? Number(values.duration) : undefined,
         audio: values.generateAudio === true || values.sound === true,
         images: referenceCounts.images,
         videos: referenceCounts.videos,
@@ -358,11 +358,8 @@ export function Composer({
 
   /* Popovers are positioned by the composer so the wide ones stay inside its
      column, but they open off the control that summoned them: the anchor
-     travels to the trigger's left edge, clamped to the column, and rises from
-     just above the trigger's own top rather than from the whole dock.
-     One thing outranks the trigger: the attachments. A panel laid over the
-     frames already on the plane makes the visitor choose blind, so where the
-     strip is present every panel clears it. */
+     travels to the trigger's left edge, clamped to the column, and the panel's
+     bottom sits just above that control. */
   function toggle(next: string, trigger: HTMLElement) {
     if (overlay === next) {
       setOverlay(null);
@@ -372,15 +369,11 @@ export function Composer({
     if (!wrap) return;
     const wrapBox = wrap.getBoundingClientRect();
     const triggerBox = trigger.getBoundingClientRect();
-    const strip = wrap.querySelector(".ohf-strip");
-    const ceiling = strip
-      ? Math.min(triggerBox.top, strip.getBoundingClientRect().top)
-      : triggerBox.top;
     const available = wrap.clientWidth;
     const width = Math.min(popoverWidth(next, tuned), available);
     setAnchor({
       x: Math.round(Math.max(0, Math.min(triggerBox.left - wrapBox.left, available - width))),
-      y: Math.round(wrapBox.bottom - ceiling + POPOVER_GAP),
+      y: Math.round(wrapBox.bottom - triggerBox.top + POPOVER_GAP),
     });
     setOverlay(next);
   }

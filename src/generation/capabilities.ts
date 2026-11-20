@@ -16,7 +16,7 @@ export function overlayModel(model: ModelEntry, caps: OpenRouterCaps | null): Mo
   if (resolution) settings.resolution = resolution;
   else delete settings.resolution;
   const quality = enumField(caps.quality, model.settings.quality);
-  if (!resolution && quality) settings.quality = quality;
+  if (quality) settings.quality = quality;
   const effort = enumField(caps.effort, model.settings.effort);
   if (effort) settings.effort = effort;
   if (model.settings.aspectRatio) {
@@ -86,7 +86,10 @@ function resolutionField(values: string[] | undefined, current: SettingField | u
   const catalog = current?.type === "enum" ? current.values : [];
   const merged = mergeResolutions(catalog, values ?? []);
   if (!merged.length) return undefined;
-  return { type: "enum", values: merged, default: merged[0]! };
+  const kept = preferAuto(merged, current);
+  const defaultValue =
+    current?.type === "enum" && current.default.toLowerCase() === "auto" ? kept.default : kept.values[0]!;
+  return { type: "enum", values: kept.values, default: defaultValue };
 }
 
 function resolutionKey(value: string): string {
@@ -102,15 +105,31 @@ function resolutionRank(key: string): number {
 
 function enumField(values: string[] | undefined, current: SettingField | undefined): SettingField | undefined {
   if (!values?.length) return undefined;
-  const fallback = current?.type === "enum" ? current.default : values[0]!;
-  const match = values.find((item) => item.toLowerCase() === fallback.toLowerCase());
-  return { type: "enum", values, default: match ?? values[0]! };
+  const kept = preferAuto(values, current);
+  return { type: "enum", values: kept.values, default: kept.default };
+}
+
+/** A catalog default of auto stays in the list and stays selected when the provider list omits it. */
+function preferAuto(values: readonly string[], current: SettingField | undefined): { values: string[]; default: string } {
+  const wantsAuto = current?.type === "enum" && current.default.toLowerCase() === "auto";
+  const list =
+    wantsAuto && !values.some((item) => item.toLowerCase() === "auto") ? ["auto", ...values] : [...values];
+  const fallback = current?.type === "enum" ? current.default : list[0]!;
+  const match = list.find((item) => item.toLowerCase() === fallback.toLowerCase());
+  return { values: list, default: match ?? list[0]! };
 }
 
 function durationField(values: number[] | undefined, current: SettingField | undefined): SettingField | undefined {
   if (!values?.length) return undefined;
   const unique = [...new Set(values.filter((item) => Number.isFinite(item)))].sort((a, b) => a - b);
   if (!unique.length) return undefined;
+  if (current?.type === "range") {
+    const min = Math.max(current.min, unique[0]!);
+    const max = Math.min(current.max, unique[unique.length - 1]!);
+    if (max >= min) {
+      return { type: "range", min, max, step: 1, default: Math.min(max, Math.max(min, current.default)) };
+    }
+  }
   const contiguous = unique.length > 1 && unique.every((item, index) => index === 0 || item === unique[index - 1]! + 1);
   if (contiguous) {
     const min = unique[0]!;

@@ -32,7 +32,7 @@ export const OPENROUTER_EXTRAS: readonly ModelEntry[] = [
   imageModel("or-bytedance-seed-seedream-5-0-flash", "Seedream 5.0 Flash", { text: "bytedance-seed/seedream-5-0-flash" }),
   imageModel("or-black-forest-labs-flux-3-image", "FLUX 3 Image", { text: "black-forest-labs/flux-3-image" }),
   imageModel("or-recraft-recraft-v4-1-flash", "Recraft V4.1 Flash", { text: "recraft/recraft-v4.1-flash" }),
-  imageModel("or-openai-gpt-image-2-5-sunburst", "GPT Image 2.5 Sunburst", { text: "openai/gpt-image-2.5-sunburst" }),
+  sunburstImage(),
   imageModel("or-openai-gpt-image-2-5-flare", "GPT Image 2.5 Flare", { text: "openai/gpt-image-2.5-flare" }),
   imageModel("or-microsoft-mai-image-2-6", "MAI-Image-2.6", { text: "microsoft/mai-image-2.6" }),
   imageModel("or-microsoft-mai-image-2-6-flash", "MAI-Image-2.6 Flash", { text: "microsoft/mai-image-2.6-flash" }),
@@ -154,3 +154,17 @@ export const OPENROUTER_EXTRA_SLUGS: Record<string, string> = {
   "or-openai-gpt-5-image": "openai/gpt-5-image",
   "or-google-gemini-2-5-flash-image": "google/gemini-2.5-flash-image",
 };
+
+function sunburstImage(): ModelEntry {
+  const base = imageModel("or-openai-gpt-image-2-5-sunburst", "GPT Image 2.5 Sunburst", {
+    text: "openai/gpt-image-2.5-sunburst",
+  });
+  return {
+    ...base,
+    settings: {
+      ...base.settings,
+      resolution: { type: "enum", values: ["auto", "1K", "2K", "4K"], default: "auto" },
+      quality: { type: "enum", values: ["auto", "low", "medium", "high", "xhigh", "max"], default: "auto" },
+    },
+  };
+}
