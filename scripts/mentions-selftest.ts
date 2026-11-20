@@ -55,9 +55,10 @@ check("video fills the video role", resolved.additions.some((item) => item.role 
 check("unsupported audio is dropped from the prompt", !resolved.text.includes("room tone"));
 check("half-typed token is left alone", resolved.text.includes("@[image:nope"));
 
+const other: PromptMention = { ...portrait, id: "up-2", url: "https://cdn.example/other.png", label: "other" };
 const full = resolvePromptMentions({
-  text: `${mentionToken(portrait)} ${mentionToken({ ...portrait, id: "up-2", url: "https://cdn.example/other.png", label: "other" })}`,
-  catalog: [portrait, { ...portrait, id: "up-2", url: "https://cdn.example/other.png", label: "other" }],
+  text: `${mentionToken(portrait)} ${mentionToken(other)}`,
+  catalog: [portrait, other],
   roles: { start: 1 },
   existing: [{ id: "tray", url: "https://cdn.example/held.png", role: "start" }],
 });
