@@ -180,19 +180,59 @@ function paint(root: HTMLDivElement, text: string, mentions: PromptMention[], on
   root.replaceChildren(fragment);
 }
 
+const BLOCK_TAGS = new Set([
+  "DIV",
+  "P",
+  "LI",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "BLOCKQUOTE",
+  "PRE",
+  "SECTION",
+  "ARTICLE",
+  "HEADER",
+  "FOOTER",
+  "TR",
+]);
+
+function isBlock(node: Node): boolean {
+  return node instanceof HTMLElement && BLOCK_TAGS.has(node.tagName);
+}
+
 function serialize(root: HTMLElement, mentions: PromptMention[]): string {
   const byId = new Map(mentions.map((mention) => [mention.id, mention]));
   let out = "";
-  for (const node of root.childNodes) {
+
+  function walk(node: Node) {
     if (node.nodeType === Node.TEXT_NODE) {
       out += (node.textContent ?? "").replace(/\u00a0/g, " ");
-      continue;
+      return;
     }
-    if (node instanceof HTMLElement && node.dataset.mentionId) {
+    if (!(node instanceof HTMLElement)) return;
+    if (node.dataset.mentionId) {
       const mention = byId.get(node.dataset.mentionId);
       if (mention) out += mentionToken(mention);
+      return;
+    }
+    if (node.tagName === "BR") {
+      out += "\n";
+      return;
+    }
+    const children = node.childNodes;
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index]!;
+      if (index > 0 && (isBlock(children[index - 1]!) || isBlock(child))) {
+        out += "\n";
+      }
+      walk(child);
     }
   }
+
+  walk(root);
   return out;
 }
 
