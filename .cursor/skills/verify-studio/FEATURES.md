@@ -1,6 +1,8 @@
-# Feature map
+# Feature map (index)
 
-Catalog entries in `src/generation/catalog/` decide which models, settings, and media roles the studio shows. Do not copy that list into a component.
+The maintained verification map lives in [features/](features/README.md). Read that index, then the matching feature file under `features/`.
+
+Legacy one-page table (routes only):
 
 | Route | How to reach it | What must be visible | Stop before |
 | --- | --- | --- | --- |

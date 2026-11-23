@@ -7,10 +7,12 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const skillDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(root, ".env") });
 
 const base = process.env.VERIFY_BASE_URL ?? "http://localhost:3000";
 const forbidden = ["/api/v1/videos", "/api/v1/images", "openrouter.ai"];
+const mode = process.argv.includes("doctor") ? "doctor" : "verify";
 
 if (process.argv.includes("--generate")) {
   console.error("verify-studio refuses generate. Do not submit a prompt or call OpenRouter.");
@@ -28,6 +30,12 @@ function browserPath() {
   return found;
 }
 
+function credentials() {
+  const username = process.env.VERIFY_USERNAME || process.env.SUPERADMIN_USERNAME || "";
+  const password = process.env.VERIFY_PASSWORD || process.env.SUPERADMIN_PASSWORD || "";
+  return { username, password };
+}
+
 async function serverUp() {
   try {
     const response = await fetch(`${base}/login`, { redirect: "manual" });
@@ -35,6 +43,12 @@ async function serverUp() {
   } catch {
     return false;
   }
+}
+
+async function loginBody() {
+  const response = await fetch(`${base}/login`, { redirect: "manual" });
+  const text = await response.text();
+  return { status: response.status, text };
 }
 
 async function ensureServer() {
@@ -66,6 +80,13 @@ function runTypecheck() {
       else reject(new Error(`tsc --noEmit exited ${code ?? "unknown"}`));
     });
   });
+}
+
+function makeRunDir() {
+  const runId = new Date().toISOString().replace(/[:.]/g, "-");
+  const dir = path.join(skillDir, "artifacts", runId);
+  fs.mkdirSync(dir, { recursive: true });
+  return { runId, dir };
 }
 
 class Cdp {
@@ -192,6 +213,14 @@ async function text(page) {
   return result.result.value ?? "";
 }
 
+async function captureEvidence(page, dir, name) {
+  const body = await text(page);
+  fs.writeFileSync(path.join(dir, `${name}.txt`), body, "utf8");
+  const shot = await page.send("Page.captureScreenshot", { format: "png" });
+  fs.writeFileSync(path.join(dir, `${name}.png`), Buffer.from(shot.data, "base64"));
+  return body;
+}
+
 async function focusAndType(page, selector, value) {
   const focused = await page.send("Runtime.evaluate", {
     expression: `(() => {
@@ -222,8 +251,7 @@ async function focusAndType(page, selector, value) {
 }
 
 async function login(page) {
-  const username = process.env.VERIFY_USERNAME || process.env.SUPERADMIN_USERNAME || "";
-  const password = process.env.VERIFY_PASSWORD || process.env.SUPERADMIN_PASSWORD || "";
+  const { username, password } = credentials();
   if (!username || !password) {
     throw new Error("Set VERIFY_USERNAME and VERIFY_PASSWORD, or SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD in .env");
   }
@@ -302,8 +330,47 @@ function assertIncludes(body, needles, where) {
   }
 }
 
-async function main() {
+async function doctor() {
+  const { username, password } = credentials();
+  const checks = {
+    base,
+    loginStatus: null,
+    loginLabels: false,
+    browser: null,
+    credentials: Boolean(username && password),
+  };
+  try {
+    checks.browser = browserPath();
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+  if (!checks.credentials) {
+    throw new Error("Doctor: VERIFY_* or SUPERADMIN_* credentials are not set");
+  }
+  let page;
+  try {
+    page = await loginBody();
+  } catch (error) {
+    throw new Error(
+      `Doctor: ${base}/login is unreachable (${error instanceof Error ? error.message : error}). Run pnpm verify:studio or pnpm dev first.`,
+    );
+  }
+  checks.loginStatus = page.status;
+  if (page.status !== 200) {
+    throw new Error(`Doctor: ${base}/login returned ${page.status}`);
+  }
+  const needles = ["Sign in", "Username", "Password"];
+  const missing = needles.filter((needle) => !page.text.includes(needle));
+  checks.loginLabels = missing.length === 0;
+  if (!checks.loginLabels) {
+    throw new Error(`Doctor: /login is missing ${missing.join(", ")}`);
+  }
+  console.log(JSON.stringify({ ok: true, mode: "doctor", ...checks }, null, 2));
+}
+
+async function verify() {
   await runTypecheck();
+  const { runId, dir } = makeRunDir();
   const started = await ensureServer();
   const browser = await connectBrowser();
   try {
@@ -314,10 +381,11 @@ async function main() {
     if (blocked.length > 0) {
       throw new Error(`Login scripts were forbidden: ${(page.logs ?? []).join(" | ")}`);
     }
-    assertIncludes(await text(page), ["Sign in", "Username", "Password"], "/login");
+    const loginText = await captureEvidence(page, dir, "login");
+    assertIncludes(loginText, ["Sign in", "Username", "Password"], "/login");
     await login(page);
     await goto(page, `${base}/`);
-    const studio = await text(page);
+    const studio = await captureEvidence(page, dir, "studio");
     assertIncludes(studio, ["Image", "Video", "Assets", "Favorites"], "/");
     const composer = await page.send("Runtime.evaluate", {
       expression: "Boolean(document.querySelector('.ohf-composer'))",
@@ -325,18 +393,23 @@ async function main() {
     });
     if (!composer.result.value) throw new Error("/ is missing the composer");
     await goto(page, `${base}/account`);
-    assertIncludes(await text(page), ["Change password"], "/account");
+    const account = await captureEvidence(page, dir, "account");
+    assertIncludes(account, ["Change password"], "/account");
     if (browser.cdp.hits.length > 0) {
       throw new Error(`Blocked a generate call: ${browser.cdp.hits.join(" ")}`);
     }
-    console.log(
-      JSON.stringify({
-        ok: true,
-        base,
-        checked: ["/login", "/", "/account"],
-        generate: false,
-      }),
-    );
+    const summary = {
+      ok: true,
+      mode: "verify",
+      base,
+      runId,
+      artifacts: dir,
+      checked: ["/login", "/", "/account"],
+      features: ["sign-in", "studio-home", "account-password"],
+      generate: false,
+    };
+    fs.writeFileSync(path.join(dir, "summary.json"), JSON.stringify(summary, null, 2), "utf8");
+    console.log(JSON.stringify(summary));
   } finally {
     browser.chrome.kill();
     await new Promise((resolve) => setTimeout(resolve, 400));
@@ -347,6 +420,11 @@ async function main() {
     }
     if (started) started.kill();
   }
+}
+
+async function main() {
+  if (mode === "doctor") await doctor();
+  else await verify();
 }
 
 main().catch((error) => {
