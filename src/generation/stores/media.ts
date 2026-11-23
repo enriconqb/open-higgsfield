@@ -34,3 +34,4 @@ function createMediaStore(name: string) {
 
 export const useImageMedia = createMediaStore("openhiggsfield.imageMedia.v1");
 export const useVideoMedia = createMediaStore("openhiggsfield.videoMedia.v1");
+export const useAudioMedia = createMediaStore("openhiggsfield.audioMedia.v1");

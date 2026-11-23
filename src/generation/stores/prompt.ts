@@ -61,3 +61,4 @@ function sameMentions(left: PromptMention[], right: PromptMention[]): boolean {
 
 export const useImagePrompt = createPromptStore("openhiggsfield.imagePrompt.v1");
 export const useVideoPrompt = createPromptStore("openhiggsfield.videoPrompt.v1");
+export const useAudioPrompt = createPromptStore("openhiggsfield.audioPrompt.v1");

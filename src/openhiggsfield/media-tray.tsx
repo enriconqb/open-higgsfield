@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import type { MediaItem, MediaRole, ModelEntry } from "@/generation/catalog";
-import { useImageMedia, useVideoMedia } from "@/generation/stores/media";
+import { storesFor } from "@/generation/stores/for-surface";
 import { uploadMedia } from "@/generation/upload";
 
 import { fileSeconds, rememberClipSeconds } from "./clip-length";
@@ -21,9 +21,7 @@ function localId(): string {
 }
 
 function useMedia(model: ModelEntry) {
-  const imageMedia = useImageMedia();
-  const videoMedia = useVideoMedia();
-  return model.surface === "image" ? imageMedia : videoMedia;
+  return storesFor(model.surface).media();
 }
 
 export interface MediaTray {

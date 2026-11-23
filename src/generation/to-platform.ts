@@ -3,7 +3,7 @@ import { openRouterSlug, seedanceReferences } from "./catalog/openrouter-slugs";
 import type { GenerationPlane } from "./catalog/types";
 
 export type MappedRequest = {
-  surface: "image" | "video";
+  surface: "image" | "video" | "audio";
   body: Record<string, unknown>;
 };
 
@@ -11,7 +11,21 @@ export function toPlatform(plane: GenerationPlane): MappedRequest {
   const model = getModel(plane.model);
   const slug = openRouterSlug(model.id);
   if (model.surface === "image") return { surface: "image", body: mapImage(plane, slug) };
+  if (model.surface === "audio") return { surface: "audio", body: mapSpeech(plane, slug) };
   return { surface: "video", body: mapVideo(plane, slug, seedanceReferences(model.id)) };
+}
+
+function mapSpeech(plane: GenerationPlane, slug: string): Record<string, unknown> {
+  const settings = plane.settings;
+  const format = settings.outputFormat;
+  const speed = settings.speed;
+  return {
+    model: slug,
+    input: plane.prompt.text,
+    ...(typeof settings.voice === "string" ? { voice: settings.voice } : {}),
+    ...(typeof format === "string" ? { response_format: format } : {}),
+    ...(typeof speed === "number" && Number.isFinite(speed) ? { speed } : {}),
+  };
 }
 
 function urls(plane: GenerationPlane, role: "start" | "end" | "reference" | "video" | "audio") {

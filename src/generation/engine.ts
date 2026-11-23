@@ -70,6 +70,7 @@ export async function capabilitiesFor(
   const cached = capsCache.get(slug);
   if (cached && Date.now() - cached.at < PRICE_TTL_MS) return cached.caps;
   const model = getModel(modelId);
+  if (model.surface === "audio") return null;
   const caps =
     model.surface === "image"
       ? await imageCaps(context.credentials, slug)
@@ -162,6 +163,7 @@ export async function quoteFor(
     return null;
   }
   const model = getModel(modelId);
+  if (model.surface === "audio") return null;
   if (model.surface === "video") {
     const priced = await videoSkus(context.credentials, slug);
     return priced ? { kind: "video", skus: priced.skus, sizes: priced.sizes } : null;
@@ -263,7 +265,11 @@ export async function submitPlane(
   const { surface, body } = toPlatform(parsed);
   const client = createPlatformClient(credentials);
   const queued: QueuedGeneration =
-    surface === "image" ? await client.submitImage(body) : await client.submitVideo(body);
+    surface === "image"
+      ? await client.submitImage(body)
+      : surface === "audio"
+        ? await client.submitSpeech(body)
+        : await client.submitVideo(body);
   await rememberUsage(context, parsed, queued);
   if (queued.immediate) {
     queued.immediate = await archiveGenerationStatus(context, queued.requestId, queued.immediate);
@@ -384,11 +390,36 @@ async function archiveGenerationStatus(
       ...(sourceUrl && sourceUrl !== local ? { sourceUrl } : {}),
     };
   }
+  let audio = status.audio;
+  if (audio) {
+    const index = (images?.length ?? 0) + (video ? 1 : 0);
+    const original = audio.url;
+    const local = await ensureArchivedUrl({
+      url: original,
+      userId: context.userId,
+      requestId,
+      index,
+      mime: audioMimeFromUrl(original),
+    });
+    audio = {
+      url: local,
+      ...(audio.sourceUrl && audio.sourceUrl !== local ? { sourceUrl: audio.sourceUrl } : {}),
+    };
+  }
   return {
     ...status,
     ...(images ? { images } : {}),
     ...(video ? { video } : {}),
+    ...(audio ? { audio } : {}),
   };
+}
+
+function audioMimeFromUrl(url: string): string {
+  const match = /^data:(audio\/[^;,]+)/i.exec(url);
+  if (match?.[1]) return match[1];
+  if (/\.pcm(?:[?#]|$)/i.test(url)) return "audio/pcm";
+  if (/\.wav(?:[?#]|$)/i.test(url)) return "audio/wav";
+  return "audio/mpeg";
 }
 
 async function videoSourceUrl(context: GenerationContext, url: string): Promise<string | undefined> {

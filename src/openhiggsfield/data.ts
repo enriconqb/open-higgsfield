@@ -1,10 +1,11 @@
 import type { MediaRole, ModelEntry, Surface } from "@/generation/catalog";
 
-export const SURFACES: readonly Surface[] = ["image", "video"];
+export const SURFACES: readonly Surface[] = ["image", "video", "audio"];
 
 export const SURFACE_LABELS: Record<Surface, string> = {
   image: "Image",
   video: "Video",
+  audio: "Audio",
 };
 
 /** What the gallery is scoped to. "assets" is every run, both surfaces;
@@ -21,6 +22,7 @@ export const PANEL_VIEWS = new Set<GalleryView>(["timeline", "compare", "unface"
 export const VIEWS: readonly GalleryView[] = [
   "image",
   "video",
+  "audio",
   "assets",
   "favorites",
   "archive",
@@ -42,6 +44,7 @@ export const VIEW_LABELS: Record<GalleryView, string> = {
 export const PROMPT_PLACEHOLDERS: Record<Surface, string> = {
   image: "Describe the image — subject, style, light, lens…",
   video: "Describe the shot — subject, camera move, light, pacing…",
+  audio: "Script to speak — plain sentences, punctuation for pacing…",
 };
 
 /* The pool the empty state draws from. Each line is a whole prompt — subject,
@@ -76,6 +79,20 @@ export const SAMPLES: Record<Surface, string[]> = {
     "Static wide of a train crossing a viaduct at dusk, lit windows, long lens compression",
     "Slow tilt down a glass tower facade to a busy crosswalk, overcast city light",
   ],
+  audio: [
+    "Welcome back. Today we unpack three quiet habits that make mornings feel longer.",
+    "This week’s drop is live. Soft pads, a patient kick, and room to breathe between the lines.",
+    "Hi, I’m calling about your open order. It left the warehouse this morning and should arrive by Friday.",
+    "Chapter one. The harbor lights flickered once, then held steady against the fog.",
+    "Try this stretch for thirty seconds. Keep your shoulders soft and breathe out slowly.",
+    "Product note: matte ceramic, hand-thrown, dishwasher safe. Ships in recycled kraft.",
+    "Breaking: the council approved the riverside path. Construction starts next Monday at dawn.",
+    "Meditation cue. Sit tall. Notice the breath at the tip of the nose, then let it go.",
+    "Podcast intro. You’re listening to Field Notes, stories from people who build with their hands.",
+    "Reminder: your meeting with Maya starts in ten minutes. Conference room B, third floor.",
+    "Kids’ bedtime. Once upon a time, a small fox found a lantern that only glowed when shared.",
+    "Support reply: thanks for writing in. I’ve reset your session and you can sign in again now.",
+  ],
 };
 
 /** A few of the pool in a fresh order, so two visits are not handed the same
@@ -107,6 +124,8 @@ const SETTING_LABELS: Record<string, string> = {
   multiShots: "Multi-shot",
   keepOriginalSound: "Keep original sound",
   characterOrientation: "Orientation",
+  voice: "Voice",
+  speed: "Speed",
 };
 
 /* A pill carries one word; "Generate audio" is a panel label, not a control on
@@ -130,7 +149,11 @@ export function settingPillLabel(key: string): string {
    set in caps are lifted; "720p" and "16:9" are already how they are written. */
 export function settingValueLabel(key: string, value: unknown): string {
   if (typeof value === "boolean") return value ? "On" : "Off";
-  if (typeof value === "number") return key === "duration" ? `${value}s` : String(value);
+  if (typeof value === "number") {
+    if (key === "duration") return `${value}s`;
+    if (key === "speed") return `${value}x`;
+    return String(value);
+  }
   const text = String(value);
   if (text === "auto") return "Auto";
   if (/^\d+k$/.test(text)) return text.toUpperCase();
@@ -238,7 +261,7 @@ function joinPhrases(parts: string[]): string {
     what it makes, what it takes, where its allow-lists top out. The catalog
     stays the only place a model's truth is written down. */
 export function describeModel(model: ModelEntry): string {
-  const noun = model.surface === "image" ? "Images" : "Video";
+  const noun = model.surface === "image" ? "Images" : model.surface === "audio" ? "Speech" : "Video";
   const inputs = [...new Set(rolesOf(model).map((role) => ROLE_PHRASES[role]))];
   const source = inputs.length
     ? `${noun} from a prompt, ${joinPhrases(inputs)}`
@@ -254,6 +277,10 @@ export function describeModel(model: ModelEntry): string {
   }
   const duration = model.settings.duration;
   if (duration?.type === "range") limits.push(`${duration.min}–${duration.max}s`);
+  const voice = model.settings.voice;
+  if (voice?.type === "enum") limits.push(`${voice.values.length} voices`);
+  const speed = model.settings.speed;
+  if (speed?.type === "range") limits.push(`${speed.min}–${speed.max}x`);
 
   return limits.length ? `${source} · ${limits.join(", ")}` : source;
 }
@@ -301,7 +328,9 @@ export function metaOf(model: ModelEntry, values: Record<string, unknown>): stri
   const parts =
     model.surface === "image"
       ? [label("resolution"), label("outputFormat")]
-      : [label("resolution"), label("duration"), values.generateAudio === true ? "Audio" : null];
+      : model.surface === "audio"
+        ? [label("voice"), label("outputFormat"), label("speed")]
+        : [label("resolution"), label("duration"), values.generateAudio === true ? "Audio" : null];
   return parts.filter(Boolean).join(" · ");
 }
 

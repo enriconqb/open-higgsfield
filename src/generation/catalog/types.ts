@@ -1,4 +1,4 @@
-export type Surface = "image" | "video";
+export type Surface = "image" | "video" | "audio";
 export type MediaRole = "start" | "end" | "reference" | "video" | "audio";
 
 export type MediaItem = {

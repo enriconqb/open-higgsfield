@@ -46,10 +46,10 @@ Harness: headless Chromium via CDP in `.cursor/skills/verify-studio/cli.mjs` (in
 | `input[type=password]` | `/login` |
 | Button text `Sign in` | `/login` |
 | `.ohf-composer` | `/` after sign-in |
-| Visible text `Image`, `Video`, `Assets`, `Favorites` | gallery scope rail on `/` |
+| Visible text `Image`, `Video`, `Audio`, `Assets`, `Favorites` | gallery scope rail on `/` |
 | Visible text `Change password` | `/account` |
 
-Do **not** pass `--generate`. Do not press Generate, do not mint an API token, and do not call `/api/v1/videos`, `/api/v1/images`, or OpenRouter. A request to those URLs fails the run.
+Do **not** pass `--generate`. Do not press Generate, do not mint an API token, and do not call `/api/v1/videos`, `/api/v1/images`, `/api/v1/audio`, `/audio/speech`, or OpenRouter. A request to those URLs fails the run.
 
 Feature recipes live under [features/](features/). Drive one mapped feature at a time unless the user asks for a broader sweep; the default CLI proves sign-in → studio home → account in one pass.
 

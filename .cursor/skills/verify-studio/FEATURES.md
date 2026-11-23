@@ -8,7 +8,7 @@ Legacy one-page table (routes only):
 | --- | --- | --- | --- |
 | `/login` | Open `/login` | Labels Username and Password, button Sign in, link Request access | Submitting a second account |
 | `/register` | Link Request access on `/login` | Title Request access | Creating a user unless the task is registration |
-| `/` | Sign in, or Back to studio | Composer `.ohf-composer`. Gallery scope rail: Image, Video, Assets, Favorites. Prompt placeholder for the active surface. `Ctrl+Enter` submits, but verification must not press it | Generate, model runs, OpenRouter |
+| `/` | Sign in, or Back to studio | Composer `.ohf-composer`. Gallery scope rail: Image, Video, Audio, Assets, Favorites. Prompt placeholder for the active surface. `Ctrl+Enter` submits, but verification must not press it | Generate, model runs, OpenRouter |
 | `/account` | User menu, Change password | Title Change password | Saving a new password during a UI check |
 | `/profile` | User menu, Profile | Title Profile | Editing identity unless that is the task |
 | `/usage` | User menu, Usage | Usage page | Treating an empty ledger as a generate failure |

@@ -47,6 +47,11 @@ export function artFor(surface: Surface, hue: number, seedKey: string): string {
       `linear-gradient(180deg, transparent 46%, oklch(0.8 0.1 ${hue} / 0.07) 50%, transparent 54%)`,
     );
   }
+  if (surface === "audio") {
+    layers.unshift(
+      `linear-gradient(90deg, transparent 8%, oklch(0.82 0.08 ${hue} / 0.12) 12%, transparent 16%, transparent 28%, oklch(0.7 0.1 ${h2} / 0.1) 34%, transparent 40%, transparent 52%, oklch(0.78 0.09 ${hc} / 0.11) 58%, transparent 64%, transparent 76%, oklch(0.68 0.08 ${h3} / 0.1) 82%, transparent 88%)`,
+    );
+  }
   return layers.join(", ");
 }
 

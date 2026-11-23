@@ -78,7 +78,7 @@ function clipRows(value: unknown): Array<{
       ratio?: unknown;
       size?: unknown;
     };
-    if (row.kind !== "image" && row.kind !== "video") return null;
+    if (row.kind !== "image" && row.kind !== "video" && row.kind !== "audio") return null;
     const kind: ClipKind = row.kind;
     rows.push({
       kind,

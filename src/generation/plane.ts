@@ -2,15 +2,15 @@ import { getModel } from "./catalog";
 import type { GenerationPlane, MediaItem } from "./catalog/types";
 import { resolvePromptMentions } from "./mentions";
 import { useActive } from "./stores/active";
-import { useImageMedia, useVideoMedia } from "./stores/media";
-import { useImagePrompt, useVideoPrompt } from "./stores/prompt";
+import { storesFor } from "./stores/for-surface";
 import { useSettings } from "./stores/settings";
 
 export function assemblePlane(): GenerationPlane {
   const { model: modelId, surface } = useActive.getState();
   const model = getModel(modelId);
-  const prompt = (surface === "image" ? useImagePrompt : useVideoPrompt).getState();
-  const items = (surface === "image" ? useImageMedia : useVideoMedia).getState().items;
+  const { prompt: promptStore, media: mediaStore } = storesFor(surface);
+  const prompt = promptStore.getState();
+  const items = mediaStore.getState().items;
   const media: GenerationPlane["media"] = {};
   for (const item of items) pushMedia(media, model.roles, item);
   const resolved = resolvePromptMentions({

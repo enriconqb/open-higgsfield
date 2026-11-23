@@ -24,7 +24,7 @@ export const useActive = create<ActiveState>()(
     (set) => ({
       surface: "video",
       model: "seedance-2.5",
-      modelBySurface: { image: "flux-2", video: "seedance-2.5" },
+      modelBySurface: { image: "flux-2", video: "seedance-2.5", audio: "voxtral-mini" },
       batch: 1,
       setModel: (id) => {
         const model = getModel(id);
@@ -57,12 +57,17 @@ export const useActive = create<ActiveState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        if (!state.modelBySurface?.audio) {
+          state.modelBySurface = { ...state.modelBySurface, audio: "voxtral-mini" };
+        }
         const remembered = state.modelBySurface?.[state.surface] || state.model;
         try {
           getModel(remembered);
           state.setModel(remembered);
         } catch {
-          state.setModel(state.surface === "image" ? "flux-2" : "seedance-2.5");
+          state.setModel(
+            state.surface === "image" ? "flux-2" : state.surface === "audio" ? "voxtral-mini" : "seedance-2.5",
+          );
         }
       },
     },

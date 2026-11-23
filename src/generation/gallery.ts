@@ -29,7 +29,8 @@ function tileArt(seed: string): string {
   ].join(", ");
 }
 
-function ratioOf(settings: unknown): string {
+function ratioOf(settings: unknown, kind: ApiJobRow["kind"]): string {
+  if (kind === "audio") return "16 / 5";
   const raw = settings && typeof settings === "object" ? (settings as { aspectRatio?: unknown }).aspectRatio : null;
   if (typeof raw === "string" && /^\d+\s*:\s*\d+$/.test(raw)) return raw.replace(/\s*:\s*/, " / ");
   return "16 / 9";
@@ -38,9 +39,12 @@ function ratioOf(settings: unknown): string {
 function metaOf(row: ApiJobRow): string {
   const settings = row.settings && typeof row.settings === "object" ? (row.settings as Record<string, unknown>) : {};
   const parts: string[] = [];
+  if (typeof settings.voice === "string" && settings.voice) parts.push(settings.voice);
+  if (typeof settings.outputFormat === "string" && settings.outputFormat) parts.push(settings.outputFormat);
+  if (typeof settings.speed === "number" && Number.isFinite(settings.speed)) parts.push(`${settings.speed}x`);
   if (typeof settings.resolution === "string" && settings.resolution) parts.push(settings.resolution);
   if (typeof settings.duration === "number" && settings.duration > 0) parts.push(`${settings.duration}s`);
-  return parts.join(" · ") || (row.kind === "video" ? "video" : "image");
+  return parts.join(" · ") || (row.kind === "video" ? "video" : row.kind === "audio" ? "audio" : "image");
 }
 
 function badgeOf(row: ApiJobRow): string | undefined {
@@ -87,7 +91,7 @@ function recordOf(
     modelId: row.model_id,
     modelLabel: labelOf(row.model_id),
     prompt: promptOf(row),
-    ratio: ratioOf(row.settings),
+    ratio: ratioOf(row.settings, row.kind),
     meta: metaOf(row),
     kind: row.kind,
     urls,
@@ -117,7 +121,13 @@ export async function archiveJobMedia(
   result: ApiJobResult,
   userId: number,
   requestId: string,
-): Promise<{ images: StoredImage[]; videoUrl: string | null; videoSourceUrl?: string }> {
+): Promise<{
+  images: StoredImage[];
+  videoUrl: string | null;
+  videoSourceUrl?: string;
+  audioUrl: string | null;
+  audioSourceUrl?: string;
+}> {
   const images: StoredImage[] = [];
   for (const image of result.images ?? []) {
     if (image.id) {
@@ -131,11 +141,39 @@ export async function archiveJobMedia(
     images.push(await archiveRemote(image.url, image.mime || "image/png", image.index, userId, requestId));
   }
 
-  const original = result.video?.url ?? null;
-  if (!original) return { images, videoUrl: null };
-  const stored = await archiveRemote(original, "video/mp4", images.length, userId, requestId, VIDEO_EXT);
-  const videoUrl = stored.id ?? original;
-  return { images, videoUrl, ...(stored.sourceUrl ? { videoSourceUrl: stored.sourceUrl } : {}) };
+  const videoOriginal = result.video?.url ?? null;
+  let videoUrl: string | null = null;
+  let videoSourceUrl: string | undefined;
+  if (videoOriginal) {
+    const stored = await archiveRemote(videoOriginal, "video/mp4", images.length, userId, requestId, VIDEO_EXT);
+    videoUrl = stored.id ?? videoOriginal;
+    videoSourceUrl = stored.sourceUrl;
+  }
+
+  const audioOriginal = result.audio?.url ?? null;
+  if (!audioOriginal) {
+    return {
+      images,
+      videoUrl,
+      ...(videoSourceUrl ? { videoSourceUrl } : {}),
+      audioUrl: null,
+    };
+  }
+  const audioStored = await archiveRemote(
+    audioOriginal,
+    "audio/mpeg",
+    images.length + (videoUrl ? 1 : 0),
+    userId,
+    requestId,
+    "mp3",
+  );
+  return {
+    images,
+    videoUrl,
+    ...(videoSourceUrl ? { videoSourceUrl } : {}),
+    audioUrl: audioStored.id ?? audioOriginal,
+    ...(audioStored.sourceUrl ? { audioSourceUrl: audioStored.sourceUrl } : {}),
+  };
 }
 
 async function archiveRemote(
@@ -218,13 +256,20 @@ export async function mirrorStudioJobToGallery(userId: number, job: ApiJobRow): 
 async function mirrorJob(userId: number, job: ApiJobRow, mode: "api" | "studio"): Promise<void> {
   try {
     const result = parseJobResult(job.result);
-    const { images, videoUrl, videoSourceUrl } = await archiveJobMedia(result, userId, job.request_id);
-    const surface: Surface = job.kind === "image" ? "image" : "video";
+    const { images, videoUrl, videoSourceUrl, audioUrl, audioSourceUrl } = await archiveJobMedia(
+      result,
+      userId,
+      job.request_id,
+    );
+    const surface: Surface = job.kind === "image" ? "image" : job.kind === "audio" ? "audio" : "video";
 
     const stored: ApiJobResult = {
       ...(images.length ? { images } : {}),
       ...(videoUrl
         ? { video: { url: videoUrl, ...(videoSourceUrl ? { sourceUrl: videoSourceUrl } : {}) } }
+        : {}),
+      ...(audioUrl
+        ? { audio: { url: audioUrl, ...(audioSourceUrl ? { sourceUrl: audioSourceUrl } : {}) } }
         : {}),
     };
     await execute(`UPDATE api_jobs SET result = ? WHERE request_id = ?`, [
@@ -234,8 +279,8 @@ async function mirrorJob(userId: number, job: ApiJobRow, mode: "api" | "studio")
 
     const records =
       mode === "api"
-        ? [apiRecord(job, images, videoUrl, videoSourceUrl, surface)]
-        : studioRecords(job, images, videoUrl, videoSourceUrl, surface);
+        ? [apiRecord(job, images, videoUrl, videoSourceUrl, audioUrl, audioSourceUrl, surface)]
+        : studioRecords(job, images, videoUrl, videoSourceUrl, audioUrl, audioSourceUrl, surface);
     for (const record of records) await upsertGenerationResult(userId, record);
   } catch (caught) {
     console.error("[gallery] mirror failed", caught instanceof Error ? caught.message : caught);
@@ -249,13 +294,19 @@ function apiRecord(
   images: StoredImage[],
   videoUrl: string | null,
   videoSourceUrl: string | undefined,
+  audioUrl: string | null,
+  audioSourceUrl: string | undefined,
   surface: Surface,
 ): RunRecord {
-  const urls = buildUrls(job, images, videoUrl);
+  const urls = buildUrls(job, images, videoUrl, audioUrl);
   /* One entry per url, aligned the way the studio reads it: the gallery takes
      the CDN link while it lasts and the archived copy once it stops. */
   const remoteUrls = urls.map((_url, index) =>
-    surface === "image" ? (images[index]?.sourceUrl ?? "") : (videoSourceUrl ?? ""),
+    surface === "image"
+      ? (images[index]?.sourceUrl ?? "")
+      : surface === "audio"
+        ? (audioSourceUrl ?? "")
+        : (videoSourceUrl ?? ""),
   );
   return recordOf(job, urls, surface, {
     viaApi: true,
@@ -271,6 +322,8 @@ function studioRecords(
   images: StoredImage[],
   videoUrl: string | null,
   videoSourceUrl: string | undefined,
+  audioUrl: string | null,
+  audioSourceUrl: string | undefined,
   surface: Surface,
 ): RunRecord[] {
   if (surface === "image" && images.length > 0) {
@@ -284,8 +337,8 @@ function studioRecords(
       });
     });
   }
-  const urls = buildUrls(job, images, videoUrl);
-  const remoteUrls = urls.map(() => videoSourceUrl ?? "");
+  const urls = buildUrls(job, images, videoUrl, audioUrl);
+  const remoteUrls = urls.map(() => (surface === "audio" ? (audioSourceUrl ?? "") : (videoSourceUrl ?? "")));
   return [
     recordOf(job, urls, surface, {
       id: job.request_id,
@@ -301,13 +354,19 @@ function rowIdOf(requestId: string, offset: number, count: number): string {
 
 /** The URLs the studio renders. Archived bytes become `/api/uploads/<id>`, which
     the studio already knows how to play; a provider link stays as it is. */
-function buildUrls(job: ApiJobRow, images: StoredImage[], videoUrl: string | null): string[] {
+function buildUrls(
+  job: ApiJobRow,
+  images: StoredImage[],
+  videoUrl: string | null,
+  audioUrl: string | null,
+): string[] {
   if (job.kind === "image") {
     return images.map((image) => (image.id ? `/api/uploads/${image.id}` : (image.url ?? ""))).filter(Boolean);
   }
-  if (!videoUrl) return [];
-  if (/^https?:\/\//i.test(videoUrl)) return [videoUrl];
-  return [videoUrl.startsWith("/") ? videoUrl : `/api/uploads/${videoUrl}`];
+  const mediaUrl = job.kind === "audio" ? audioUrl : videoUrl;
+  if (!mediaUrl) return [];
+  if (/^https?:\/\//i.test(mediaUrl)) return [mediaUrl];
+  return [mediaUrl.startsWith("/") ? mediaUrl : `/api/uploads/${mediaUrl}`];
 }
 
 export async function galleryHas(userId: number, requestId: string): Promise<boolean> {

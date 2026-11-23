@@ -42,5 +42,7 @@ export function fileNameFor(record: RunRecord, index: number): string {
       .replace(/^-+|-+$/g, "")
       .slice(0, 44)
       .replace(/-+$/, "") || "run";
-  return `vicendvtaai-${slug}-${index + 1}.${ext ?? (record.kind === "video" ? "mp4" : "png")}`;
+  const fallback =
+    record.kind === "video" ? "mp4" : record.kind === "audio" ? "mp3" : "png";
+  return `vicendvtaai-${slug}-${index + 1}.${ext ?? fallback}`;
 }

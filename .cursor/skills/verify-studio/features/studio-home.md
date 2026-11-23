@@ -1,11 +1,11 @@
 # Studio home
 
-Studio home is the signed-in surface at `/`: one composer for Image and Video, plus a gallery scope rail.
+Studio home is the signed-in surface at `/`: one composer for Image, Video, and Audio, plus a gallery scope rail.
 
 ## Sub-features
 
 - `studio-composer` shows `.ohf-composer` after sign-in.
-- `studio-scopes` shows gallery tabs Image, Video, Assets, and Favorites (Archive, Timeline, Compare, Tools may also appear).
+- `studio-scopes` shows gallery tabs Image, Video, Audio, Assets, and Favorites (Archive, Timeline, Compare, Tools may also appear).
 - `studio-no-generate` never submits a prompt or hits generate APIs.
 
 ## How to get to it (user POV)
@@ -24,13 +24,13 @@ Preconditions:
 
 - **Open studio.** After login, navigate to `/` if needed. Run `pnpm verify:studio` (CLI asserts `/` after login).
 - **Composer present.** Evaluate `Boolean(document.querySelector('.ohf-composer'))` — must be `true`.
-- **Gallery rail.** Body text includes `Image`, `Video`, `Assets`, and `Favorites`.
-- **Network fence.** No request URL may contain `/api/v1/videos`, `/api/v1/images`, or `openrouter.ai`.
+- **Gallery rail.** Body text includes `Image`, `Video`, `Audio`, `Assets`, and `Favorites`.
+- **Network fence.** No request URL may contain `/api/v1/videos`, `/api/v1/images`, `/api/v1/audio`, `/audio/speech`, or `openrouter.ai`.
 - **Proof.** `artifacts/<run-id>/studio.png` and `studio.txt` show the composer dock and scope labels. `summary.json` has `generate: false`.
 
 ## Gotchas
 
-- Extra tabs (Archive, Timeline, Compare, Tools) are fine; missing Image/Video/Assets/Favorites fails.
+- Extra tabs (Archive, Timeline, Compare, Tools) are fine; missing Image/Video/Audio/Assets/Favorites fails.
 - `Ctrl+Enter` submits the prompt — never send that key during verification.
 - An empty gallery is not a failure; empty states still leave the composer and rail visible.
 - Catalog models live under `src/generation/catalog/`; do not hardcode a parallel list when asserting the picker.

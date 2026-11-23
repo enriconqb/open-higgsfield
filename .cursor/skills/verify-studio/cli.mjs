@@ -11,7 +11,7 @@ const skillDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(root, ".env") });
 
 const base = process.env.VERIFY_BASE_URL ?? "http://localhost:3000";
-const forbidden = ["/api/v1/videos", "/api/v1/images", "openrouter.ai"];
+const forbidden = ["/api/v1/videos", "/api/v1/images", "/api/v1/audio", "/audio/speech", "openrouter.ai"];
 const mode = process.argv.includes("doctor") ? "doctor" : "verify";
 
 if (process.argv.includes("--generate")) {
@@ -386,7 +386,7 @@ async function verify() {
     await login(page);
     await goto(page, `${base}/`);
     const studio = await captureEvidence(page, dir, "studio");
-    assertIncludes(studio, ["Image", "Video", "Assets", "Favorites"], "/");
+    assertIncludes(studio, ["Image", "Video", "Audio", "Assets", "Favorites"], "/");
     const composer = await page.send("Runtime.evaluate", {
       expression: "Boolean(document.querySelector('.ohf-composer'))",
       returnByValue: true,

@@ -7,7 +7,7 @@ import { estimateUsd, type OpenRouterQuote } from "@/generation/estimate";
 
 import { creditsFromUsd } from "./credits";
 
-export type UsageKind = "image" | "video";
+export type UsageKind = "image" | "video" | "audio";
 export type UsageStatus = "pending" | "success" | "failed";
 
 export function usageSpec(settings: Record<string, unknown>): string {
@@ -15,6 +15,9 @@ export function usageSpec(settings: Record<string, unknown>): string {
   if (typeof settings.resolution === "string" && settings.resolution) parts.push(settings.resolution);
   if (typeof settings.duration === "number" && settings.duration > 0) parts.push(`${settings.duration}s`);
   if (typeof settings.aspectRatio === "string" && settings.aspectRatio) parts.push(settings.aspectRatio);
+  if (typeof settings.voice === "string" && settings.voice) parts.push(settings.voice);
+  if (typeof settings.outputFormat === "string" && settings.outputFormat) parts.push(settings.outputFormat);
+  if (typeof settings.speed === "number" && Number.isFinite(settings.speed)) parts.push(`${settings.speed}x`);
   return parts.join(" · ").slice(0, 128);
 }
 

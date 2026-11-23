@@ -87,7 +87,7 @@ export async function GET(request: Request): Promise<Response> {
       },
       byModel: byModel.map((row) => ({
         model: String(row.model_id),
-        kind: row.kind === "video" ? "video" : "image",
+        kind: row.kind === "video" ? "video" : row.kind === "audio" ? "audio" : "image",
         generations: Number(row.generations ?? 0),
         credits: Number(row.credits ?? 0),
       })),
@@ -100,7 +100,7 @@ export async function GET(request: Request): Promise<Response> {
       jobs: jobs.map((row) => ({
         requestId: String(row.request_id),
         model: String(row.model_id),
-        kind: row.kind === "video" ? "video" : "image",
+        kind: row.kind === "video" ? "video" : row.kind === "audio" ? "audio" : "image",
         status: String(row.status),
         credits: Number(row.credits ?? 0),
         costUsd: row.cost_usd === null ? null : Number(row.cost_usd),

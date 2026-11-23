@@ -300,6 +300,15 @@ export function Viewer({
                   onLoadedMetadata={(event) => measure(event.currentTarget)}
                   onError={() => setOnFallback(true)}
                 />
+              ) : item.kind === "audio" ? (
+                <audio
+                  className="ohf-viewer-audio"
+                  src={url}
+                  controls
+                  autoPlay
+                  onLoadedMetadata={() => setDelivered(16 / 5)}
+                  onError={() => setOnFallback(true)}
+                />
               ) : (
                 <ZoomStage
                   className="ohf-viewer-zoom"

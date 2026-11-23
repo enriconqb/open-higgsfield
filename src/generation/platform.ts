@@ -33,6 +33,7 @@ export type GenerationStatus = {
       gallery and for a reference that has to be sent on. */
   images?: Array<{ url: string; sourceUrl?: string }>;
   video?: { url: string; sourceUrl?: string };
+  audio?: { url: string; sourceUrl?: string };
   error?: unknown;
   /** USD reported by OpenRouter on a finished job. */
   costUsd?: number;
@@ -164,6 +165,51 @@ export function createPlatformClient(options: PlatformClientOptions) {
         immediate,
       };
     },
+    async submitSpeech(input: Record<string, unknown>): Promise<QueuedGeneration> {
+      const url = `${baseUrl}/audio/speech`;
+      console.info("[platform] request", { method: "POST", url, body: input });
+      const response = await fetchImpl(url, {
+        method: "POST",
+        headers: {
+          Authorization: auth,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) {
+        const payload = await readJson(response);
+        console.info("[platform] response", { method: "POST", url, status: response.status, body: summarize(payload) });
+        throw new PlatformError(response.status, payload);
+      }
+      const bytes = Buffer.from(await response.arrayBuffer());
+      const requestId =
+        response.headers.get("X-Generation-Id")?.trim() ||
+        response.headers.get("x-generation-id")?.trim() ||
+        `aud-${crypto.randomUUID()}`;
+      if (!bytes.byteLength) {
+        const immediate: GenerationStatus = {
+          status: "failed",
+          requestId,
+          error: "Speech response had no audio bytes",
+        };
+        return { status: immediate.status, requestId, statusUrl: "", cancelUrl: "", immediate };
+      }
+      const contentType = response.headers.get("Content-Type") || speechMime(input.response_format);
+      const mime = contentType.split(";")[0]?.trim() || "audio/mpeg";
+      const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
+      console.info("[platform] response", {
+        method: "POST",
+        url,
+        status: response.status,
+        body: { bytes: bytes.byteLength, mime },
+      });
+      const immediate: GenerationStatus = {
+        status: "completed",
+        requestId,
+        audio: { url: dataUrl },
+      };
+      return { status: immediate.status, requestId, statusUrl: "", cancelUrl: "", immediate };
+    },
     async status(requestId: string): Promise<GenerationStatus> {
       if (!requestId) throw new PlatformError(400, { detail: "Missing request id" });
       return mapStatus(await send("GET", `/videos/${encodeURIComponent(requestId)}`), requestId);
@@ -291,6 +337,12 @@ function summarize(payload: unknown): unknown {
     return { ...data, data: images.map(() => ({ b64_json: "[omitted]" })) };
   }
   return payload;
+}
+
+function speechMime(format: unknown): string {
+  if (format === "pcm") return "audio/pcm";
+  if (format === "wav") return "audio/wav";
+  return "audio/mpeg";
 }
 
 function messageFromBody(status: number, body: unknown): string {

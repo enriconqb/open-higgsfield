@@ -493,8 +493,8 @@ function emptyCopy(source: Source, kind: AssetKind): { title: string; hint: stri
   }
   if (kind === "audio") {
     return {
-      title: "Runs never return audio",
-      hint: "Attach an audio track from this device instead — it lands on the Uploads shelf.",
+      title: "No finished audio runs yet",
+      hint: "Speech you generate lands here, ready to attach as a reference on a later run.",
     };
   }
   return {

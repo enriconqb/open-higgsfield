@@ -1,4 +1,4 @@
-import type { MediaRole, ModelEntry, PlatformPaths } from "./types";
+import type { MediaRole, ModelEntry, PlatformPaths, SettingField } from "./types";
 
 const IMAGE_ASPECT = ["auto", "1:1", "4:3", "3:4", "16:9", "9:16"] as const;
 const VIDEO_ASPECT = ["16:9", "9:16", "1:1"] as const;
@@ -40,4 +40,9 @@ export function videoModel(
     },
     paths,
   };
+}
+
+/** OpenRouter TTS. Slug lives in openrouter-slugs; no PlatformPaths. */
+export function speechModel(id: string, label: string, settings: Record<string, SettingField>): ModelEntry {
+  return { id, surface: "audio", label, roles: {}, settings };
 }

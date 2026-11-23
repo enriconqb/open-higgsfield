@@ -32,9 +32,13 @@ const EMPTY: Record<GalleryView, { title: string; hint: string }> = {
     title: "Your video runs land here",
     hint: "Describe the shot below, pick a model, press Generate. Every finished run stays in this browser.",
   },
+  audio: {
+    title: "Your speech runs land here",
+    hint: "Write a script below, pick a voice, press Generate. Every finished run stays in this browser.",
+  },
   assets: {
     title: "Nothing generated yet",
-    hint: "Image and video runs both land in this grid and stay in this browser.",
+    hint: "Image, video, and audio runs land in this grid and stay in this browser.",
   },
   favorites: {
     title: "Nothing kept yet",
@@ -308,6 +312,8 @@ const Tile = memo(function Tile({
             preload="metadata"
             onError={() => setOnFallback(true)}
           />
+        ) : item.kind === "audio" ? (
+          <audio className="ohf-tile-audio" src={poster} controls preload="metadata" onError={() => setOnFallback(true)} />
         ) : (
           /* Platform-hosted result on an arbitrary CDN host; next/image would
              need every provider domain allow-listed up front. */
@@ -695,7 +701,7 @@ function Empty({
   surface: Surface;
   onStarter: (prompt: string) => void;
 }) {
-  const thumbRatio = surface === "image" ? "4 / 3" : "16 / 9";
+  const thumbRatio = surface === "image" ? "4 / 3" : surface === "audio" ? "16 / 5" : "16 / 9";
   /* Reshuffled on every page load, and only after mount — picking during
      render would hand the hydrating client a different three than the server
      wrote. Until the picks land the server's three hold their space unseen, so

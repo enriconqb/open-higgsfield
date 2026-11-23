@@ -18,9 +18,8 @@ import { assemblePlane } from "@/generation/plane";
 import type { GenerationStatus } from "@/generation/platform";
 import { POLL_DEADLINE_MS, WatchAbandonedError, stopWatching, watchRequest } from "@/generation/poll";
 import { useActive } from "@/generation/stores/active";
-import { useImageMedia, useVideoMedia } from "@/generation/stores/media";
+import { storesFor } from "@/generation/stores/for-surface";
 import { rebindPromptMentions, resolvePromptMentions, reuseAttachments, sameMentionList, type PromptMention } from "@/generation/mentions";
-import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
 import { useSettings } from "@/generation/stores/settings";
 
 import { GRAIN_URI, artFor } from "./artwork";
@@ -138,7 +137,8 @@ function runningRows(requestId: string, count: number, draft: RunDraft): RunReco
 
 function terminalRows(requestId: string, draft: RunDraft, status: GenerationStatus): RunRecord[] {
   const urls =
-    status.images?.map((image) => image.url) ?? (status.video ? [status.video.url] : []);
+    status.images?.map((image) => image.url) ??
+    (status.video ? [status.video.url] : status.audio ? [status.audio.url] : []);
   const completed = status.status === "completed" && urls.length > 0;
   const base = status.requestId || requestId;
   const failure = completed ? undefined : failureText(status);
@@ -148,7 +148,8 @@ function terminalRows(requestId: string, draft: RunDraft, status: GenerationStat
     /* The provider link this row came from, kept beside the archived copy: the
        gallery shows it while it still answers and falls back to the copy after.
        Video carries it as sourceUrl, each image carries its own. */
-    const source = status.images?.[offset]?.sourceUrl ?? status.video?.sourceUrl;
+    const source =
+      status.images?.[offset]?.sourceUrl ?? status.video?.sourceUrl ?? status.audio?.sourceUrl;
     const remote = url && source && source !== url && /^https:\/\//i.test(source) ? [source] : undefined;
     return {
       id,
@@ -639,7 +640,7 @@ function persistLocal(records: RunRecord[]) {
     (next: GalleryView) => {
       setView(next);
       galleryRef.current?.scrollTo({ top: 0 });
-      if (next !== "image" && next !== "video") return;
+      if (next !== "image" && next !== "video" && next !== "audio") return;
       if (next === surface) return;
       const list = modelsFor(keyKind === "higgsfield" ? "higgsfield" : "openrouter").filter(
         (entry) => entry.surface === next,
@@ -666,8 +667,8 @@ function persistLocal(records: RunRecord[]) {
       return;
     }
     const surfaceNow = useActive.getState().surface;
-    const promptStore = surfaceNow === "image" ? useImagePrompt : useVideoPrompt;
-    const mediaItems = (surfaceNow === "image" ? useImageMedia : useVideoMedia).getState().items;
+    const { prompt: promptStore, media: mediaStore } = storesFor(surfaceNow);
+    const mediaItems = mediaStore.getState().items;
     const sourceBefore = promptStore.getState();
     const rebound = rebindPromptMentions(sourceBefore.text, sourceBefore.mentions ?? [], mediaItems);
     if (rebound.text !== sourceBefore.text || !sameMentionList(sourceBefore.mentions ?? [], rebound.mentions)) {
@@ -691,13 +692,13 @@ function persistLocal(records: RunRecord[]) {
     }
     const plane = assemblePlane();
     if (!plane.prompt.text.trim()) return;
-    const source = (useActive.getState().surface === "image" ? useImagePrompt : useVideoPrompt).getState();
+    const source = storesFor(useActive.getState().surface).prompt.getState();
     const mentions = source.mentions.filter((mention) => !mention.url.startsWith("blob:"));
 
     const entry = getModel(plane.model);
     const ratio = ratioToCss(
       plane.settings.aspectRatio,
-      entry.surface === "image" ? "4 / 3" : "16 / 9",
+      entry.surface === "image" ? "4 / 3" : entry.surface === "audio" ? "16 / 5" : "16 / 9",
     );
     const meta = metaOf(entry, plane.settings);
     const badge = entry.surface === "video" ? durationBadge(plane.settings) : undefined;
@@ -799,11 +800,12 @@ function persistLocal(records: RunRecord[]) {
       if (model) {
         setModel(record.modelId);
         if (record.settings) setSettings(record.modelId, record.settings);
-        const store = model.surface === "image" ? useImageMedia : useVideoMedia;
-        store.getState().replace(reuseAttachments(model.roles, record.media ?? [], record.mentions ?? []));
+        storesFor(model.surface)
+          .media.getState()
+          .replace(reuseAttachments(model.roles, record.media ?? [], record.mentions ?? []));
       }
-      (record.surface === "image" ? useImagePrompt : useVideoPrompt)
-        .getState()
+      storesFor(record.surface)
+        .prompt.getState()
         .restore(record.promptRaw ?? record.prompt, record.mentions ?? []);
       setViewerId(null);
       setError(null);
@@ -1022,7 +1024,7 @@ function persistLocal(records: RunRecord[]) {
      caret; pressing Generate stays their call. */
   const applyStarter = useCallback(
     (text: string) => {
-      (surface === "image" ? useImagePrompt : useVideoPrompt).getState().restore(text, []);
+      storesFor(surface).prompt.getState().restore(text, []);
       setError(null);
       setFocusNonce((n) => n + 1);
     },

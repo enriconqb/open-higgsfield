@@ -41,7 +41,7 @@ export async function createShare(input: {
 }): Promise<ActionResult<{ token: string }>> {
   return run(async () => {
     const user = await requireActiveUser();
-    if (input.kind !== "image" && input.kind !== "video" && input.kind !== "timeline") {
+    if (input.kind !== "image" && input.kind !== "video" && input.kind !== "timeline" && input.kind !== "audio") {
       throw new Error("Unknown share");
     }
     const limit = input.kind === "timeline" ? 20 : 1;
@@ -51,8 +51,10 @@ export async function createShare(input: {
     const stored: Array<StoredClip & ShareFact> = [];
     for (const clip of input.clips) {
       if (input.kind === "image" && clip.kind !== "image") throw new Error("Share an image");
-      if (input.kind !== "image" && clip.kind !== "video") throw new Error("Share a video");
-      const url = clip.url.trim().startsWith("data:") ? await archiveInlineImage(clip.url) : clip.url;
+      if (input.kind === "audio" && clip.kind !== "audio") throw new Error("Share audio");
+      if (input.kind !== "image" && input.kind !== "audio" && clip.kind !== "video") throw new Error("Share a video");
+      const url =
+        clip.url.trim().startsWith("data:image/") ? await archiveInlineImage(clip.url) : clip.url;
       const next = clipFromUrl(url, clip.kind);
       if (!next) throw new Error("This result cannot be shared yet");
       const fact = publicFact(clip);
@@ -72,7 +74,9 @@ export async function createShare(input: {
 export async function readPublicShare(token: string): Promise<PublicShare | null> {
   if (!/^[A-Za-z0-9_-]{32,80}$/.test(token)) return null;
   const row = await queryOne<ShareRow>("SELECT token, kind, clips FROM shares WHERE token = ?", [token]);
-  if (!row || (row.kind !== "image" && row.kind !== "video" && row.kind !== "timeline")) return null;
+  if (!row || (row.kind !== "image" && row.kind !== "video" && row.kind !== "timeline" && row.kind !== "audio")) {
+    return null;
+  }
   const clips = readClips(row.clips);
   const facts = parseShareFacts(typeof row.clips === "string" ? safeJson(row.clips) : row.clips);
   if (!clips || !facts) return null;

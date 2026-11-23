@@ -94,10 +94,11 @@ export function Compare({
     const list: ShelfItem[] = [];
     const generations = history
       .filter(
-        (record) =>
+        (record): record is RunRecord & { kind: "image" | "video" } =>
           record.archived !== true &&
           record.status === "completed" &&
-          record.urls[0] &&
+          Boolean(record.urls[0]) &&
+          (record.kind === "image" || record.kind === "video") &&
           matchesAuthor(record, member, viewerName),
       )
       .map((record) => {

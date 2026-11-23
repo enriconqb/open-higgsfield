@@ -128,6 +128,8 @@ export function SharePreview({
           {kind === "image" ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img className="ohf-share-still" src={urls[0]} alt="" draggable={false} onLoad={noteSize} />
+          ) : kind === "audio" ? (
+            <audio className="ohf-share-audio" src={urls[0]} controls autoPlay />
           ) : (
             <>
               <TimelinePlayer

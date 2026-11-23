@@ -11,7 +11,7 @@ export type UsageFilters = {
   from: string;
   to: string;
   modelId: string;
-  kind: "" | "image" | "video";
+  kind: "" | "image" | "video" | "audio";
   status: "" | "pending" | "success" | "failed";
   requestId: string;
   username: string;
@@ -38,7 +38,7 @@ export type UsageRow = {
   workspace: string;
   username: string;
   modelId: string;
-  kind: "image" | "video";
+  kind: "image" | "video" | "audio";
   spec: string;
   credits: number;
   costUsd: number | null;
@@ -87,7 +87,7 @@ function cleanFilters(data: unknown, isSuperadmin: boolean): UsageFilters {
   const fallback = defaultRange();
   const from = typeof raw.from === "string" && DAY.test(raw.from) ? raw.from : fallback.from;
   const to = typeof raw.to === "string" && DAY.test(raw.to) ? raw.to : fallback.to;
-  const kind = raw.kind === "image" || raw.kind === "video" ? raw.kind : "";
+  const kind = raw.kind === "image" || raw.kind === "video" || raw.kind === "audio" ? raw.kind : "";
   const status =
     raw.status === "pending" || raw.status === "success" || raw.status === "failed" ? raw.status : "";
   const teamIds = Array.isArray(raw.teamIds)
@@ -288,7 +288,7 @@ async function loadUsageDashboardHandler(data?: unknown): Promise<UsageDashboard
       workspace: String(row.workspace ?? "Personal"),
       username: String(row.username),
       modelId: String(row.model_id),
-      kind: row.kind === "video" ? "video" : "image",
+      kind: row.kind === "video" ? "video" : row.kind === "audio" ? "audio" : "image",
       spec: String(row.spec ?? ""),
       credits: Number(row.credits ?? 0),
       costUsd: row.cost_usd == null ? null : Number(row.cost_usd),

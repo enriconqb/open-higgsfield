@@ -10,7 +10,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Chrome or Edge is installed, or `VERIFY_BROWSER` points at a Chromium binary.
 - Run `node .cursor/skills/verify-studio/cli.mjs doctor` and require a pass before Drive.
 - Never attach to the developer's interactive Chrome profile; the CLI uses a disposable `--user-data-dir`.
-- Never press Generate or call `/api/v1/videos`, `/api/v1/images`, or OpenRouter during verification.
+- Never press Generate or call `/api/v1/videos`, `/api/v1/images`, `/api/v1/audio`, `/audio/speech`, or OpenRouter during verification.
 
 ## Driving conventions
 
@@ -43,6 +43,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 
 - [Sign in](./sign-in.md) covers the `/login` form and redirect into the studio.
 - [Studio home](./studio-home.md) covers the signed-in composer and gallery scope rail.
+- [Audio surface](./audio-surface.md) covers the Audio tab (TTS) without pressing Generate.
 - [Change password](./account-password.md) covers `/account` without saving a new password.
 - [Request access](./request-access.md) covers `/register` from the login footer.
 - [API tokens dialog](./api-tokens.md) covers opening the tokens panel without minting a `vic_` token.

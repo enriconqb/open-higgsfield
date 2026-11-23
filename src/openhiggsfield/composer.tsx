@@ -14,7 +14,7 @@ import { unwrap } from "@/lib/action-result";
 import type { KeyProvider } from "@/generation/credentials";
 import { MAX_BATCH, useActive } from "@/generation/stores/active";
 import { mentionQueryAt, mentionToken, rebindPromptMentions, resolvePromptMentions, sameMentionList, type PromptMention } from "@/generation/mentions";
-import { useImagePrompt, useVideoPrompt } from "@/generation/stores/prompt";
+import { storesFor } from "@/generation/stores/for-surface";
 import { useSettings } from "@/generation/stores/settings";
 
 import { swatchFor } from "./artwork";
@@ -122,9 +122,7 @@ export function Composer({
   const setModel = useActive((state) => state.setModel);
   const batch = useActive((state) => state.batch);
   const setBatch = useActive((state) => state.setBatch);
-  const imagePrompt = useImagePrompt();
-  const videoPrompt = useVideoPrompt();
-  const prompt = surface === "image" ? imagePrompt : videoPrompt;
+  const prompt = storesFor(surface).prompt();
   const settings = useSettings();
   const [caps, setCaps] = useState<OpenRouterCaps | null>(null);
   useEffect(() => {

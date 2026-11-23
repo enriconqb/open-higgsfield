@@ -7,7 +7,7 @@ import { execute, queryOne, queryRows } from "@/db/client";
 
 import { uploadFilePath, uploadRoot, uploadTypePath } from "./local-upload";
 
-export type ApiJobKind = "image" | "video";
+export type ApiJobKind = "image" | "video" | "audio";
 
 /** `id` means the bytes live in the uploads directory and are streamed back by
     /api/v1/jobs/<id>/files/<index>; `url` is used when the provider already
@@ -27,6 +27,7 @@ export type StoredImage = {
 export type ApiJobResult = {
   images?: StoredImage[];
   video?: { url: string; sourceUrl?: string };
+  audio?: { url: string; sourceUrl?: string };
 };
 
 export type ApiJobRow = {
@@ -228,7 +229,7 @@ export function parseJobResult(value: unknown): ApiJobResult {
     }
   }
   if (typeof value !== "object" || Array.isArray(value)) return {};
-  const record = value as { images?: unknown; video?: unknown };
+  const record = value as { images?: unknown; video?: unknown; audio?: unknown };
   const images = Array.isArray(record.images)
     ? record.images.flatMap((item): StoredImage[] => {
         if (item === null || typeof item !== "object") return [];
@@ -252,10 +253,19 @@ export function parseJobResult(value: unknown): ApiJobResult {
       : null;
   const videoUrl = videoRow?.url;
   const videoSource = typeof videoRow?.sourceUrl === "string" ? videoRow.sourceUrl : undefined;
+  const audioRow =
+    record.audio !== null && typeof record.audio === "object"
+      ? (record.audio as { url?: unknown; sourceUrl?: unknown })
+      : null;
+  const audioUrl = audioRow?.url;
+  const audioSource = typeof audioRow?.sourceUrl === "string" ? audioRow.sourceUrl : undefined;
   return {
     ...(images?.length ? { images } : {}),
     ...(typeof videoUrl === "string"
       ? { video: { url: videoUrl, ...(videoSource ? { sourceUrl: videoSource } : {}) } }
+      : {}),
+    ...(typeof audioUrl === "string"
+      ? { audio: { url: audioUrl, ...(audioSource ? { sourceUrl: audioSource } : {}) } }
       : {}),
   };
 }

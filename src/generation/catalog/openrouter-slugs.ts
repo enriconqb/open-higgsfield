@@ -29,6 +29,11 @@ const SLUGS: Record<string, string> = {
   "grok-imagine-2": "x-ai/grok-imagine-image-2.0",
   "recraft-4.1": "recraft/recraft-v4.1",
   "qwen-image-3": "qwen/qwen-image-3",
+  "voxtral-mini": "mistralai/voxtral-mini-tts-2603",
+  "eleven-flash": "elevenlabs/eleven-flash-v2.5",
+  "eleven-multilingual": "elevenlabs/eleven-multilingual-v2",
+  "kokoro": "hexgrad/kokoro-82m",
+  "grok-voice": "x-ai/grok-voice-tts-1.0",
 };
 
 export function openRouterSlug(modelId: string): string {
@@ -82,16 +87,25 @@ const IMAGE_AFTER: Record<string, string> = {
   "black-forest-labs/flux.2-flex": "black-forest-labs/flux.2-pro",
 };
 
+const AUDIO_SLUGS = [
+  "mistralai/voxtral-mini-tts-2603",
+  "elevenlabs/eleven-flash-v2.5",
+  "elevenlabs/eleven-multilingual-v2",
+  "hexgrad/kokoro-82m",
+  "x-ai/grok-voice-tts-1.0",
+];
+
 export function openRouterSlugOrder(): string[] {
   const videos = new Set(VIDEO_SLUGS);
-  const images = Object.values(OPENROUTER_EXTRA_SLUGS).filter((slug) => !videos.has(slug));
+  const audio = new Set(AUDIO_SLUGS);
+  const images = Object.values(OPENROUTER_EXTRA_SLUGS).filter((slug) => !videos.has(slug) && !audio.has(slug));
   const orderedImages: string[] = [];
   for (const slug of images) {
     orderedImages.push(slug);
     const insert = IMAGE_AFTER[slug];
     if (insert) orderedImages.push(insert);
   }
-  return [...VIDEO_SLUGS, ...orderedImages];
+  return [...VIDEO_SLUGS, ...orderedImages, ...AUDIO_SLUGS];
 }
 
 export function seedanceReferences(modelId: string): boolean {

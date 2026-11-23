@@ -48,7 +48,7 @@ export async function GET(
     return new NextResponse(null, { status: 502 });
   }
   const type = upstream.headers.get("Content-Type")?.split(";")[0]?.trim() || fallbackType(clip.kind);
-  if (!/^(image|video)\//.test(type) && type !== "application/octet-stream") {
+  if (!/^(image|video|audio)\//.test(type) && type !== "application/octet-stream") {
     return new NextResponse(null, { status: 502 });
   }
   const headers: Record<string, string> = { ...PRIVATE, "Content-Type": type };
@@ -59,7 +59,7 @@ export async function GET(
   return new NextResponse(upstream.body, { status: upstream.status === 206 ? 206 : 200, headers });
 }
 
-async function streamUpload(id: string, kind: "image" | "video", header: string | null): Promise<NextResponse> {
+async function streamUpload(id: string, kind: "image" | "video" | "audio", header: string | null): Promise<NextResponse> {
   let handle: Awaited<ReturnType<typeof open>> | null = null;
   try {
     handle = await open(uploadFilePath(id), "r");
@@ -122,6 +122,8 @@ function parseRange(header: string | null, size: number): { start: number; end: 
   return { start, end: Math.min(end, size - 1) };
 }
 
-function fallbackType(kind: "image" | "video"): string {
-  return kind === "image" ? "image/jpeg" : "video/mp4";
+function fallbackType(kind: "image" | "video" | "audio"): string {
+  if (kind === "image") return "image/jpeg";
+  if (kind === "audio") return "audio/mpeg";
+  return "video/mp4";
 }

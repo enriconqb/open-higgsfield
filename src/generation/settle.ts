@@ -202,6 +202,14 @@ export function jobResultFromStatus(status: GenerationStatus): ApiJobResult {
           },
         }
       : {}),
+    ...(status.audio
+      ? {
+          audio: {
+            url: status.audio.url,
+            ...(status.audio.sourceUrl ? { sourceUrl: status.audio.sourceUrl } : {}),
+          },
+        }
+      : {}),
   };
 }
 

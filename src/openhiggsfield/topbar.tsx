@@ -16,6 +16,7 @@ import { TemplatesPanel } from "./templates-panel";
 import {
   AssetsIcon,
   ArchiveIcon,
+  AudioIcon,
   ClockIcon,
   CompareIcon,
   FormatIcon,
@@ -34,6 +35,7 @@ import {
 const VIEW_ICONS: Record<GalleryView, () => React.ReactNode> = {
   image: () => <ImageIcon />,
   video: () => <VideoIcon />,
+  audio: () => <AudioIcon />,
   assets: () => <AssetsIcon />,
   favorites: () => <HeartIcon size={15} />,
   archive: () => <ArchiveIcon size={15} />,

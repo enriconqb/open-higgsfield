@@ -22,6 +22,7 @@ export function isArchivedMediaUrl(url: string): boolean {
 }
 
 const DATA_IMAGE = /^data:image\/(?:png|jpeg|webp|gif);base64,([A-Za-z0-9+/=\s]+)$/i;
+const DATA_AUDIO = /^data:(audio\/(?:mpeg|mp3|wav|pcm|ogg|webm|x-wav|L16));base64,([A-Za-z0-9+/=\s]+)$/i;
 
 /** Bytes of a browser data-image URL, or null when it is not a still we store. */
 export function dataImageBytes(url: string): { bytes: Buffer; mime: string } | null {
@@ -31,6 +32,16 @@ export function dataImageBytes(url: string): { bytes: Buffer; mime: string } | n
   if (!bytes.byteLength) return null;
   const mime = sniffImageMime(bytes);
   if (!mime) return null;
+  return { bytes, mime };
+}
+
+/** Bytes of a TTS data-audio URL. */
+export function dataAudioBytes(url: string): { bytes: Buffer; mime: string } | null {
+  const match = DATA_AUDIO.exec(url.trim());
+  if (!match?.[1] || !match[2]) return null;
+  const bytes = Buffer.from(match[2].replace(/\s/g, ""), "base64");
+  if (!bytes.byteLength) return null;
+  const mime = match[1] === "audio/mp3" ? "audio/mpeg" : match[1];
   return { bytes, mime };
 }
 
@@ -74,7 +85,7 @@ export async function ensureArchivedUrl(input: {
 }): Promise<string> {
   const url = input.url;
   if (!url || isArchivedMediaUrl(url)) return url;
-  const inline = dataImageBytes(url);
+  const inline = dataImageBytes(url) ?? dataAudioBytes(url);
   const remote = /^https?:\/\//i.test(url);
   if (!remote && !inline && !input.fetchBytes) return url;
   if (inline && inline.bytes.byteLength > uploadMaxBytes()) return url;
@@ -119,8 +130,12 @@ export async function ensureArchivedUrl(input: {
 export async function archiveRunRecord(userId: number, record: RunRecord): Promise<RunRecord> {
   if (record.status !== "completed" || record.urls.length === 0) return record;
   const requestId = record.requestId ?? record.id.split("#")[0] ?? record.id;
-  const video = record.kind === "video" || record.surface === "video";
-  const mime = video ? "video/mp4" : "image/png";
+  const mime =
+    record.kind === "video" || record.surface === "video"
+      ? "video/mp4"
+      : record.kind === "audio" || record.surface === "audio"
+        ? "audio/mpeg"
+        : "image/png";
   const urls = await Promise.all(
     record.urls.map((url, index) => ensureArchivedUrl({ url, userId, requestId, index, mime })),
   );
