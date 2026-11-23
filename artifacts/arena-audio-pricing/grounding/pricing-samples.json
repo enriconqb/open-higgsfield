@@ -1,0 +1,37 @@
+[
+  {
+    "id": "elevenlabs/eleven-flash-v2.5",
+    "pricing": {
+      "prompt": "0.00004",
+      "completion": "0"
+    }
+  },
+  {
+    "id": "hexgrad/kokoro-82m",
+    "pricing": {
+      "prompt": "0.00000099",
+      "completion": "0"
+    }
+  },
+  {
+    "id": "mistralai/voxtral-mini-tts-2603",
+    "pricing": {
+      "prompt": "0.000016",
+      "completion": "0"
+    }
+  },
+  {
+    "id": "bytedance-seed/seed-audio-1-0",
+    "pricing": {
+      "prompt": "0",
+      "completion": "0.0025"
+    }
+  },
+  {
+    "id": "google/gemini-2.5-flash-tts",
+    "pricing": {
+      "prompt": "0.0000005",
+      "completion": "0.00001"
+    }
+  }
+]
