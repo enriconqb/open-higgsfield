@@ -283,6 +283,46 @@ export function sameMentionList(left: PromptMention[], right: PromptMention[]): 
   });
 }
 
+/** Bare `@video1` / `@image2` pasted from a script, not the encoded `@[…]` token. */
+const BARE_SLOT = /(?<![\w.])@(image|video|audio)(\d+)\b/g;
+
+/**
+ * Turn bare `@image1` / `@video1` / `@audio1` into encoded tokens when the tray
+ * already owns that slot. Unmatched bare refs stay as plain text.
+ */
+export function expandBareMentionSlots(
+  text: string,
+  items: MediaItem[],
+): { text: string; mentions: PromptMention[] } {
+  const byLabel = new Map(mentionSlots(items).map((slot) => [`${slot.kind}:${slot.label}`, slot]));
+  if (byLabel.size === 0) return { text, mentions: [] };
+  const kept: PromptMention[] = [];
+  const seen = new Set<string>();
+  const next = text.replace(BARE_SLOT, (match, kind: string, index: string) => {
+    const slot = byLabel.get(`${kind}:${kind}${index}`);
+    if (!slot) return match;
+    if (!seen.has(slot.id)) {
+      seen.add(slot.id);
+      kept.push(slot);
+    }
+    return mentionToken(slot);
+  });
+  return { text: next, mentions: kept };
+}
+
+/** Expand bare slot refs, then rebind encoded tokens to the current tray. */
+export function syncPromptMentions(
+  text: string,
+  mentions: PromptMention[],
+  items: MediaItem[],
+): { text: string; mentions: PromptMention[] } {
+  const expanded = expandBareMentionSlots(text, items);
+  const catalog = expanded.mentions.length
+    ? [...mentions.filter((mention) => !expanded.mentions.some((slot) => slot.id === mention.id)), ...expanded.mentions]
+    : mentions;
+  return rebindPromptMentions(expanded.text, catalog, items);
+}
+
 export function rebindPromptMentions(
   text: string,
   mentions: PromptMention[],

@@ -19,7 +19,7 @@ import type { GenerationStatus } from "@/generation/platform";
 import { POLL_DEADLINE_MS, WatchAbandonedError, stopWatching, watchRequest } from "@/generation/poll";
 import { useActive } from "@/generation/stores/active";
 import { storesFor } from "@/generation/stores/for-surface";
-import { rebindPromptMentions, resolvePromptMentions, reuseAttachments, sameMentionList, type PromptMention } from "@/generation/mentions";
+import { resolvePromptMentions, reuseAttachments, sameMentionList, syncPromptMentions, type PromptMention } from "@/generation/mentions";
 import { useSettings } from "@/generation/stores/settings";
 
 import { GRAIN_URI, artFor } from "./artwork";
@@ -670,7 +670,7 @@ function persistLocal(records: RunRecord[]) {
     const { prompt: promptStore, media: mediaStore } = storesFor(surfaceNow);
     const mediaItems = mediaStore.getState().items;
     const sourceBefore = promptStore.getState();
-    const rebound = rebindPromptMentions(sourceBefore.text, sourceBefore.mentions ?? [], mediaItems);
+    const rebound = syncPromptMentions(sourceBefore.text, sourceBefore.mentions ?? [], mediaItems);
     if (rebound.text !== sourceBefore.text || !sameMentionList(sourceBefore.mentions ?? [], rebound.mentions)) {
       promptStore.getState().restore(rebound.text, rebound.mentions);
     }

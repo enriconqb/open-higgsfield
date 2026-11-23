@@ -3,7 +3,7 @@
  *
  *   pnpm exec tsx scripts/mentions-selftest.ts
  */
-import { mentionToken, parseMentionTokens, rebindPromptMentions, resolvePromptMentions, reuseAttachments, type PromptMention } from "@/generation/mentions";
+import { expandBareMentionSlots, mentionToken, parseMentionTokens, rebindPromptMentions, resolvePromptMentions, reuseAttachments, syncPromptMentions, type PromptMention } from "@/generation/mentions";
 
 let checks = 0;
 let failures = 0;
@@ -143,6 +143,27 @@ const onlyMention = reuseAttachments(
 );
 check("a mention with no saved media is the first attachment", onlyMention.length === 1 && onlyMention[0]?.url.endsWith("portrait.png") && onlyMention[0]?.role === "reference");
 check("a run with nothing attached clears the tray", reuseAttachments({ reference: 2 }, [], []).length === 0);
+
+const bareScript = `1. @video1: "Ini dia BAR-DI!"\n2. @video1: "Colok, sambung"\n3. @image1 still in frame`;
+const bareTray = [
+  { id: "tray-video", url: "https://cdn.example/product.mp4", role: "video" as const },
+  { id: "tray-image", url: "https://cdn.example/face.png", role: "reference" as const },
+];
+const expanded = expandBareMentionSlots(bareScript, bareTray);
+check("bare @video1 becomes an encoded token", expanded.text.includes(mentionToken({ id: "tray-video", kind: "video", label: "video1" })));
+check("bare @image1 becomes an encoded token", expanded.text.includes(mentionToken({ id: "tray-image", kind: "image", label: "image1" })));
+check("bare expand catalogs the tray slots", expanded.mentions.some((m) => m.id === "tray-video") && expanded.mentions.some((m) => m.id === "tray-image"));
+check("bare @video9 without a slot stays text", expandBareMentionSlots("see @video9 now", bareTray).text.includes("@video9"));
+
+const synced = syncPromptMentions(bareScript, [], bareTray);
+const syncedResolved = resolvePromptMentions({
+  text: synced.text,
+  catalog: synced.mentions,
+  roles: { reference: 4, video: 2 },
+  existing: bareTray,
+});
+check("sync from paste does not mark video1 missing", syncedResolved.chips.every((chip) => chip.status !== "missing"));
+check("sync keeps spoken script lines", synced.text.includes('"Ini dia BAR-DI!"') && synced.text.includes('"Colok, sambung"'));
 
 console.log(`\n${checks - failures}/${checks} passed`);
 if (failures > 0) process.exit(1);
