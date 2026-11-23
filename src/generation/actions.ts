@@ -17,6 +17,7 @@ import type { GenerationPlane } from "./catalog/types";
 import { MissingCredentialsError } from "./credentials";
 import type { KeyProvider } from "./credentials";
 import { ActionError, run, type ActionResult } from "@/lib/action-result";
+import { estimatePlaneUsd } from "@/usage/record";
 import {
   capabilitiesFor,
   quoteFor,
@@ -94,7 +95,8 @@ async function rememberStudioJob(
     const status = immediate?.status ?? queued.status;
     const terminal = TERMINAL_JOB_STATUSES.includes(status);
     const result = immediate ? jobResultFromStatus(immediate) : null;
-    const costUsd = immediate?.costUsd ?? null;
+    const quote = await quoteFor(context, plane.model).catch(() => null);
+    const costUsd = immediate?.costUsd ?? estimatePlaneUsd(quote, plane);
     const error = status === "failed" ? errorTextOf(immediate?.error) : null;
 
     await createApiJob({

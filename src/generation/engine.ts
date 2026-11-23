@@ -43,6 +43,10 @@ const PRICE_TTL_MS = 5 * 60_000;
 
 let videoSkuCache: { at: number; models: Map<string, { skus: Record<string, number>; sizes: string[] }> } | null =
   null;
+let speechPriceCache: {
+  at: number;
+  models: Map<string, { prompt: number; completion: number }>;
+} | null = null;
 const imagePriceCache = new Map<string, { at: number; lines: ImagePriceLine[] }>();
 const capsCache = new Map<string, { at: number; caps: OpenRouterCaps }>();
 
@@ -206,13 +210,41 @@ export async function quoteFor(
     return null;
   }
   const model = getModel(modelId);
-  if (model.surface === "audio") return null;
+  if (model.surface === "audio") {
+    const rates = await speechRates(context.credentials, slug);
+    return rates ? { kind: "audio", ...rates } : null;
+  }
   if (model.surface === "video") {
     const priced = await videoSkus(context.credentials, slug);
     return priced ? { kind: "video", skus: priced.skus, sizes: priced.sizes } : null;
   }
   const lines = await imageLines(context.credentials, slug);
   return lines.length ? { kind: "image", lines } : null;
+}
+
+async function speechRates(
+  credentials: { apiKey: string; baseUrl: string },
+  slug: string,
+): Promise<{ prompt: number; completion: number } | null> {
+  if (!speechPriceCache || Date.now() - speechPriceCache.at > PRICE_TTL_MS) {
+    const payload = await openRouterJson(
+      credentials,
+      "/models?output_modalities=speech&endpoints=/api/v1/audio/speech",
+    );
+    const models = new Map<string, { prompt: number; completion: number }>();
+    for (const item of asList(payload && typeof payload === "object" ? (payload as { data?: unknown }).data : null)) {
+      const row = asObject(item, "pricing");
+      const id = row.id;
+      if (typeof id !== "string") continue;
+      const pricing = asObject(row.pricing, "pricing");
+      const prompt = Number(pricing.prompt);
+      const completion = Number(pricing.completion);
+      if (!Number.isFinite(prompt) || !Number.isFinite(completion)) continue;
+      models.set(id, { prompt, completion });
+    }
+    speechPriceCache = { at: Date.now(), models };
+  }
+  return speechPriceCache.models.get(slug) ?? null;
 }
 
 async function videoSkus(

@@ -7,7 +7,14 @@ export type ImagePriceLine = {
 
 export type OpenRouterQuote =
   | { kind: "video"; skus: Record<string, number>; sizes?: string[] }
-  | { kind: "image"; lines: ImagePriceLine[] };
+  | { kind: "image"; lines: ImagePriceLine[] }
+  | {
+      kind: "audio";
+      /** USD per input character — OpenRouter `pricing.prompt`. */
+      prompt: number;
+      /** USD per generated audio second — OpenRouter `pricing.completion`. */
+      completion: number;
+    };
 
 export type EstimateInput = {
   resolution?: string;
@@ -18,13 +25,33 @@ export type EstimateInput = {
   videos: number;
   audios: number;
   batch: number;
+  /** Billable TTS script length (`plane.prompt.text.length`). */
+  characters?: number;
 };
 
 /** USD from a cached OpenRouter price table and the controls the user has set. */
 export function estimateUsd(quote: OpenRouterQuote, input: EstimateInput): number | null {
-  const total = quote.kind === "video" ? estimateVideo(quote.skus, quote.sizes, input) : estimateImage(quote.lines, input);
+  const total =
+    quote.kind === "video"
+      ? estimateVideo(quote.skus, quote.sizes, input)
+      : quote.kind === "image"
+        ? estimateImage(quote.lines, input)
+        : estimateAudio(quote, input);
   if (total === null || !Number.isFinite(total) || total <= 0) return null;
   return total;
+}
+
+function estimateAudio(
+  quote: Extract<OpenRouterQuote, { kind: "audio" }>,
+  input: EstimateInput,
+): number | null {
+  const batch = input.batch > 0 ? input.batch : 1;
+  const chars = Math.max(0, input.characters ?? 0);
+  const seconds = input.duration && input.duration > 0 ? input.duration : 0;
+  let total = 0;
+  if (quote.prompt > 0) total += quote.prompt * chars * batch;
+  if (quote.completion > 0 && seconds > 0) total += quote.completion * seconds * batch;
+  return total > 0 ? total : null;
 }
 
 export function formatUsd(amount: number): string {

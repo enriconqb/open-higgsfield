@@ -35,6 +35,7 @@ export function estimatePlaneUsd(quote: OpenRouterQuote | null, plane: Generatio
     videos: media.video?.length ?? 0,
     audios: media.audio?.length ?? 0,
     batch: batch > 0 ? batch : 1,
+    characters: plane.prompt.text.length,
   });
 }
 

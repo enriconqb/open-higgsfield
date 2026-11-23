@@ -273,6 +273,7 @@ export function Composer({
         videos: referenceCounts.videos,
         audios: referenceCounts.audios,
         batch: batchValue,
+        characters: prompt.text.length,
       })
     : null;
   const settingKeys = Object.keys(tuned.settings).filter((key) => key !== native?.key);
