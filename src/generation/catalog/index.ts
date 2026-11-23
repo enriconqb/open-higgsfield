@@ -37,6 +37,7 @@ import {
 } from "./seedance-2";
 import { seedance25, seedance25Edit, seedance25Extend } from "./seedance-2.5";
 import { OPENROUTER_EXTRAS } from "./openrouter-extra";
+import { OPENROUTER_SPEECH_EXTRAS } from "./openrouter-speech-extra";
 import { listedOnOpenRouter, openRouterSlug, openRouterSlugOrder } from "./openrouter-slugs";
 import { soul2, soulCinema } from "./soul";
 import { TTS_MODELS } from "./tts";
@@ -92,7 +93,12 @@ export const MODELS: readonly ModelEntry[] = [
   dop,
 ];
 
-const ALL_MODELS: readonly ModelEntry[] = [...MODELS, ...OPENROUTER_EXTRAS, ...TTS_MODELS];
+const ALL_MODELS: readonly ModelEntry[] = [
+  ...MODELS,
+  ...OPENROUTER_EXTRAS,
+  ...TTS_MODELS,
+  ...OPENROUTER_SPEECH_EXTRAS,
+];
 
 export function modelsFor(kind: "higgsfield" | "openrouter" | null): readonly ModelEntry[] {
   if (kind === "higgsfield") return MODELS;

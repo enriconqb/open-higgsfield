@@ -2,9 +2,12 @@ import { readFileSync } from "node:fs";
 
 const video = await (await fetch("https://openrouter.ai/api/v1/videos/models")).json();
 const image = await (await fetch("https://openrouter.ai/api/v1/images/models")).json();
+const speech = await (await fetch("https://openrouter.ai/api/v1/audio/speech/models")).json();
 const text =
   readFileSync("src/generation/catalog/openrouter-slugs.ts", "utf8") +
-  readFileSync("src/generation/catalog/openrouter-extra.ts", "utf8");
+  readFileSync("src/generation/catalog/openrouter-extra.ts", "utf8") +
+  readFileSync("src/generation/catalog/openrouter-speech-extra.ts", "utf8") +
+  readFileSync("src/generation/catalog/tts.ts", "utf8");
 const set = new Set([...text.matchAll(/"([a-z0-9_.-]+\/[a-z0-9_.-]+)"/g)].map((match) => match[1]));
-const all = [...video.data, ...image.data].map((model) => model.id);
+const all = [...video.data, ...image.data, ...(speech.data ?? [])].map((model) => model.id);
 console.log(all.filter((id) => !set.has(id)));

@@ -1,4 +1,8 @@
 import { OPENROUTER_EXTRA_SLUGS } from "./openrouter-extra";
+import {
+  OPENROUTER_SPEECH_EXTRA_SLUGS,
+  OPENROUTER_SPEECH_SLUG_ORDER,
+} from "./openrouter-speech-extra";
 
 /** Studio model id → OpenRouter slug. Seedance 2.5, Edit, and Extend share one slug. */
 const SLUGS: Record<string, string> = {
@@ -37,13 +41,13 @@ const SLUGS: Record<string, string> = {
 };
 
 export function openRouterSlug(modelId: string): string {
-  const slug = SLUGS[modelId] ?? OPENROUTER_EXTRA_SLUGS[modelId];
+  const slug = SLUGS[modelId] ?? OPENROUTER_EXTRA_SLUGS[modelId] ?? OPENROUTER_SPEECH_EXTRA_SLUGS[modelId];
   if (!slug) throw new Error(`No OpenRouter model for ${modelId}`);
   return slug;
 }
 
 export function listedOnOpenRouter(modelId: string): boolean {
-  return modelId in SLUGS || modelId in OPENROUTER_EXTRA_SLUGS;
+  return modelId in SLUGS || modelId in OPENROUTER_EXTRA_SLUGS || modelId in OPENROUTER_SPEECH_EXTRA_SLUGS;
 }
 
 const VIDEO_SLUGS = [
@@ -87,17 +91,9 @@ const IMAGE_AFTER: Record<string, string> = {
   "black-forest-labs/flux.2-flex": "black-forest-labs/flux.2-pro",
 };
 
-const AUDIO_SLUGS = [
-  "mistralai/voxtral-mini-tts-2603",
-  "elevenlabs/eleven-flash-v2.5",
-  "elevenlabs/eleven-multilingual-v2",
-  "hexgrad/kokoro-82m",
-  "x-ai/grok-voice-tts-1.0",
-];
-
 export function openRouterSlugOrder(): string[] {
   const videos = new Set(VIDEO_SLUGS);
-  const audio = new Set(AUDIO_SLUGS);
+  const audio = new Set(OPENROUTER_SPEECH_SLUG_ORDER);
   const images = Object.values(OPENROUTER_EXTRA_SLUGS).filter((slug) => !videos.has(slug) && !audio.has(slug));
   const orderedImages: string[] = [];
   for (const slug of images) {
@@ -105,10 +101,10 @@ export function openRouterSlugOrder(): string[] {
     const insert = IMAGE_AFTER[slug];
     if (insert) orderedImages.push(insert);
   }
-  return [...VIDEO_SLUGS, ...orderedImages, ...AUDIO_SLUGS];
+  return [...VIDEO_SLUGS, ...orderedImages, ...OPENROUTER_SPEECH_SLUG_ORDER];
 }
 
 export function seedanceReferences(modelId: string): boolean {
-  const slug = SLUGS[modelId] ?? OPENROUTER_EXTRA_SLUGS[modelId] ?? "";
+  const slug = SLUGS[modelId] ?? OPENROUTER_EXTRA_SLUGS[modelId] ?? OPENROUTER_SPEECH_EXTRA_SLUGS[modelId] ?? "";
   return slug.startsWith("bytedance/seedance-2");
 }

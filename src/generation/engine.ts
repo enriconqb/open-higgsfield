@@ -70,11 +70,12 @@ export async function capabilitiesFor(
   const cached = capsCache.get(slug);
   if (cached && Date.now() - cached.at < PRICE_TTL_MS) return cached.caps;
   const model = getModel(modelId);
-  if (model.surface === "audio") return null;
   const caps =
     model.surface === "image"
       ? await imageCaps(context.credentials, slug)
-      : await videoCaps(context.credentials, slug);
+      : model.surface === "audio"
+        ? await speechCaps(context.credentials, slug)
+        : await videoCaps(context.credentials, slug);
   capsCache.set(slug, { at: Date.now(), caps });
   return caps;
 }
@@ -135,6 +136,48 @@ async function videoCaps(
     };
   }
   return {};
+}
+
+async function speechCaps(
+  credentials: { apiKey: string; baseUrl: string },
+  slug: string,
+): Promise<OpenRouterCaps> {
+  const payload = await openRouterJson(credentials, "/audio/speech/models");
+  for (const item of asList(payload && typeof payload === "object" ? (payload as { data?: unknown }).data : null)) {
+    const row = asObject(item, "caps");
+    if (row.id !== slug) continue;
+    const params = speechSupportedParameters(row);
+    const voice = enumValues(params.voice);
+    const outputFormat = enumValues(params.response_format);
+    const speed = speedRange(params.speed);
+    return {
+      ...(voice.length ? { voice } : {}),
+      ...(outputFormat.length ? { outputFormat } : {}),
+      ...(speed ? { speed } : {}),
+    };
+  }
+  return {};
+}
+
+function speechSupportedParameters(row: Record<string, unknown>): Record<string, unknown> {
+  const modalities = asList(row.output_modalities);
+  for (const modality of modalities) {
+    const record = asObject(modality, "caps");
+    if (record.type !== "speech") continue;
+    const params = record.supported_parameters;
+    return params && typeof params === "object" ? (params as Record<string, unknown>) : {};
+  }
+  return {};
+}
+
+function speedRange(value: unknown): { min: number; max: number } | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as { type?: unknown; min?: unknown; max?: unknown };
+  if (record.type !== "range") return undefined;
+  const min = typeof record.min === "number" ? record.min : Number.NaN;
+  const max = typeof record.max === "number" ? record.max : Number.NaN;
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) return undefined;
+  return { min, max };
 }
 
 function enumValues(value: unknown): string[] {

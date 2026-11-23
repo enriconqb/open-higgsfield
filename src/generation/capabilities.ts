@@ -6,6 +6,9 @@ export type OpenRouterCaps = {
   duration?: number[];
   quality?: string[];
   effort?: string[];
+  voice?: string[];
+  outputFormat?: string[];
+  speed?: { min: number; max: number };
 };
 
 export function overlayModel(model: ModelEntry, caps: OpenRouterCaps | null): ModelEntry {
@@ -25,6 +28,17 @@ export function overlayModel(model: ModelEntry, caps: OpenRouterCaps | null): Mo
   }
   const duration = model.settings.duration ? durationField(caps.duration, model.settings.duration) : undefined;
   if (duration) settings.duration = duration;
+  if (model.surface === "audio") {
+    const voice = enumField(caps.voice, model.settings.voice);
+    if (voice) settings.voice = voice;
+    else delete settings.voice;
+    const outputFormat = enumField(caps.outputFormat, model.settings.outputFormat);
+    if (outputFormat) settings.outputFormat = outputFormat;
+    else delete settings.outputFormat;
+    const speed = speedField(caps.speed, model.settings.speed);
+    if (speed) settings.speed = speed;
+    else delete settings.speed;
+  }
   return { ...model, settings };
 }
 
@@ -117,6 +131,19 @@ function preferAuto(values: readonly string[], current: SettingField | undefined
   const fallback = current?.type === "enum" ? current.default : list[0]!;
   const match = list.find((item) => item.toLowerCase() === fallback.toLowerCase());
   return { values: list, default: match ?? list[0]! };
+}
+
+function speedField(
+  range: { min: number; max: number } | undefined,
+  current: SettingField | undefined,
+): SettingField | undefined {
+  if (!range) return undefined;
+  const min = range.min;
+  const max = range.max;
+  if (!(max >= min)) return undefined;
+  const preferred = current?.type === "range" ? current.default : 1;
+  const fallback = Number.isFinite(preferred) ? Math.min(max, Math.max(min, preferred)) : Math.min(max, Math.max(min, 1));
+  return { type: "range", min, max, step: 0.05, default: fallback };
 }
 
 function durationField(values: number[] | undefined, current: SettingField | undefined): SettingField | undefined {

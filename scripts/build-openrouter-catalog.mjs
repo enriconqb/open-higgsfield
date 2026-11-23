@@ -1,5 +1,7 @@
 import { writeFileSync } from "node:fs";
 
+/** Speech extras live in build-openrouter-speech-catalog.mjs → openrouter-speech-extra.ts. */
+
 const claimed = new Set([
   "bytedance/seedance-2.5",
   "bytedance/seedance-2.0",
