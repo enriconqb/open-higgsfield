@@ -194,14 +194,18 @@ async function archiveRemote(
 }
 
 /** Idempotent: one gallery row per (user, request id), refreshed in place. */
-export async function upsertGenerationResult(userId: number, record: RunRecord): Promise<void> {
+export async function upsertGenerationResult(
+  userId: number,
+  record: RunRecord,
+  teamFromToken?: number | null,
+): Promise<void> {
   if (!isRunRecord(record)) return;
   const stored = { ...record, id: record.id.slice(0, 191) };
   const { readSession } = await import("@/auth/session");
   const session = await readSession();
   const inWorkspace = session?.id === userId;
-  let teamId: number | null = null;
-  if (inWorkspace && session) {
+  let teamId: number | null = teamFromToken ?? null;
+  if (teamId == null && inWorkspace && session) {
     const { workspaceFor } = await import("@/teams/access");
     teamId = (await workspaceFor(session)).teamId;
   }
@@ -210,7 +214,7 @@ export async function upsertGenerationResult(userId: number, record: RunRecord):
     [userId],
   );
   if (owner?.username && !stored.createdBy) stored.createdBy = owner.username;
-  if (inWorkspace) {
+  if (inWorkspace || teamFromToken != null) {
     await execute(
       `INSERT INTO generation_results (user_id, team_id, created_by, client_id, payload)
        VALUES (?, ?, ?, ?, ?)
@@ -253,6 +257,15 @@ export async function mirrorStudioJobToGallery(userId: number, job: ApiJobRow): 
   await mirrorJob(userId, job, "studio");
 }
 
+async function teamIdForToken(tokenId: number | null): Promise<number | null> {
+  if (!tokenId) return null;
+  const row = await queryOne<RowDataPacket & { team_id: number | null }>(
+    `SELECT team_id FROM api_tokens WHERE id = ?`,
+    [tokenId],
+  );
+  return row?.team_id == null ? null : Number(row.team_id);
+}
+
 async function mirrorJob(userId: number, job: ApiJobRow, mode: "api" | "studio"): Promise<void> {
   try {
     const result = parseJobResult(job.result);
@@ -281,7 +294,8 @@ async function mirrorJob(userId: number, job: ApiJobRow, mode: "api" | "studio")
       mode === "api"
         ? [apiRecord(job, images, videoUrl, videoSourceUrl, audioUrl, audioSourceUrl, surface)]
         : studioRecords(job, images, videoUrl, videoSourceUrl, audioUrl, audioSourceUrl, surface);
-    for (const record of records) await upsertGenerationResult(userId, record);
+    const teamFromToken = mode === "api" ? await teamIdForToken(job.token_id) : null;
+    for (const record of records) await upsertGenerationResult(userId, record, teamFromToken);
   } catch (caught) {
     console.error("[gallery] mirror failed", caught instanceof Error ? caught.message : caught);
   }

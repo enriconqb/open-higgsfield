@@ -169,7 +169,7 @@ async function mint(
   expiresAt: Date | null,
   sealedWrappingKey: string,
 ): Promise<{ token: string; id: number }> {
-  const created = await createApiToken({ userId, label, scopes, expiresAt, sealedWrappingKey });
+  const created = await createApiToken({ userId, teamId: null, label, scopes, expiresAt, sealedWrappingKey });
   return { token: created.token, id: created.record.id };
 }
 

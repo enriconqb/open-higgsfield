@@ -14,6 +14,7 @@ export const DEFAULT_SCOPES: readonly ApiTokenScope[] = ["read", "generate"];
 export type ApiTokenRow = {
   id: number;
   user_id: number;
+  team_id: number | null;
   label: string;
   token_hash: string;
   token_hint: string;
@@ -28,6 +29,7 @@ export type ApiTokenRow = {
 export type PublicApiToken = {
   id: number;
   label: string;
+  teamId: number | null;
   hint: string;
   scopes: ApiTokenScope[];
   expiresAt: string | null;
@@ -40,7 +42,7 @@ export type PublicApiToken = {
 
 type TokenPacket = ApiTokenRow & RowDataPacket;
 
-const SELECT_COLUMNS = `id, user_id, label, token_hash, token_hint, scopes, sealed_wrapping_key,
+const SELECT_COLUMNS = `id, user_id, team_id, label, token_hash, token_hint, scopes, sealed_wrapping_key,
    expires_at, revoked_at, last_used_at, created_at`;
 
 /** Only the hash is stored, so a database copy cannot be replayed as a token. */
@@ -79,6 +81,7 @@ export function toPublicApiToken(row: ApiTokenRow): PublicApiToken {
   return {
     id: row.id,
     label: row.label,
+    teamId: row.team_id == null ? null : Number(row.team_id),
     hint: row.token_hint,
     scopes: parseScopes(row.scopes),
     expiresAt: iso(row.expires_at),
@@ -92,6 +95,7 @@ export function toPublicApiToken(row: ApiTokenRow): PublicApiToken {
 
 export async function createApiToken(input: {
   userId: number;
+  teamId: number | null;
   label: string;
   scopes: readonly ApiTokenScope[];
   expiresAt: Date | null;
@@ -99,10 +103,11 @@ export async function createApiToken(input: {
 }): Promise<{ token: string; record: PublicApiToken }> {
   const minted = mintToken();
   const result = await execute(
-    `INSERT INTO api_tokens (user_id, label, token_hash, token_hint, scopes, sealed_wrapping_key, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO api_tokens (user_id, team_id, label, token_hash, token_hint, scopes, sealed_wrapping_key, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.userId,
+      input.teamId,
       input.label.slice(0, 64),
       minted.hash,
       minted.hint.slice(0, 24),

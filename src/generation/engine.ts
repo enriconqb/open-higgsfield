@@ -37,6 +37,8 @@ export type GenerationContext = {
   origin: string;
   /** API token that started the work, so usage rows can point back at it. */
   tokenId?: number | null;
+  /** Workspace stamped on that token. Null is the personal workspace. */
+  teamId?: number | null;
 };
 
 const PRICE_TTL_MS = 5 * 60_000;
@@ -366,6 +368,7 @@ async function rememberUsage(
     await recordUsage({
       userId: context.userId,
       tokenId: context.tokenId ?? null,
+      teamId: context.teamId ?? null,
       requestId: queued.requestId,
       modelId: plane.model,
       kind: getModel(plane.model).surface,

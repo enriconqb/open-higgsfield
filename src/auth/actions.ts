@@ -505,9 +505,12 @@ async function createApiTokenActionHandler(data: unknown): Promise<CreatedApiTok
   const wrappingKey = Buffer.from(session.wrappingKey, "base64");
   if (wrappingKey.length !== 32) throw new Error("Session key is unusable. Log in again.");
 
+  const { workspaceFor } = await import("@/teams/access");
+  const workspace = await workspaceFor(session);
   const created = await createApiToken({
     userId: session.id,
-    label: label || "OpenMontage",
+    teamId: workspace.teamId,
+    label: label || "Claude",
     scopes: normalizeScopes(body.scopes),
     expiresAt,
     sealedWrappingKey: sealSecret(session.wrappingKey),

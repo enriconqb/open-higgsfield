@@ -33,6 +33,7 @@ export type ApiIdentity = {
   tokenLabel: string;
   scopes: ApiTokenScope[];
   expiresAt: Date | null;
+  teamId: number | null;
 };
 
 /** Everything a generation needs, plus who the bearer token says is asking. */
@@ -42,7 +43,10 @@ const BEARER = /^Bearer\s+(\S+)$/i;
 
 export function bearerTokenOf(request: Request): string {
   const header = (request.headers.get("authorization") ?? "").trim();
-  const token = BEARER.exec(header)?.[1] ?? "";
+  const fromBearer = BEARER.exec(header)?.[1] ?? "";
+  const fromKey =
+    request.headers.get("x-api-key")?.trim() || request.headers.get("x-auth-token")?.trim() || "";
+  const token = fromBearer || fromKey;
   if (!token) throw new ApiError(401, "Send the token as: Authorization: Bearer <token>");
   if (!token.startsWith(TOKEN_PREFIX)) throw new ApiError(401, "Invalid token");
   return token;
@@ -79,6 +83,7 @@ export async function requireApiIdentity(
     tokenLabel: row.label,
     scopes,
     expiresAt: row.expires_at,
+    teamId: row.team_id == null ? null : Number(row.team_id),
   };
 }
 
@@ -130,6 +135,7 @@ export async function requireApiContext(
     credentials,
     origin: originOf(request),
     tokenId: identity.tokenId,
+    teamId: identity.teamId,
     identity,
   };
 }

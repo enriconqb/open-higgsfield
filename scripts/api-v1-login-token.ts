@@ -90,6 +90,7 @@ async function main(): Promise<void> {
   }
   const created = await createApiToken({
     userId: user.id,
+    teamId: null,
     label: flag("label", "local test") ?? "local test",
     scopes: ["read", "generate"],
     expiresAt: null,

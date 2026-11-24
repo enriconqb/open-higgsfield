@@ -51,17 +51,21 @@ export async function recordUsage(input: {
   userId?: number;
   /** Which API token started the job, when one did. Browser sessions pass nothing. */
   tokenId?: number | null;
+  /** Workspace of that token. A browser session still resolves its own workspace. */
+  teamId?: number | null;
 }): Promise<void> {
   const userId = input.userId ?? (await requireActiveUser()).id;
   const credits = creditsFromUsd(input.costUsd);
-  let teamId: number | null = null;
-  try {
-    const { readSession } = await import("@/auth/session");
-    const { workspaceFor } = await import("@/teams/access");
-    const session = await readSession();
-    if (session && session.id === userId) teamId = (await workspaceFor(session)).teamId;
-  } catch {
-    teamId = null;
+  let teamId: number | null = input.teamId ?? null;
+  if (teamId == null) {
+    try {
+      const { readSession } = await import("@/auth/session");
+      const { workspaceFor } = await import("@/teams/access");
+      const session = await readSession();
+      if (session && session.id === userId) teamId = (await workspaceFor(session)).teamId;
+    } catch {
+      teamId = null;
+    }
   }
   const { bindHoldToRequest, finishTeamSpend } = await import("@/teams/spend");
   const bound = await bindHoldToRequest(userId, input.requestId.slice(0, 128));
@@ -86,13 +90,13 @@ export async function recordUsage(input: {
       input.status,
     ],
   );
-  if (bound && input.status !== "pending") {
+  if (input.status !== "pending" && (bound || teamId)) {
     await finishTeamSpend({
       userId,
       requestId: input.requestId.slice(0, 128),
       usd: input.costUsd ?? 0,
       ok: input.status === "success",
-      teamId: bound.teamId,
+      teamId: bound?.teamId ?? teamId,
     });
   }
 }
