@@ -140,6 +140,16 @@ export async function findApiTokenByHash(hash: string): Promise<ApiTokenRow | nu
   return queryOne<TokenPacket>(`SELECT ${SELECT_COLUMNS} FROM api_tokens WHERE token_hash = ?`, [hash]);
 }
 
+/** Only a token that can no longer authenticate may disappear from the list. */
+export async function deleteApiToken(userId: number, id: number): Promise<boolean> {
+  const result = await execute(
+    `DELETE FROM api_tokens
+     WHERE id = ? AND user_id = ? AND (revoked_at IS NOT NULL OR (expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP))`,
+    [id, userId],
+  );
+  return result.affectedRows > 0;
+}
+
 export async function revokeApiToken(userId: number, id: number): Promise<boolean> {
   const result = await execute(
     `UPDATE api_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND revoked_at IS NULL`,

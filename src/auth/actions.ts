@@ -12,6 +12,7 @@ import {
   listApiTokens,
   normalizeScopes,
   revokeAllApiTokens,
+  deleteApiToken,
   revokeApiToken,
   type PublicApiToken,
 } from "./api-tokens";
@@ -529,6 +530,20 @@ async function revokeApiTokenActionHandler(data: unknown): Promise<PublicApiToke
   const id = Number(body.id);
   if (!Number.isInteger(id) || id < 1) throw new Error("Invalid token");
   await revokeApiToken(session.id, id);
+  return listApiTokens(session.id);
+}
+
+export async function deleteApiTokenAction(data: unknown): Promise<ActionResult<PublicApiToken[]>> {
+  return run(() => deleteApiTokenActionHandler(data));
+}
+
+async function deleteApiTokenActionHandler(data: unknown): Promise<PublicApiToken[]> {
+  const session = await requireActiveUser();
+  const body = asObject(data);
+  const id = Number(body.id);
+  if (!Number.isInteger(id) || id < 1) throw new Error("Invalid token");
+  const removed = await deleteApiToken(session.id, id);
+  if (!removed) throw new Error("Revoke the token before deleting it");
   return listApiTokens(session.id);
 }
 

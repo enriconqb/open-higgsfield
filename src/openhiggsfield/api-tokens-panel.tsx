@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
-import { createApiTokenAction, getAuthState, getPublicApiInfo, listApiTokensAction, revokeApiTokenAction } from "@/auth/actions";
+import {
+  createApiTokenAction,
+  deleteApiTokenAction,
+  getAuthState,
+  getPublicApiInfo,
+  listApiTokensAction,
+  revokeApiTokenAction,
+} from "@/auth/actions";
 import { configuredBasePath } from "@/base-path";
 import { unwrap } from "@/lib/action-result";
 
@@ -55,6 +62,10 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [existingOpen, setExistingOpen] = useState(false);
+  const generateRef = useRef<HTMLDialogElement>(null);
+  const existingRef = useRef<HTMLDialogElement>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -90,6 +101,20 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const dialog = generateRef.current;
+    if (!dialog) return;
+    if (generateOpen && !dialog.open) dialog.showModal();
+    if (!generateOpen && dialog.open) dialog.close();
+  }, [generateOpen]);
+
+  useEffect(() => {
+    const dialog = existingRef.current;
+    if (!dialog) return;
+    if (existingOpen && !dialog.open) dialog.showModal();
+    if (!existingOpen && dialog.open) dialog.close();
+  }, [existingOpen]);
+
   const basePath = configuredBasePath();
   const baseUrl = typeof window === "undefined" ? basePath : `${window.location.origin}${basePath}`;
 
@@ -116,6 +141,7 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
       setFresh(created.token);
       setTokens(created.tokens as TokenView[]);
       setLabel("");
+      setGenerateOpen(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not create the token");
     } finally {
@@ -135,6 +161,23 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function onDelete(id: number) {
+    setError(null);
+    setBusy(true);
+    try {
+      setTokens(unwrap(await deleteApiTokenAction({ id })) as TokenView[]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not delete the token");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function workspaceOf(token: TokenView): string {
+    if (token.teamId == null) return "Personal";
+    return teams.find((team) => team.id === token.teamId)?.name ?? "Team";
+  }
+
   async function copy(text: string, what: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -146,6 +189,7 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
+    <>
     <dialog
       ref={ref}
       aria-labelledby="ohf-tokens-title"
@@ -248,103 +292,184 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
       )}
 
       {signedIn && (
-      <form className="ohf-keys-form" onSubmit={(event) => void onCreate(event)}>
-        <label className="ohf-field">
-          <div className="ohf-field-label">Label</div>
-          <input
-            className="ohf-input"
-            type="text"
-            placeholder="OpenMontage"
-            maxLength={64}
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-          />
-        </label>        <label className="ohf-field">
-          <div className="ohf-field-label">Expires</div>
-          <select
-            className="ohf-input"
-            value={expiry}
-            onChange={(event) => setExpiry(event.target.value)}
-          >
-            {EXPIRY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <fieldset className="ohf-keys-provider">
-          <label>
-            <input
-              type="checkbox"
-              checked={canRead}
-              onChange={(event) => setCanRead(event.target.checked)}
-            />
-            Read jobs
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={canGenerate}
-              onChange={(event) => setCanGenerate(event.target.checked)}
-            />
-            Start generations
-          </label>
-        </fieldset>
-        {error && (
-          <div className="ohf-alert" role="alert">
-            <span className="ohf-alert-text">{error}</span>
-          </div>
-        )}
-        <div className="ohf-keys-actions">
-          <button type="submit" className="ohf-keys-save" disabled={busy}>
-            {busy ? "Working…" : "Create token"}
+        <div className="ohf-token-actions">
+          <button type="button" className="ohf-keys-save" onClick={() => setGenerateOpen(true)}>
+            Generate Token
+          </button>
+          <button type="button" className="ohf-token-ghost" onClick={() => setExistingOpen(true)}>
+            Existing
           </button>
         </div>
-      </form>
       )}
 
-      <div className="ohf-token-list">
-        <div className="ohf-token-list-title">Existing tokens</div>
-        {loading ? (
-          <p className="ohf-keys-copy">Loading…</p>
-        ) : !signedIn ? (
-          <p className="ohf-keys-copy">Sign in to see your tokens.</p>
-        ) : tokens.length === 0 ? (
-          <p className="ohf-keys-copy">No tokens yet.</p>
-        ) : (
-          tokens.map((token) => (
-            <div className="ohf-token-row" key={token.id}>
-              <div className="ohf-token-row-main">
-                <div className="ohf-token-row-label">
-                  {token.label || "Token"}
-                  <span className={`ohf-token-state ${token.active ? "is-live" : "is-dead"}`}>
-                    {token.revokedAt ? "revoked" : token.expired ? "expired" : "active"}
-                  </span>
-                </div>
-                <div className="ohf-token-row-meta">
-                  {token.teamId == null ? "Personal" : (teams.find((team) => team.id === token.teamId)?.name ?? "Team")} ·{" "}
-                  {token.hint} · {token.scopes.join(" + ") || "no scope"} · created{" "}
-                  {when(token.createdAt)} · last used {when(token.lastUsedAt)} · expires{" "}
-                  {token.expiresAt ? when(token.expiresAt) : "never"}
-                </div>
-              </div>
-              {token.active && (
-                <button
-                  type="button"
-                  className="ohf-token-ghost"
-                  disabled={busy}
-                  onClick={() => void onRevoke(token.id)}
-                >
-                  Revoke
-                </button>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+      {error && !generateOpen && !existingOpen && (
+        <div className="ohf-alert" role="alert">
+          <span className="ohf-alert-text">{error}</span>
+        </div>
+      )}
     </section>
     </div>
     </dialog>
+
+    <dialog
+      ref={generateRef}
+      className="ohf-token-subdialog"
+      aria-labelledby="ohf-generate-token-title"
+      onClose={() => setGenerateOpen(false)}
+      onClick={(event) => {
+        if (event.target === generateRef.current) setGenerateOpen(false);
+      }}
+    >
+      <div className="ohf-dialog-panel ohf-manage-panel">
+        <section className="ohf-tokens ohf-manage-body ohf-scroll">
+          <div className="ohf-keys-head">
+            <div id="ohf-generate-token-title" className="ohf-keys-title">Generate token</div>
+            <button type="button" className="ohf-icon-btn" aria-label="Close" onClick={() => setGenerateOpen(false)}>
+              <CloseIcon size={13} />
+            </button>
+          </div>
+          <p className="ohf-keys-copy">Workspace for this token: {workspaceName}.</p>
+          <form className="ohf-keys-form" onSubmit={(event) => void onCreate(event)}>
+            <label className="ohf-field">
+              <div className="ohf-field-label">Label</div>
+              <input
+                className="ohf-input"
+                type="text"
+                placeholder="OpenMontage"
+                maxLength={64}
+                value={label}
+                onChange={(event) => setLabel(event.target.value)}
+              />
+            </label>
+            <label className="ohf-field">
+              <div className="ohf-field-label">Expires</div>
+              <select className="ohf-input" value={expiry} onChange={(event) => setExpiry(event.target.value)}>
+                {EXPIRY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="ohf-keys-provider">
+              <label>
+                <input type="checkbox" checked={canRead} onChange={(event) => setCanRead(event.target.checked)} />
+                Read jobs
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={canGenerate}
+                  onChange={(event) => setCanGenerate(event.target.checked)}
+                />
+                Start generations
+              </label>
+            </fieldset>
+            {error && generateOpen && (
+              <div className="ohf-alert" role="alert">
+                <span className="ohf-alert-text">{error}</span>
+              </div>
+            )}
+            <div className="ohf-keys-actions">
+              <button type="submit" className="ohf-keys-save" disabled={busy}>
+                {busy ? "Working…" : "Generate"}
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </dialog>
+
+    <dialog
+      ref={existingRef}
+      className="ohf-token-subdialog"
+      aria-labelledby="ohf-existing-token-title"
+      onClose={() => setExistingOpen(false)}
+      onClick={(event) => {
+        if (event.target === existingRef.current) setExistingOpen(false);
+      }}
+    >
+      <div className="ohf-dialog-panel ohf-manage-panel">
+        <section className="ohf-tokens ohf-manage-body ohf-scroll">
+          <div className="ohf-keys-head">
+            <div id="ohf-existing-token-title" className="ohf-keys-title">Existing tokens</div>
+            <button type="button" className="ohf-icon-btn" aria-label="Close" onClick={() => setExistingOpen(false)}>
+              <CloseIcon size={13} />
+            </button>
+          </div>
+          {error && existingOpen && (
+            <div className="ohf-alert" role="alert">
+              <span className="ohf-alert-text">{error}</span>
+            </div>
+          )}
+          {loading ? (
+            <p className="ohf-keys-copy">Loading…</p>
+          ) : tokens.length === 0 ? (
+            <p className="ohf-keys-copy">No tokens yet.</p>
+          ) : (
+            <div className="ohf-token-table-wrap">
+              <table className="ohf-token-table">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Workspace</th>
+                    <th>Hint</th>
+                    <th>Scopes</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Last used</th>
+                    <th>Expires</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tokens.map((token) => (
+                    <tr key={token.id}>
+                      <td>{token.label || "Token"}</td>
+                      <td>{workspaceOf(token)}</td>
+                      <td>{token.hint}</td>
+                      <td>{token.scopes.join(" + ") || "—"}</td>
+                      <td>
+                        <span className={`ohf-token-state ${token.active ? "is-live" : "is-dead"}`}>
+                          {token.revokedAt ? "revoked" : token.expired ? "expired" : "active"}
+                        </span>
+                      </td>
+                      <td>{when(token.createdAt)}</td>
+                      <td>{when(token.lastUsedAt)}</td>
+                      <td>{token.expiresAt ? when(token.expiresAt) : "never"}</td>
+                      <td>
+                        <div className="ohf-token-row-actions">
+                          {token.active && (
+                            <button
+                              type="button"
+                              className="ohf-token-ghost"
+                              disabled={busy}
+                              onClick={() => void onRevoke(token.id)}
+                            >
+                              Revoke
+                            </button>
+                          )}
+                          {(token.revokedAt || token.expired) && (
+                            <button
+                              type="button"
+                              className="ohf-token-ghost ohf-token-delete"
+                              disabled={busy}
+                              onClick={() => void onDelete(token.id)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+    </dialog>
+    </>
   );
 }

@@ -6278,6 +6278,62 @@ a.ohf-key-link {
   opacity: 0.5;
 }
 
+.ohf-token-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.ohf-token-subdialog {
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.ohf-token-subdialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.ohf-token-table-wrap {
+  margin-top: 12px;
+  overflow: auto;
+}
+
+.ohf-token-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ohf-token-table th,
+.ohf-token-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.ohf-token-table th {
+  color: var(--tx3);
+  font-size: 11px;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ohf-token-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ohf-token-delete {
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+
 .ohf-token-list {
   padding-top: 16px;
 }
