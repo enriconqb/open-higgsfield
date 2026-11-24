@@ -12,6 +12,7 @@ import { CloseIcon } from "./icons";
 type TokenView = {
   id: number;
   label: string;
+  teamId: number | null;
   hint: string;
   scopes: string[];
   expiresAt: string | null;
@@ -40,6 +41,8 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [tokens, setTokens] = useState<TokenView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [workspaceName, setWorkspaceName] = useState("Personal");
+  const [teams, setTeams] = useState<{ id: number; name: string }[]>([]);
   const [signedIn, setSignedIn] = useState(true);
   const [hasApiKey, setHasApiKey] = useState(true);
   const [apiBase, setApiBase] = useState("");
@@ -68,6 +71,9 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
       }
       const list = unwrap(await listApiTokensAction());
       setHasApiKey(state.hasApiKey);
+      const named = state.teams.find((team) => team.id === state.activeTeamId);
+      setTeams(state.teams);
+      setWorkspaceName(named?.name ?? "Personal");
       setTokens(list as TokenView[]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load tokens");
@@ -154,14 +160,23 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
         <div>
           <div id="ohf-tokens-title" className="ohf-keys-title">API tokens</div>
           <p className="ohf-keys-copy">
-            A token lets an outside tool — OpenMontage, a script, curl — start generations on your
-            account. It spends the platform key saved here, and everything it runs lands in your usage
-            page. The token is shown once.
+            A token lets Claude, OpenMontage, or a script start generations on this account. It spends
+            the platform key saved here. Jobs land in the workspace that is active when you create the
+            token. The token is shown once. Current workspace: {workspaceName}.
           </p>
         </div>
         <button type="button" className="ohf-icon-btn" aria-label="Close" onClick={onClose}>
           <CloseIcon size={13} />
         </button>
+      </div>
+
+      <div className="ohf-token-endpoint">
+        <div className="ohf-token-endpoint-label">Claude connector URL</div>
+        <code className="ohf-token-code">{`${baseUrl}/mcp`}</code>
+        <p className="ohf-keys-copy">
+          In Claude, add a custom connector with that URL, choose no sign-in, and set header
+          Authorization to Bearer plus the token. Claude must reach this host on HTTPS port 443.
+        </p>
       </div>
 
       {apiBase && (
@@ -308,6 +323,7 @@ export function ApiTokensPanel({ onClose }: { onClose: () => void }) {
                   </span>
                 </div>
                 <div className="ohf-token-row-meta">
+                  {token.teamId == null ? "Personal" : (teams.find((team) => team.id === token.teamId)?.name ?? "Team")} ·{" "}
                   {token.hint} · {token.scopes.join(" + ") || "no scope"} · created{" "}
                   {when(token.createdAt)} · last used {when(token.lastUsedAt)} · expires{" "}
                   {token.expiresAt ? when(token.expiresAt) : "never"}
